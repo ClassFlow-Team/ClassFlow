@@ -53,6 +53,13 @@
     <string name="title_select_weeks">Select course weeks</string>
     <string name="title_select_color">Select course color</string>
     <string name="a11y_color_selected">Selected</string>
+    <string name="label_custom_time_range">Custom Time Range</string>
+    <string name="label_select_custom_time">Select Custom Time</string>
+    <string name="toast_custom_time_empty">Start time or end time cannot be empty</string>
+    <string name="label_custom_time">Custom Time</string>
+    <string name="label_start_time">Start Time</string>
+    <string name="label_end_time">End Time</string>
+
 
     <!-- Course Related -->
     <string name="course_time_description">Time: Period %1$s-%2$s (%3$s-%4$s)</string>
@@ -302,6 +309,7 @@
     <string name="toast_tweak_success">Schedule adjusted successfully!</string>
     <string name="error_tweak_failed">Schedule adjustment failed: %1$s</string>
     <string name="course_time_day_section_details_tweak">%1$s | Periods %2$s-%3$s</string>
+    <string name="course_time_day_time_details_tweak">%1$s | Time: %2$s - %3$s</string>
 
     <!-- Academic System Import -->
     <string name="title_select_school">Select school</string>

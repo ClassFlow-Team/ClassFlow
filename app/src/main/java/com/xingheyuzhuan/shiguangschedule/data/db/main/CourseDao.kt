@@ -11,23 +11,43 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * Room 数据访问对象 (DAO)，用于操作课程 (Course) 数据表。
+ * 已更新以支持标准节次和自定义时间字段的混合排序。
  */
 @Dao
 interface CourseDao {
     /**
      * 获取指定课表ID的所有课程。
-     * 返回一个 Flow，当数据变化时会自动更新。
+     * 排序逻辑已调整，支持按节次和自定义时间字符串混合排序。
      */
-    @Query("SELECT * FROM courses WHERE courseTableId = :courseTableId ORDER BY day ASC, startSection ASC, endSection ASC")
+    @Query(
+        """
+        SELECT * FROM courses 
+        WHERE courseTableId = :courseTableId 
+        ORDER BY 
+            day ASC, 
+            -- 如果是标准课，按 startSection 排序；否则给定一个大值 99
+            CASE WHEN isCustomTime = 0 THEN startSection ELSE 99 END ASC,  
+            -- 如果是自定义课，按 customStartTime 字符串排序；否则给定一个大值 '99:99'
+            CASE WHEN isCustomTime = 1 THEN customStartTime ELSE '99:99' END ASC
+        """
+    )
     fun getCoursesByTableId(courseTableId: String): Flow<List<Course>>
 
     /**
      * 获取指定课表ID的所有课程，并包含其对应的周数。
-     * @Transaction 注解确保这是一个原子操作，以避免数据不一致。
-     * Room 会自动根据 CourseWithWeeks 中的 @Relation 注解执行关联查询。
+     * 排序逻辑与上面保持一致，确保关联查询结果的顺序正确。
      */
     @Transaction
-    @Query("SELECT * FROM courses WHERE courseTableId = :courseTableId ORDER BY day ASC, startSection ASC, endSection ASC")
+    @Query(
+        """
+        SELECT * FROM courses 
+        WHERE courseTableId = :courseTableId 
+        ORDER BY 
+            day ASC, 
+            CASE WHEN isCustomTime = 0 THEN startSection ELSE 99 END ASC,  
+            CASE WHEN isCustomTime = 1 THEN customStartTime ELSE '99:99' END ASC
+        """
+    )
     @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     fun getCoursesWithWeeksByTableId(courseTableId: String): Flow<List<CourseWithWeeks>>
 
@@ -58,6 +78,7 @@ interface CourseDao {
 
     /**
      * 获取指定课表ID下，在特定星期和周次的所有课程及其周数。
+     * 排序逻辑已调整，以正确处理同一天内的自定义时间日程。
      *
      * @param courseTableId 课表ID。
      * @param day 星期几。
@@ -66,12 +87,15 @@ interface CourseDao {
     @Transaction
     @Query(
         """
-    SELECT * FROM courses AS c
-    INNER JOIN course_weeks AS cw ON c.id = cw.courseId
-    WHERE c.courseTableId = :courseTableId
-      AND c.day = :day
-      AND cw.weekNumber = :weekNumber
-    """
+        SELECT * FROM courses AS c
+        INNER JOIN course_weeks AS cw ON c.id = cw.courseId
+        WHERE c.courseTableId = :courseTableId
+          AND c.day = :day
+          AND cw.weekNumber = :weekNumber
+        ORDER BY 
+            CASE WHEN c.isCustomTime = 0 THEN c.startSection ELSE 99 END ASC,  
+            CASE WHEN c.isCustomTime = 1 THEN c.customStartTime ELSE '99:99' END ASC
+        """
     )
     @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     fun getCoursesWithWeeksByDayAndWeek(

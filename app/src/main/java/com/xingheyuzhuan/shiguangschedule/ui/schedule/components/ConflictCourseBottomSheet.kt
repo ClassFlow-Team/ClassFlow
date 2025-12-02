@@ -71,6 +71,11 @@ fun ConflictCourseBottomSheet(
             ) {
                 items(courses) { courseWithWeeks ->
                     val course = courseWithWeeks.course
+
+                    // ⭐ 核心修改 1: 检查是否为自定义时间课程
+                    val isCustomTimeCourse = course.customStartTime != null && course.customEndTime != null
+
+                    // 只有非自定义时间课程才需要查找 timeSlots
                     val startSlot = timeSlots.find { it.number == course.startSection }?.startTime ?: "N/A"
                     val endSlot = timeSlots.find { it.number == course.endSection }?.endTime ?: "N/A"
 
@@ -108,18 +113,31 @@ fun ConflictCourseBottomSheet(
                                 color = textColor // 应用新的文本颜色
                             )
                             Spacer(Modifier.height(8.dp))
-                            // 详细信息
-                            Text(
-                                text = stringResource(
-                                    R.string.course_time_description,
-                                    course.startSection, // 对应 %1$s (起始节次)
-                                    course.endSection,   // 对应 %2$s (结束节次)
-                                    startSlot,           // 对应 %3$s (起始时间)
-                                    endSlot              // 对应 %4$s (结束时间)
-                                ),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = textColor
-                            )
+
+                            // ⭐ 核心修改 2: 根据是否为自定义时间课程，显示不同的时间信息
+                            if (isCustomTimeCourse) {
+                                // 自定义时间课程：直接显示时间范围
+                                Text(
+                                    text = "${course.customStartTime} - ${course.customEndTime}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = textColor,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            } else {
+                                // 标准节次课程：显示节次和标准时间段
+                                Text(
+                                    text = stringResource(
+                                        R.string.course_time_description,
+                                        course.startSection!!, // 对应 %1$s (起始节次)
+                                        course.endSection!!,   // 对应 %2$s (结束节次)
+                                        startSlot,           // 对应 %3$s (起始时间)
+                                        endSlot              // 对应 %4$s (结束时间)
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = textColor
+                                )
+                            }
+
                             // 详细信息 - 地点
                             Text(
                                 text = stringResource(

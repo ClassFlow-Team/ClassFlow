@@ -1,6 +1,5 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.course
 
-import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -101,6 +100,9 @@ class AddEditCourseViewModel(
                             day = initialDay ?: 1,
                             startSection = initialSection ?: 1,
                             endSection = initialSection ?: 1,
+                            isCustomTime = false, // 默认使用节次
+                            customStartTime = null, // 默认无自定义时间
+                            customEndTime = null,   // 默认无自定义时间
                             colorInt = newColorIndex
                         )
                         Pair(newCourse, newColorIndex)
@@ -133,6 +135,12 @@ class AddEditCourseViewModel(
                         day = course?.day ?: 1,
                         startSection = course?.startSection ?: 1,
                         endSection = course?.endSection ?: 1,
+
+                        isCustomTime = course?.isCustomTime ?: false,
+                        // 如果是新课程或现有课程为 null，则默认为空字符串 ""
+                        customStartTime = course?.customStartTime.orEmpty(),
+                        customEndTime = course?.customEndTime.orEmpty(),
+
                         colorIndex = initialColorIndex, // 使用解构后的 initialColorIndex
                         weeks = weeks,
                         timeSlots = timeSlots,
@@ -162,6 +170,18 @@ class AddEditCourseViewModel(
 
     fun onColorChange(colorIndex: Int) { _uiState.update { it.copy(colorIndex = colorIndex) } }
 
+    fun onIsCustomTimeChange(isCustom: Boolean) {
+        _uiState.update { it.copy(isCustomTime = isCustom) }
+    }
+
+    fun onCustomStartTimeChange(time: String) {
+        _uiState.update { it.copy(customStartTime = time) }
+    }
+
+    fun onCustomEndTimeChange(time: String) {
+        _uiState.update { it.copy(customEndTime = time) }
+    }
+
     // 统一的保存函数
     fun onSave() {
         viewModelScope.launch {
@@ -175,8 +195,17 @@ class AddEditCourseViewModel(
                 teacher = state.teacher,
                 position = state.position,
                 day = state.day,
-                startSection = state.startSection,
-                endSection = state.endSection,
+
+                // 如果使用自定义时间，节次字段设为 null
+                startSection = state.startSection.takeUnless { state.isCustomTime },
+                endSection = state.endSection.takeUnless { state.isCustomTime },
+
+                // 设置 isCustomTime 标志
+                isCustomTime = state.isCustomTime,
+                // 如果使用自定义时间，保存自定义时间；如果时间字符串为空，则保存 null
+                customStartTime = state.customStartTime.takeIf { state.isCustomTime && it.isNotEmpty() },
+                customEndTime = state.customEndTime.takeIf { state.isCustomTime && it.isNotEmpty() },
+
                 colorInt = colorIndexToSave, // 存储颜色索引
                 courseTableId = state.currentCourseTableId.orEmpty()
             )
@@ -242,6 +271,11 @@ data class AddEditCourseUiState(
     val day: Int = 1,
     val startSection: Int = 1,
     val endSection: Int = 2,
+    val isCustomTime: Boolean = false,
+    val customStartTime: String = "",
+    val customEndTime: String = "",
+
+
     val colorIndex: Int = 0,
     val weeks: Set<Int> = emptySet(),
     val timeSlots: List<TimeSlot> = emptyList(),

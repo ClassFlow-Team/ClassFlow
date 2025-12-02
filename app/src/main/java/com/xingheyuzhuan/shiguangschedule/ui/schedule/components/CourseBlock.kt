@@ -74,6 +74,15 @@ fun CourseBlock(
     // val textColor = getDarkerColor(blockColor, factor = ScheduleGridDefaults.TextDarkenFactor)
     val textColor = MaterialTheme.colorScheme.onSurface
 
+    val customStartTime = firstCourse?.course?.customStartTime
+    val customEndTime = firstCourse?.course?.customEndTime
+    val customTimeString = if (customStartTime != null && customEndTime != null) {
+        "$customStartTime - $customEndTime"
+    } else {
+        null
+    }
+    val isCustomTimeCourse = customTimeString != null
+
     Box(
         modifier = modifier
             .padding(ScheduleGridDefaults.CourseBlockOuterPadding)
@@ -114,6 +123,18 @@ fun CourseBlock(
                     modifier = Modifier.weight(1f, fill = false),
                     style = TextStyle(lineHeight = 1.2.em)
                 )
+
+                if (isCustomTimeCourse) {
+                    Text(
+                        text = customTimeString!!, // customTimeString 此时保证不为 null
+                        fontSize = 10.sp,
+                        color = textColor.copy(alpha = 0.8f),
+                        fontWeight = FontWeight.SemiBold,
+                        overflow = TextOverflow.Ellipsis,
+                        style = TextStyle(lineHeight = 1.em)
+                    )
+                }
+
                 Text(
                     text = firstCourse?.course?.teacher ?: "",
                     fontSize = 10.sp,

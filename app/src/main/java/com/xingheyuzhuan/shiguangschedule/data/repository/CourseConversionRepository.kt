@@ -1,14 +1,13 @@
 package com.xingheyuzhuan.shiguangschedule.data.repository
 
-import androidx.compose.ui.graphics.toArgb
 import androidx.room.Transaction
 import com.xingheyuzhuan.shiguangschedule.data.db.main.Course
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseDao
+import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWeek
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWeekDao
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlotDao
-import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.CourseConfigJsonModel
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.CourseTableExportModel
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.CourseTableImportModel
@@ -79,6 +78,9 @@ class CourseConversionRepository(
                     day = jsonCourse.day,
                     startSection = jsonCourse.startSection,
                     endSection = jsonCourse.endSection,
+                    isCustomTime = jsonCourse.isCustomTime,
+                    customStartTime = jsonCourse.customStartTime,
+                    customEndTime = jsonCourse.customEndTime,
                     colorInt = courseIndex // 写入颜色索引
                 )
             )
@@ -132,6 +134,9 @@ class CourseConversionRepository(
                     day = jsonCourse.day,
                     startSection = jsonCourse.startSection,
                     endSection = jsonCourse.endSection,
+                    isCustomTime = jsonCourse.isCustomTime,
+                    customStartTime = jsonCourse.customStartTime,
+                    customEndTime = jsonCourse.customEndTime,
                     colorInt = courseIndex // 写入颜色索引
                 )
             )
@@ -223,25 +228,25 @@ class CourseConversionRepository(
 
         val coursesWithWeeks = courseDao.getCoursesWithWeeksByTableId(tableId).first()
         val exportCourses = coursesWithWeeks.map { courseWithWeeks ->
+            val course = courseWithWeeks.course
             val weeks = courseWithWeeks.weeks.map { it.weekNumber }
 
-            // 修正 3: 从数据库获取索引，映射回 Light 颜色的 ARGB 值用于导出 JSON
-            val colorIndex = courseWithWeeks.course.colorInt
-            val exportedColorArgb = CourseImportExport.COURSE_COLOR_MAPS
-                .getOrNull(colorIndex)
-                ?.light?.toArgb()
-                ?: CourseImportExport.COURSE_COLOR_MAPS.first().light.toArgb()
+            // 修正 3: 从数据库获取索引，直接导出索引编号（Int），而不是 ARGB 值。
+            val colorIndex = course.colorInt
 
             ExportCourseJsonModel(
-                id = courseWithWeeks.course.id,
-                name = courseWithWeeks.course.name,
-                teacher = courseWithWeeks.course.teacher,
-                position = courseWithWeeks.course.position,
-                day = courseWithWeeks.course.day,
-                startSection = courseWithWeeks.course.startSection,
-                endSection = courseWithWeeks.course.endSection,
-                color = exportedColorArgb,
-                weeks = weeks
+                id = course.id,
+                name = course.name,
+                teacher = course.teacher,
+                position = course.position,
+                day = course.day,
+                startSection = course.startSection,
+                endSection = course.endSection,
+                color = colorIndex,
+                weeks = weeks,
+                isCustomTime = course.isCustomTime,
+                customStartTime = course.customStartTime,
+                customEndTime = course.customEndTime
             )
         }
 

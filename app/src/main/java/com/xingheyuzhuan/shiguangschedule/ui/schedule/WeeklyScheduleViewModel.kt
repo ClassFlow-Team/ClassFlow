@@ -36,7 +36,8 @@ data class MergedCourseBlock(
     val startSection: Int,
     val endSection: Int,
     val courses: List<CourseWithWeeks>,
-    val isConflict: Boolean = false
+    val isConflict: Boolean = false,
+    val needsProportionalRendering: Boolean = false // 关键字段：标记是否需要分钟级的比例渲染
 )
 
 /**
@@ -66,10 +67,8 @@ class WeeklyScheduleViewModel(
     private val _uiState = MutableStateFlow(WeeklyScheduleUiState())
     val uiState: StateFlow<WeeklyScheduleUiState> = _uiState.asStateFlow()
 
-    // 1. 订阅全局 AppSettings (包含 currentCourseTableId)
     private val appSettingsFlow: Flow<AppSettings> = appSettingsRepository.getAppSettings()
 
-    // 2. 订阅当前课表的配置 (依赖 AppSettings)
     private val courseTableConfigFlow: Flow<CourseTableConfig?> =
         appSettingsFlow.flatMapLatest { settings ->
             settings.currentCourseTableId?.let { tableId ->
@@ -77,7 +76,6 @@ class WeeklyScheduleViewModel(
             } ?: flowOf(null)
         }
 
-    // 3. 订阅当前课表的时间段 (依赖 AppSettings)
     private val timeSlotsForCurrentTable: Flow<List<TimeSlot>> =
         appSettingsFlow.flatMapLatest { settings ->
             if (settings.currentCourseTableId != null) {
@@ -87,7 +85,6 @@ class WeeklyScheduleViewModel(
             }
         }
 
-    // 4. 订阅当前课表的全部课程 (依赖 AppSettings)
     private val allCourses: Flow<List<CourseWithWeeks>> =
         appSettingsFlow.flatMapLatest { settings ->
             if (settings.currentCourseTableId != null) {
@@ -99,10 +96,9 @@ class WeeklyScheduleViewModel(
 
     init {
         viewModelScope.launch {
-            // 组合 appSettingsFlow, courseTableConfigFlow, timeSlots, allCourses
             combine(
                 appSettingsFlow,
-                courseTableConfigFlow, // 接收课表配置
+                courseTableConfigFlow,
                 timeSlotsForCurrentTable,
                 allCourses
             ) { _, config, timeSlots, allCoursesList ->
@@ -116,13 +112,10 @@ class WeeklyScheduleViewModel(
                 }
 
                 val isSemesterSet = semesterStartDate != null
-                // 使用 ?.let 安全地获取配置，提供默认值
                 val totalWeeks = config?.semesterTotalWeeks ?: 20
                 val firstDayOfWeek = config?.firstDayOfWeek ?: DayOfWeek.MONDAY.value
                 val showWeekends = config?.showWeekends ?: false
 
-
-                // 1. 计算当前周数
                 val currentWeekNumber = if (semesterStartDate != null) {
                     calculateCurrentWeek(semesterStartDate, totalWeeks, firstDayOfWeek)
                 } else {
@@ -145,12 +138,7 @@ class WeeklyScheduleViewModel(
         }
     }
 
-    /**
-     * 遍历所有课程，检查颜色索引是否有效。如果无效（例如旧的 ARGB 值），
-     * 则随机生成一个有效索引并更新数据库。
-     */
     private fun fixInvalidCourseColors(courses: List<CourseWithWeeks>) = viewModelScope.launch {
-        // 获取有效的颜色索引范围 (0 到 11)
         val validColorRange = CourseImportExport.COURSE_COLOR_MAPS.indices
 
         for (courseWithWeeks in courses) {
@@ -160,10 +148,7 @@ class WeeklyScheduleViewModel(
             val isInvalid = colorInt !in validColorRange
 
             if (isInvalid) {
-                // 1. 随机生成一个新的有效索引
                 val newColorInt = CourseImportExport.getRandomColorIndex()
-
-                // 2. 调用 Repository 更新数据库中的颜色索引
                 courseTableRepository.updateCourseColor(
                     courseId = course.id,
                     newColorInt = newColorInt
@@ -202,31 +187,68 @@ fun mergeCourses(
     timeSlots: List<TimeSlot>
 ): List<MergedCourseBlock> {
     val mergedBlocks = mutableListOf<MergedCourseBlock>()
-    val coursesByDay = courses.groupBy { it.course.day }
+
+    // 1. 预处理课程：确保所有课程都有非空的节次。自定义课程使用虚拟节次来通过排序。
+    val processedCourses = courses.mapNotNull { courseWithWeeks ->
+        val c = courseWithWeeks.course
+
+        if (c.isCustomTime) {
+            // 自定义课程：必须分配一个非空值来避免后续的排序和合并逻辑崩溃。
+            // 节次 1-1 仅是占位符，最终渲染高度和位置由 customTime 决定。
+            val start = c.startSection ?: 1
+            val end = c.endSection ?: 1
+
+            courseWithWeeks.copy(
+                course = c.copy(
+                    startSection = start,
+                    endSection = end
+                )
+            )
+        } else {
+            // 标准课程：必须有非空的节次，否则丢弃。
+            if (c.startSection == null || c.endSection == null) {
+                return@mapNotNull null
+            }
+            courseWithWeeks
+        }
+    }
+
+    val filteredCourses = processedCourses
+
+    // 2. 按天分组并进行合并
+    val coursesByDay = filteredCourses
+        .filter { it.course.day in 1..7 }
+        .groupBy { it.course.day }
 
     for ((day, dailyCourses) in coursesByDay) {
-        val coursesSorted = dailyCourses.sortedBy { it.course.startSection }
-        val processedCourses = mutableSetOf<CourseWithWeeks>()
+        // 必须基于节次进行排序 (使用非空断言，因为前面已经保证非空)
+        val coursesSorted = dailyCourses.sortedBy { it.course.startSection!! }
+        val processedInDay = mutableSetOf<CourseWithWeeks>()
 
         for (course in coursesSorted) {
-            if (!processedCourses.contains(course)) {
+            if (!processedInDay.contains(course)) {
                 val combinedCourses = mutableListOf(course)
-                var currentStartSection = course.course.startSection
-                var currentEndSection = course.course.endSection
+
+                // 必须基于节次进行冲突检测 (使用非空断言)
+                var currentStartSection = course.course.startSection!!
+                var currentEndSection = course.course.endSection!!
                 var isConflict = false
 
                 val overlappingCourses = coursesSorted.filter { other ->
                     other != course &&
-                            !(other.course.endSection < currentStartSection ||
-                                    other.course.startSection > currentEndSection)
+                            !(other.course.endSection!! < currentStartSection ||
+                                    other.course.startSection!! > currentEndSection)
                 }
 
                 if (overlappingCourses.isNotEmpty()) {
                     isConflict = true
                     combinedCourses.addAll(overlappingCourses)
-                    currentStartSection = combinedCourses.minOf { it.course.startSection }
-                    currentEndSection = combinedCourses.maxOf { it.course.endSection }
+                    currentStartSection = combinedCourses.minOf { it.course.startSection!! }
+                    currentEndSection = combinedCourses.maxOf { it.course.endSection!! }
                 }
+
+                // 核心：只要合并块中有一个是自定义时间，就启用比例渲染标记
+                val needsProportionalRendering = combinedCourses.any { it.course.isCustomTime }
 
                 mergedBlocks.add(
                     MergedCourseBlock(
@@ -234,10 +256,12 @@ fun mergeCourses(
                         startSection = currentStartSection,
                         endSection = currentEndSection,
                         courses = combinedCourses.distinct(),
-                        isConflict = isConflict
+                        isConflict = isConflict,
+                        needsProportionalRendering = needsProportionalRendering
                     )
                 )
-                processedCourses.addAll(combinedCourses)
+
+                processedInDay.addAll(combinedCourses)
             }
         }
     }

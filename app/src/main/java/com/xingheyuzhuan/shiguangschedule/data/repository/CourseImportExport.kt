@@ -53,9 +53,12 @@ object CourseImportExport {
         val teacher: String,
         val position: String,
         val day: Int,
-        val startSection: Int,
-        val endSection: Int,
+        val startSection: Int? = null,
+        val endSection: Int? = null,
         val weeks: List<Int>,
+        val isCustomTime: Boolean = false,
+        val customStartTime: String? = null,
+        val customEndTime: String? = null,
         val color: Int? = null
     )
 
@@ -74,10 +77,13 @@ object CourseImportExport {
         val teacher: String,
         val position: String,
         val day: Int,
-        val startSection: Int,
-        val endSection: Int,
+        val startSection: Int? = null,
+        val endSection: Int? = null,
         val color: Int, // 导出时颜色必须
-        val weeks: List<Int>
+        val weeks: List<Int>,
+        val isCustomTime: Boolean = false,
+        val customStartTime: String? = null,
+        val customEndTime: String? = null
     )
 
     // 导入和导出都通用的时间段模型

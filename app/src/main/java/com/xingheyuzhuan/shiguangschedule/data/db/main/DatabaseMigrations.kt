@@ -12,7 +12,6 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {
-
         // --- 步骤 1: 创建新的 course_table_config 表 ---
         db.execSQL(
             """
@@ -108,8 +107,24 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+/**
+ * 数据库版本 2 迁移到 版本 3 的迁移代码。
+ * 修改 courses 表，添加自定义时间字段。
+ */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+
+        // 只需要修改 courses 表，添加自定义时间字段
+        // 注意：Kotlin Boolean 对应 SQLite INTEGER (0=false, 1=true)
+        db.execSQL("ALTER TABLE `courses` ADD COLUMN `isCustomTime` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `courses` ADD COLUMN `customStartTime` TEXT") // Nullable TEXT
+        db.execSQL("ALTER TABLE `courses` ADD COLUMN `customEndTime` TEXT")   // Nullable TEXT
+    }
+}
+
+
 // 【集中管理所有迁移对象】
 val ALL_MIGRATIONS = arrayOf(
     MIGRATION_1_2,
-    // 未来在这里添加 MIGRATION_2_3, MIGRATION_3_4 等...
+    MIGRATION_2_3,
 )

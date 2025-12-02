@@ -96,9 +96,9 @@ class TodayScheduleViewModel(
     }
 
     class TodayScheduleViewModelFactory(private val application: Application) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(TodayScheduleViewModel::class.java)) {
-                @Suppress("UNCHECKED_CAST")
                 val myApp = application as MyApplication
                 return TodayScheduleViewModel(
                     myApp,

@@ -53,6 +53,12 @@
     <string name="title_select_weeks">選擇上課週次</string>
     <string name="title_select_color">選擇課程顏色</string>
     <string name="a11y_color_selected">已選擇</string>
+    <string name="label_custom_time_range">自訂時間段</string>
+    <string name="label_select_custom_time">選擇自訂時間</string>
+    <string name="toast_custom_time_empty">起始時間或結束時間不能為空</string>
+    <string name="label_custom_time">自訂時間</string>
+    <string name="label_start_time">開始時間</string>
+    <string name="label_end_time">結束時間</string>
 
     <!-- 課程相關 -->
     <string name="course_time_description">時間: 第%1$s-%2$s節 (%3$s-%4$s)</string>
@@ -302,6 +308,7 @@
     <string name="toast_tweak_success">調課成功！</string>
     <string name="error_tweak_failed">調課失敗：%1$s</string>
     <string name="course_time_day_section_details_tweak">%1$s | 節次 %2$s-%3$s</string>
+    <string name="course_time_day_time_details_tweak">%1$s | 時間 %2$s-%3$s</string>
 
     <!-- 教務匯入 -->
     <string name="title_select_school">選擇學校</string>

@@ -268,7 +268,9 @@ fun TweakScheduleScreen(
 @Composable
 fun CourseDisplayCard(title: String, courses: List<CourseWithWeeks>, modifier: Modifier = Modifier) {
     val textNoCourse = stringResource(R.string.text_no_course)
-    val courseTimeDaySectionDetailsTweak = stringResource(R.string.course_time_day_section_details_tweak)
+    val sectionFormatRes = R.string.course_time_day_section_details_tweak
+    val customTimeFormatRes = R.string.course_time_day_time_details_tweak
+
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(text = title, style = MaterialTheme.typography.titleLarge)
@@ -288,6 +290,28 @@ fun CourseDisplayCard(title: String, courses: List<CourseWithWeeks>, modifier: M
                 } else {
                     items(courses) { courseWithWeeks ->
                         val course = courseWithWeeks.course
+
+                        val dayString = getLocalizedDayString(course.day)
+
+                        val detailsText = if (course.isCustomTime) {
+                            val startTime = course.customStartTime ?: "??:??"
+                            val endTime = course.customEndTime ?: "??:??"
+
+                            stringResource(
+                                id = customTimeFormatRes,
+                                dayString,
+                                startTime,
+                                endTime
+                            )
+                        } else {
+                            stringResource(
+                                id = sectionFormatRes,
+                                dayString,
+                                course.startSection.toString(),
+                                course.endSection.toString()
+                            )
+                        }
+
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -295,12 +319,7 @@ fun CourseDisplayCard(title: String, courses: List<CourseWithWeeks>, modifier: M
                         ) {
                             Text(text = course.name, style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                text = stringResource(
-                                    R.string.course_time_day_section_details_tweak,
-                                    getLocalizedDayString(course.day),
-                                    course.startSection,
-                                    course.endSection
-                                ),
+                                text = detailsText, // 使用修正后的文本
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
