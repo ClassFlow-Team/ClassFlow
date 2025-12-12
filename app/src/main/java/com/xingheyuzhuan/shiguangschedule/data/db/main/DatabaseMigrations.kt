@@ -114,11 +114,44 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
 val MIGRATION_2_3 = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) {
 
-        // 只需要修改 courses 表，添加自定义时间字段
-        // 注意：Kotlin Boolean 对应 SQLite INTEGER (0=false, 1=true)
-        db.execSQL("ALTER TABLE `courses` ADD COLUMN `isCustomTime` INTEGER NOT NULL DEFAULT 0")
-        db.execSQL("ALTER TABLE `courses` ADD COLUMN `customStartTime` TEXT") // Nullable TEXT
-        db.execSQL("ALTER TABLE `courses` ADD COLUMN `customEndTime` TEXT")   // Nullable TEXT
+        // 创建具有新结构和约束的临时表 `courses_new`
+        db.execSQL(
+            """
+            CREATE TABLE `courses_new` (
+                `id` TEXT NOT NULL,
+                `courseTableId` TEXT NOT NULL,
+                `name` TEXT NOT NULL,
+                `teacher` TEXT NOT NULL,
+                `position` TEXT NOT NULL,
+                `day` INTEGER NOT NULL,
+                `startSection` INTEGER,  -- 变为可空 (Int?)
+                `endSection` INTEGER,    -- 变为可空 (Int?)
+                `isCustomTime` INTEGER NOT NULL DEFAULT 0, -- 新增字段，默认 FALSE
+                `customStartTime` TEXT,  -- 新增字段
+                `customEndTime` TEXT,    -- 新增字段
+                `colorInt` INTEGER NOT NULL,
+                PRIMARY KEY(`id`),
+                FOREIGN KEY(`courseTableId`) REFERENCES `course_tables`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """
+        )
+
+        // 将原表数据复制到新表
+        // 注意：新字段使用默认值或 NULL
+        db.execSQL(
+            """
+            INSERT INTO courses_new (id, courseTableId, name, teacher, position, day, startSection, endSection, colorInt, isCustomTime, customStartTime, customEndTime)
+            SELECT id, courseTableId, name, teacher, position, day, startSection, endSection, colorInt, 0, NULL, NULL
+            FROM courses
+            """
+        )
+
+        // 移除原表并重命名新表
+        db.execSQL("DROP TABLE courses")
+        db.execSQL("ALTER TABLE courses_new RENAME TO courses")
+
+        // 重新创建必要的索引和外键索引
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_courses_courseTableId` ON `courses` (`courseTableId`)")
     }
 }
 
