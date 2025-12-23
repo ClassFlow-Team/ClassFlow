@@ -48,7 +48,7 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         if (cursor.moveToFirst()) {
             currentCourseTableId = cursor.getString(0)
             showWeekends = cursor.getInt(1)
-            if (!cursor.isNull(2)) semesterStartDate = cursor.getString(2) else semesterStartDate = null
+            semesterStartDate = if (!cursor.isNull(2)) cursor.getString(2) else null
             semesterTotalWeeks = cursor.getInt(3)
             defaultClassDuration = cursor.getInt(4)
             defaultBreakDuration = cursor.getInt(5)
@@ -62,7 +62,7 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
                 INSERT INTO `course_table_config` (courseTableId, showWeekends, semesterStartDate, semesterTotalWeeks, defaultClassDuration, defaultBreakDuration, firstDayOfWeek)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                arrayOf(
+                arrayOf<Any?>(
                     currentCourseTableId,
                     showWeekends,
                     semesterStartDate,

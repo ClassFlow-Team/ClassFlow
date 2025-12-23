@@ -9,22 +9,14 @@ import com.xingheyuzhuan.shiguangschedule.data.db.main.AppSettings
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
-import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
-import com.xingheyuzhuan.shiguangschedule.data.repository.CourseTableRepository
-import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
-import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport
+import com.xingheyuzhuan.shiguangschedule.data.model.ScheduleGridStyle
+import com.xingheyuzhuan.shiguangschedule.data.repository.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
-import java.time.DayOfWeek
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 
@@ -44,6 +36,7 @@ data class MergedCourseBlock(
  * 周课表 UI 的所有状态。
  */
 data class WeeklyScheduleUiState(
+    val style: ScheduleGridStyle = ScheduleGridStyle(),
     val showWeekends: Boolean = false,
     val totalWeeks: Int = 20,
     val timeSlots: List<TimeSlot> = emptyList(),
@@ -61,13 +54,18 @@ data class WeeklyScheduleUiState(
 class WeeklyScheduleViewModel(
     private val appSettingsRepository: AppSettingsRepository,
     private val courseTableRepository: CourseTableRepository,
-    private val timeSlotRepository: TimeSlotRepository
+    private val timeSlotRepository: TimeSlotRepository,
+    private val styleSettingsRepository: StyleSettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WeeklyScheduleUiState())
     val uiState: StateFlow<WeeklyScheduleUiState> = _uiState.asStateFlow()
 
+    // 获取全局设置流
     private val appSettingsFlow: Flow<AppSettings> = appSettingsRepository.getAppSettings()
+
+    // 获取当前样式流（用于动态获取颜色池大小、UI 样式配置）
+    private val styleFlow: Flow<ScheduleGridStyle> = styleSettingsRepository.styleFlow
 
     private val courseTableConfigFlow: Flow<CourseTableConfig?> =
         appSettingsFlow.flatMapLatest { settings ->
@@ -78,20 +76,16 @@ class WeeklyScheduleViewModel(
 
     private val timeSlotsForCurrentTable: Flow<List<TimeSlot>> =
         appSettingsFlow.flatMapLatest { settings ->
-            if (settings.currentCourseTableId != null) {
-                timeSlotRepository.getTimeSlotsByCourseTableId(settings.currentCourseTableId)
-            } else {
-                flowOf(emptyList())
-            }
+            settings.currentCourseTableId?.let { tableId ->
+                timeSlotRepository.getTimeSlotsByCourseTableId(tableId)
+            } ?: flowOf(emptyList())
         }
 
     private val allCourses: Flow<List<CourseWithWeeks>> =
         appSettingsFlow.flatMapLatest { settings ->
-            if (settings.currentCourseTableId != null) {
-                courseTableRepository.getCoursesWithWeeksByTableId(settings.currentCourseTableId)
-            } else {
-                flowOf(emptyList())
-            }
+            settings.currentCourseTableId?.let { tableId ->
+                courseTableRepository.getCoursesWithWeeksByTableId(tableId)
+            } ?: flowOf(emptyList())
         }
 
     init {
@@ -100,59 +94,57 @@ class WeeklyScheduleViewModel(
                 appSettingsFlow,
                 courseTableConfigFlow,
                 timeSlotsForCurrentTable,
-                allCourses
-            ) { _, config, timeSlots, allCoursesList ->
+                allCourses,
+                styleFlow
+            ) { _, config, timeSlots, allCoursesList, currentStyle ->
 
-                val startDateString = config?.semesterStartDate
-
-                val semesterStartDate: LocalDate? = try {
-                    startDateString?.let { LocalDate.parse(it) }
+                val semesterStartDate = try {
+                    config?.semesterStartDate?.let { LocalDate.parse(it) }
                 } catch (e: DateTimeParseException) {
                     null
                 }
 
-                val isSemesterSet = semesterStartDate != null
                 val totalWeeks = config?.semesterTotalWeeks ?: 20
                 val firstDayOfWeek = config?.firstDayOfWeek ?: DayOfWeek.MONDAY.value
                 val showWeekends = config?.showWeekends ?: false
 
-                val currentWeekNumber = if (semesterStartDate != null) {
-                    calculateCurrentWeek(semesterStartDate, totalWeeks, firstDayOfWeek)
-                } else {
-                    null
+                val currentWeekNumber = semesterStartDate?.let {
+                    calculateCurrentWeek(it, totalWeeks, firstDayOfWeek)
                 }
 
-                fixInvalidCourseColors(allCoursesList)
+                fixInvalidCourseColors(allCoursesList, currentStyle)
 
                 WeeklyScheduleUiState(
+                    style = currentStyle,
                     showWeekends = showWeekends,
                     totalWeeks = totalWeeks,
                     allCourses = allCoursesList,
                     timeSlots = timeSlots,
-                    isSemesterSet = isSemesterSet,
+                    isSemesterSet = semesterStartDate != null,
                     semesterStartDate = semesterStartDate,
                     firstDayOfWeek = firstDayOfWeek,
                     currentWeekNumber = currentWeekNumber
                 )
-            }.collect { _uiState.value = it }
+            }.collect { state ->
+                _uiState.value = state
+            }
         }
     }
 
-    private fun fixInvalidCourseColors(courses: List<CourseWithWeeks>) = viewModelScope.launch {
-        val validColorRange = CourseImportExport.COURSE_COLOR_MAPS.indices
+    /**
+     * 优化点：使用动态样式的 indices 进行校验，避免静态常量失效导致的颜色错乱。
+     */
+    private fun fixInvalidCourseColors(courses: List<CourseWithWeeks>, style: ScheduleGridStyle) {
+        viewModelScope.launch {
+            val validRange = style.courseColorMaps.indices
 
-        for (courseWithWeeks in courses) {
-            val course = courseWithWeeks.course
-            val colorInt = course.colorInt
-
-            val isInvalid = colorInt !in validColorRange
-
-            if (isInvalid) {
-                val newColorInt = CourseImportExport.getRandomColorIndex()
-                courseTableRepository.updateCourseColor(
-                    courseId = course.id,
-                    newColorInt = newColorInt
-                )
+            courses.forEach { courseWithWeeks ->
+                val course = courseWithWeeks.course
+                // 如果当前课程的颜色索引超出了当前样式定义的颜色池范围，重置为一个合法的随机颜色
+                if (course.colorInt !in validRange) {
+                    val newColorIndex = style.generateRandomColorIndex()
+                    courseTableRepository.updateCourseColor(course.id, newColorIndex)
+                }
             }
         }
     }
@@ -193,8 +185,6 @@ fun mergeCourses(
         val c = courseWithWeeks.course
 
         if (c.isCustomTime) {
-            // 自定义课程：必须分配一个非空值来避免后续的排序和合并逻辑崩溃。
-            // 节次 1-1 仅是占位符，最终渲染高度和位置由 customTime 决定。
             val start = c.startSection ?: 1
             val end = c.endSection ?: 1
 
@@ -205,7 +195,6 @@ fun mergeCourses(
                 )
             )
         } else {
-            // 标准课程：必须有非空的节次，否则丢弃。
             if (c.startSection == null || c.endSection == null) {
                 return@mapNotNull null
             }
@@ -213,15 +202,12 @@ fun mergeCourses(
         }
     }
 
-    val filteredCourses = processedCourses
-
     // 2. 按天分组并进行合并
-    val coursesByDay = filteredCourses
+    val coursesByDay = processedCourses
         .filter { it.course.day in 1..7 }
         .groupBy { it.course.day }
 
     for ((day, dailyCourses) in coursesByDay) {
-        // 必须基于节次进行排序 (使用非空断言，因为前面已经保证非空)
         val coursesSorted = dailyCourses.sortedBy { it.course.startSection!! }
         val processedInDay = mutableSetOf<CourseWithWeeks>()
 
@@ -229,7 +215,6 @@ fun mergeCourses(
             if (!processedInDay.contains(course)) {
                 val combinedCourses = mutableListOf(course)
 
-                // 必须基于节次进行冲突检测 (使用非空断言)
                 var currentStartSection = course.course.startSection!!
                 var currentEndSection = course.course.endSection!!
                 var isConflict = false
@@ -247,7 +232,6 @@ fun mergeCourses(
                     currentEndSection = combinedCourses.maxOf { it.course.endSection!! }
                 }
 
-                // 核心：只要合并块中有一个是自定义时间，就启用比例渲染标记
                 val needsProportionalRendering = combinedCourses.any { it.course.isCustomTime }
 
                 mergedBlocks.add(
@@ -268,18 +252,20 @@ fun mergeCourses(
     return mergedBlocks
 }
 
-
+/**
+ * ViewModel 工厂类
+ */
 object WeeklyScheduleViewModelFactory : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-        val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
+        val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]) as MyApplication
 
         if (modelClass.isAssignableFrom(WeeklyScheduleViewModel::class.java)) {
-            val myApplication = application as MyApplication
             @Suppress("UNCHECKED_CAST")
             return WeeklyScheduleViewModel(
-                appSettingsRepository = myApplication.appSettingsRepository,
-                courseTableRepository = myApplication.courseTableRepository,
-                timeSlotRepository = myApplication.timeSlotRepository
+                appSettingsRepository = application.appSettingsRepository,
+                courseTableRepository = application.courseTableRepository,
+                timeSlotRepository = application.timeSlotRepository,
+                styleSettingsRepository = application.styleSettingsRepository
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

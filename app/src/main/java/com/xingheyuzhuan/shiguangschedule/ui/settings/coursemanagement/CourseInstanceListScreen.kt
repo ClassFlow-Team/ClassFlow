@@ -37,16 +37,18 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Screen
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
-import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport
-import com.xingheyuzhuan.shiguangschedule.data.repository.DualColor
+import com.xingheyuzhuan.shiguangschedule.data.model.DualColor
 import com.xingheyuzhuan.shiguangschedule.navigation.AddEditCourseChannel
 import com.xingheyuzhuan.shiguangschedule.navigation.PresetCourseData
 import kotlinx.coroutines.launch
@@ -67,14 +69,16 @@ fun CourseInstanceListScreen(
     navController: NavController,
     viewModel: CourseInstanceListViewModel = viewModel(factory = CourseInstanceListViewModel.Factory)
 ) {
-    val courseInstances by viewModel.courseInstances.collectAsState()
+    // 使用 collectAsStateWithLifecycle 观察 UI 状态（包含颜色列表）
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val courseInstances by viewModel.courseInstances.collectAsStateWithLifecycle()
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
     val selectedCourseIds by viewModel.selectedCourseIds.collectAsState()
     val scope = rememberCoroutineScope()
 
     val onNavigateToAddNewCourse: () -> Unit = {
         scope.launch {
-            // 1. 创建包含默认课程名称、默认节次 (1-2) 的预设数据
+            // 修正 Argument type mismatch：显式将 Int 传入 PresetCourseData
             val presetData = PresetCourseData(
                 name = courseName,
                 startSection = 1,
@@ -188,6 +192,7 @@ fun CourseInstanceListScreen(
                     courseWithWeeks = courseWithWeeks,
                     isSelectionMode = isSelectionMode,
                     isSelected = selectedCourseIds.contains(courseWithWeeks.course.id),
+                    colorMaps = uiState.courseColorMaps,
                     onCourseClick = { courseId ->
                         if (isSelectionMode) {
                             // 选择模式下，点击切换选择状态
@@ -218,6 +223,7 @@ fun CourseInstanceCard(
     courseWithWeeks: CourseWithWeeks,
     isSelectionMode: Boolean,
     isSelected: Boolean,
+    colorMaps: List<DualColor>,
     onCourseClick: (courseId: String) -> Unit,
     onCourseLongClick: (courseId: String) -> Unit
 ) {
@@ -226,13 +232,15 @@ fun CourseInstanceCard(
 
     val isDarkTheme = isSystemInDarkTheme()
 
-    val courseColorDual: DualColor = CourseImportExport.COURSE_COLOR_MAPS.getOrElse(course.colorInt) {
-        CourseImportExport.COURSE_COLOR_MAPS.first()
-    }
+    // 如果索引不存在，则取列表第一项；如果列表为空，则使用 MaterialTheme 的 SurfaceVariant 颜色兜底
+    val fallbackColor = DualColor(
+        light = MaterialTheme.colorScheme.surfaceVariant,
+        dark = MaterialTheme.colorScheme.surfaceVariant
+    )
+    val courseColorDual = colorMaps.getOrNull(course.colorInt) ?: colorMaps.firstOrNull() ?: fallbackColor
 
     // 根据主题获取课程背景色
     val courseBackgroundColor = if (isDarkTheme) courseColorDual.dark else courseColorDual.light
-
 
     val weekDays = stringArrayResource(R.array.week_days_full_names)
     val dayName = weekDays.getOrElse(course.day - 1) { "?" }
@@ -264,15 +272,13 @@ fun CourseInstanceCard(
             // 教师信息
             Text(
                 text = course.teacher,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                style = MaterialTheme.typography.labelMedium
             )
             Spacer(modifier = Modifier.height(4.dp))
             // 地点信息
             Text(
                 text = course.position,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface
+                style = MaterialTheme.typography.bodySmall
             )
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -295,8 +301,7 @@ fun CourseInstanceCard(
 
             Text(
                 text = timeText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                style = MaterialTheme.typography.bodyMedium
             )
 
             // 周次信息
@@ -306,8 +311,7 @@ fun CourseInstanceCard(
                     courseWithWeeks.weeks.map { it.weekNumber }.joinToString(", ")
                 ),
                 style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(top = 4.dp),
-                color = MaterialTheme.colorScheme.onSurface
+                modifier = Modifier.padding(top = 4.dp)
             )
         }
     }

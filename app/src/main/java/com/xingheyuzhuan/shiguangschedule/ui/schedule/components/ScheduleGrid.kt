@@ -43,6 +43,7 @@ import com.xingheyuzhuan.shiguangschedule.R
  */
 @Composable
 fun ScheduleGrid(
+    style: ScheduleGridStyleComposed,
     dates: List<String>,
     timeSlots: List<TimeSlot>,
     mergedCourses: List<MergedCourseBlock>,
@@ -60,9 +61,10 @@ fun ScheduleGrid(
 
     val density = LocalDensity.current
     val screenWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
-    val timeColumnWidth = ScheduleGridDefaults.TimeColumnWidth
-    val dayHeaderHeight = ScheduleGridDefaults.DayHeaderHeight
-    val sectionHeight = ScheduleGridDefaults.SectionHeight
+
+    val timeColumnWidth = style.timeColumnWidth
+    val dayHeaderHeight = style.dayHeaderHeight
+    val sectionHeight = style.sectionHeight
     val gridLineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
 
     val gridWidth = screenWidth - timeColumnWidth
@@ -76,6 +78,7 @@ fun ScheduleGrid(
 
     Column(modifier = Modifier.fillMaxSize()) {
         DayHeader(
+            style = style,
             displayDays = displayDays,
             dates = dates,
             cellWidth = cellWidth,
@@ -91,6 +94,7 @@ fun ScheduleGrid(
                 .verticalScroll(rememberScrollState())
         ) {
             TimeColumn(
+                style = style,
                 timeSlots = timeSlots,
                 timeColumnWidth = timeColumnWidth,
                 sectionHeight = sectionHeight,
@@ -130,6 +134,10 @@ fun ScheduleGrid(
 
                     // 只有当课程在显示的列范围内时才绘制
                     if (newDayIndex != -1) {
+
+                        // 根据起始节次查找对应的标准开始时间
+                        val sectionStartTime = timeSlots.find { it.number == mergedBlock.startSection }?.startTime
+
                         // 使用 0-based 的索引计算 offsetX
                         val offsetX = newDayIndex * cellWidth
 
@@ -150,7 +158,9 @@ fun ScheduleGrid(
                                 .clickable { onCourseBlockClicked(mergedBlock) }
                         ) {
                             CourseBlock(
-                                mergedBlock = mergedBlock
+                                mergedBlock = mergedBlock,
+                                style = style,
+                                startTime = sectionStartTime
                             )
                         }
                     }
@@ -281,6 +291,7 @@ private fun calculateProportionalLayout(
  */
 @Composable
 private fun DayHeader(
+    style: ScheduleGridStyleComposed,
     displayDays: List<String>,
     dates: List<String>,
     cellWidth: Dp,
@@ -293,7 +304,10 @@ private fun DayHeader(
         modifier = Modifier
             .fillMaxWidth()
             .height(dayHeaderHeight)
-            .background(MaterialTheme.colorScheme.background)
+            .background(
+                if (style.backgroundImagePath.isNotEmpty()) Color.Transparent
+                else MaterialTheme.colorScheme.surface
+            )
             .drawBehind {
                 drawLine(
                     color = gridLineColor.copy(alpha = 0.3f),
@@ -312,7 +326,12 @@ private fun DayHeader(
         // 星期几和日期
         displayDays.forEachIndexed { index, day ->
             val isToday = index == todayIndex
-            val backgroundColor = if (isToday) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+            val backgroundColor = if (isToday) {
+                if (style.backgroundImagePath.isNotEmpty()) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                else MaterialTheme.colorScheme.primaryContainer
+            } else {
+                Color.Transparent
+            }
             val textColor = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
             val dateColor = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
 
@@ -335,7 +354,7 @@ private fun DayHeader(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(text = day, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textColor, lineHeight = 14.sp)
-                if (dates.size > index) {
+                if (!style.hideDateUnderDay && dates.size > index) {
                     Text(text = dates[index], fontSize = 10.sp, color = dateColor, lineHeight = 10.sp)
                 }
             }
@@ -348,6 +367,7 @@ private fun DayHeader(
  */
 @Composable
 private fun TimeColumn(
+    style: ScheduleGridStyleComposed,
     timeSlots: List<TimeSlot>,
     timeColumnWidth: Dp,
     sectionHeight: Dp,
@@ -359,7 +379,10 @@ private fun TimeColumn(
     Column(
         modifier = modifier
             .width(timeColumnWidth)
-            .background(MaterialTheme.colorScheme.background)
+            .background(
+                if (style.backgroundImagePath.isNotEmpty()) Color.Transparent
+                else MaterialTheme.colorScheme.surface
+            )
             .drawBehind {
                 val strokeWidth = 1f
                 val transparentColor = gridLineColor.copy(alpha = 0.3f)
@@ -397,9 +420,11 @@ private fun TimeColumn(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Text(text = slot.number.toString(), fontSize = 16.sp, fontWeight = FontWeight.Bold, lineHeight = 16.sp)
-                Text(text = slot.startTime, fontSize = 10.sp, lineHeight = 10.sp)
-                Text(text = slot.endTime, fontSize = 10.sp, lineHeight = 10.sp)
+                Text(text = slot.number.toString(), fontSize = 16.sp, fontWeight = FontWeight.Bold, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                if (!style.hideSectionTime) {
+                    Text(text = slot.startTime, fontSize = 10.sp, lineHeight = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(text = slot.endTime, fontSize = 10.sp, lineHeight = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }

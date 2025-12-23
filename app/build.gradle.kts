@@ -150,6 +150,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.protobuf.kotlin.lite)
     implementation(libs.protobuf.java.lite)
+    implementation(libs.javax.inject)
     ksp(libs.androidx.room.compiler)
 
     testImplementation(libs.junit)

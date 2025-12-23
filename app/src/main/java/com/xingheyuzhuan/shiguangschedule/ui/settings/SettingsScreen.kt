@@ -346,6 +346,12 @@ private fun AdvancedSettingsSection(navController: NavHostController) {
                 onClick = { navController.navigate(Screen.TimeSlotSettings.route) }
             )
 
+            // 个性化配置
+            SettingItem(
+                title = stringResource(R.string.item_personalization),
+                subtitle = stringResource(R.string.desc_personalization),
+                onClick = { navController.navigate(Screen.StyleSettings.route) }
+            )
             // 更多选项设置项
             SettingItem(
                 title = stringResource(R.string.item_more_options),

@@ -406,4 +406,49 @@
     <string name="label_username_or_token_key">Username or token key</string>
     <string name="label_password_or_token_value">Password or token value</string>
     <string name="title_update_log">Update log</string>
+
+    <!-- Color Picker -->
+    <string name="color_picker_title_edit">Adjust Color</string>
+    <string name="color_picker_title_precise">Precise Values</string>
+    <string name="color_picker_mode_visual">Slider Mode</string>
+    <string name="color_picker_mode_input">Digital Mode</string>
+    <string name="color_picker_label_hue">Hue</string>
+    <string name="color_picker_label_saturation">Saturation</string>
+    <string name="color_picker_label_value">Value</string>
+    <string name="color_picker_label_alpha">Alpha</string>
+    <string name="a11y_switch_color_mode">Switch input mode</string>
+
+    <!-- Personalization -->
+    <string name="item_personalization">Personalization</string>
+    <string name="desc_personalization">Adjust schedule grid height, corner radius, spacing, and opacity</string>
+    <string name="style_category_interface">Interface</string>
+    <string name="style_category_grid_size">Grid Size</string>
+    <string name="style_category_course_block">Course Block Settings</string>
+    <string name="style_category_color_scheme">Color Scheme (Tap circle to edit)</string>
+    <string name="label_wallpaper">Schedule Wallpaper</string>
+    <string name="desc_wallpaper_set">Set (Long press to clear)</string>
+    <string name="desc_wallpaper_unset">Not set (Tap to select image)</string>
+    <string name="label_hide_section_time">Hide specific section times</string>
+    <string name="label_hide_date_under_day">Hide date (below day of week)</string>
+    <string name="label_show_start_time">Show start time on course cells</string>
+    <string name="label_section_height">Grid Height</string>
+    <string name="label_time_column_width">Sidebar Width</string>
+    <string name="label_day_header_height">Top Header Height</string>
+    <string name="label_hide_location">Hide Location</string>
+    <string name="label_hide_teacher">Hide Teacher</string>
+    <string name="label_remove_location_at">Remove @ symbol before location</string>
+    <string name="label_font_scale">Font Scale</string>
+    <string name="label_corner_radius">Corner Radius</string>
+    <string name="label_inner_padding">Inner Padding</string>
+    <string name="label_outer_padding">Outer Spacing</string>
+    <string name="label_opacity">Opacity</string>
+    <string name="title_light_color_pool">Light Mode Color Pool</string>
+    <string name="title_dark_color_pool">Dark Mode Color Pool</string>
+    <string name="label_color_conflict">Conflict</string>
+    <string name="preview_light_mode">Light Mode Preview\nFixed dark text</string>
+    <string name="preview_dark_mode">Dark Mode Preview\nFixed light text</string>
+    <string name="action_reset_style">Reset to default style</string>
+    <string name="dialog_reset_title">Reset Style</string>
+    <string name="dialog_reset_message">Are you sure you want to reset all style settings to default? This action cannot be undone.</string>
+
 </resources>

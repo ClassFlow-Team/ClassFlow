@@ -68,4 +68,6 @@ sealed class Screen(val route: String) {
             return "course_management_detail/$encodedCourseName"
         }
     }
+
+    object StyleSettings : Screen("style_settings")
 }

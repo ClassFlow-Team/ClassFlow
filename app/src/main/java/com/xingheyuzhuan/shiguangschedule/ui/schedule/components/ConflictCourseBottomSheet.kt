@@ -16,36 +16,31 @@ import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import androidx.compose.ui.res.stringResource
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.COURSE_COLOR_MAPS
 
 /**
  * 冲突课程列表底部动作条。
- *
- * @param courses 冲突的课程列表。
- * @param timeSlots 时间段列表，用于查找开始和结束时间。
- * @param onCourseClicked 当用户点击某个冲突课程时触发的回调。
- * @param onDismissRequest 当底部动作条被关闭时触发的回调。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConflictCourseBottomSheet(
     courses: List<CourseWithWeeks>,
     timeSlots: List<TimeSlot>,
+    style: ScheduleGridStyleComposed,
     onCourseClicked: (CourseWithWeeks) -> Unit,
     onDismissRequest: () -> Unit
 ) {
     val isDarkTheme = isSystemInDarkTheme()
 
     val conflictTitleColor = if (isDarkTheme) {
-        ScheduleGridDefaults.ConflictCourseColorDark
+        style.conflictCourseColorDark
     } else {
-        ScheduleGridDefaults.ConflictCourseColor
+        style.conflictCourseColor
     }
 
     val fallbackColorAdapted = if (isDarkTheme) {
-        COURSE_COLOR_MAPS.first().dark
+        style.courseColorMaps.first().dark
     } else {
-        COURSE_COLOR_MAPS.first().light
+        style.courseColorMaps.first().light
     }
 
     ModalBottomSheet(
@@ -72,32 +67,27 @@ fun ConflictCourseBottomSheet(
                 items(courses) { courseWithWeeks ->
                     val course = courseWithWeeks.course
 
-                    // ⭐ 核心修改 1: 检查是否为自定义时间课程
                     val isCustomTimeCourse = course.customStartTime != null && course.customEndTime != null
 
-                    // 只有非自定义时间课程才需要查找 timeSlots
                     val startSlot = timeSlots.find { it.number == course.startSection }?.startTime ?: "N/A"
                     val endSlot = timeSlots.find { it.number == course.endSection }?.endTime ?: "N/A"
 
-                    val colorIndex = course.colorInt.takeIf { it in COURSE_COLOR_MAPS.indices }
+                    val colorIndex = course.colorInt.takeIf { it in style.courseColorMaps.indices }
 
                     val cardBaseColor = colorIndex?.let { index ->
-                        val dualColor = COURSE_COLOR_MAPS[index]
+                        val dualColor = style.courseColorMaps[index]
                         if (isDarkTheme) dualColor.dark else dualColor.light
                     } ?: fallbackColorAdapted
 
-                    // 应用配置文件中的透明度
-                    val cardColor = cardBaseColor.copy(alpha = ScheduleGridDefaults.CourseBlockAlpha)
+                    val cardColor = cardBaseColor.copy(alpha = style.courseBlockAlpha)
 
-                    // 根据卡片颜色计算文本颜色，使用配置文件中的变深因子
-                    //val textColor = getDarkerColor(cardColor, factor = ScheduleGridDefaults.TextDarkenFactor)
                     val textColor = MaterialTheme.colorScheme.onSurface
 
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onCourseClicked(courseWithWeeks) },
-                        colors = CardDefaults.cardColors(containerColor = cardColor), // 应用新的卡片背景色
+                        colors = CardDefaults.cardColors(containerColor = cardColor),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         Column(
@@ -110,11 +100,10 @@ fun ConflictCourseBottomSheet(
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                color = textColor // 应用新的文本颜色
+                                color = textColor
                             )
                             Spacer(Modifier.height(8.dp))
 
-                            // ⭐ 核心修改 2: 根据是否为自定义时间课程，显示不同的时间信息
                             if (isCustomTimeCourse) {
                                 // 自定义时间课程：直接显示时间范围
                                 Text(

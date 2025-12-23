@@ -406,4 +406,49 @@
     <string name="label_username_or_token_key">用户名或 Token Key</string>
     <string name="label_password_or_token_value">密码或 Token Value</string>
     <string name="title_update_log">更新日志</string>
+
+    <!-- 色彩编辑器 -->
+    <string name="color_picker_title_edit">颜色调节</string>
+    <string name="color_picker_title_precise">精准数值</string>
+    <string name="color_picker_mode_visual">滑块模式</string>
+    <string name="color_picker_mode_input">数字模式</string>
+    <string name="color_picker_label_hue">色相</string>
+    <string name="color_picker_label_saturation">饱和度</string>
+    <string name="color_picker_label_value">亮度</string>
+    <string name="color_picker_label_alpha">透明度</string>
+    <string name="a11y_switch_color_mode">切换输入方式</string>
+
+    <!-- 个性化配置 -->
+    <string name="item_personalization">个性化配置</string>
+    <string name="desc_personalization">调整课表格子高度、圆角、间距及透明度</string>
+    <string name="style_category_interface">界面显示</string>
+    <string name="style_category_grid_size">网格尺寸</string>
+    <string name="style_category_course_block">课程块配置</string>
+    <string name="style_category_color_scheme">颜色方案 (点击圆形编辑)</string>
+    <string name="label_wallpaper">课表背景壁纸</string>
+    <string name="desc_wallpaper_set">已设置 (长按可清除)</string>
+    <string name="desc_wallpaper_unset">未设置 (点击选择图片)</string>
+    <string name="label_hide_section_time">隐藏节次具体时间</string>
+    <string name="label_hide_date_under_day">隐藏日期 (周几下方)</string>
+    <string name="label_show_start_time">显示课程格开始时间</string>
+    <string name="label_section_height">格子高度</string>
+    <string name="label_time_column_width">侧边栏宽度</string>
+    <string name="label_day_header_height">顶部表头高度</string>
+    <string name="label_hide_location">隐藏上课地点</string>
+    <string name="label_hide_teacher">隐藏授课老师</string>
+    <string name="label_remove_location_at">移除地点前的 @ 符号</string>
+    <string name="label_font_scale">文字缩放比例</string>
+    <string name="label_corner_radius">圆角半径</string>
+    <string name="label_inner_padding">内部填充</string>
+    <string name="label_outer_padding">外部间距</string>
+    <string name="label_opacity">不透明度</string>
+    <string name="title_light_color_pool">浅色模式颜色池</string>
+    <string name="title_dark_color_pool">深色模式颜色池</string>
+    <string name="label_color_conflict">冲突</string>
+    <string name="preview_light_mode">浅色模式预览\n固定深色文字</string>
+    <string name="preview_dark_mode">深色模式预览\n固定浅色文字</string>
+    <string name="action_reset_style">恢复默认样式设置</string>
+    <string name="dialog_reset_title">重置样式</string>
+    <string name="dialog_reset_message">确定要将所有样式设置恢复为默认值吗？此操作不可撤销。</string>
+
 </resources>
