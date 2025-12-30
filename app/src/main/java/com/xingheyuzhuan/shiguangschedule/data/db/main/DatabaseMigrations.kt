@@ -12,7 +12,6 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {
-
         // --- 步骤 1: 创建新的 course_table_config 表 ---
         db.execSQL(
             """
@@ -49,7 +48,7 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         if (cursor.moveToFirst()) {
             currentCourseTableId = cursor.getString(0)
             showWeekends = cursor.getInt(1)
-            if (!cursor.isNull(2)) semesterStartDate = cursor.getString(2) else semesterStartDate = null
+            semesterStartDate = if (!cursor.isNull(2)) cursor.getString(2) else null
             semesterTotalWeeks = cursor.getInt(3)
             defaultClassDuration = cursor.getInt(4)
             defaultBreakDuration = cursor.getInt(5)
@@ -63,7 +62,7 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
                 INSERT INTO `course_table_config` (courseTableId, showWeekends, semesterStartDate, semesterTotalWeeks, defaultClassDuration, defaultBreakDuration, firstDayOfWeek)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                arrayOf(
+                arrayOf<Any?>(
                     currentCourseTableId,
                     showWeekends,
                     semesterStartDate,
@@ -108,8 +107,57 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+/**
+ * 数据库版本 2 迁移到 版本 3 的迁移代码。
+ * 修改 courses 表，添加自定义时间字段。
+ */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+
+        // 创建具有新结构和约束的临时表 `courses_new`
+        db.execSQL(
+            """
+            CREATE TABLE `courses_new` (
+                `id` TEXT NOT NULL,
+                `courseTableId` TEXT NOT NULL,
+                `name` TEXT NOT NULL,
+                `teacher` TEXT NOT NULL,
+                `position` TEXT NOT NULL,
+                `day` INTEGER NOT NULL,
+                `startSection` INTEGER,  -- 变为可空 (Int?)
+                `endSection` INTEGER,    -- 变为可空 (Int?)
+                `isCustomTime` INTEGER NOT NULL DEFAULT 0, -- 新增字段，默认 FALSE
+                `customStartTime` TEXT,  -- 新增字段
+                `customEndTime` TEXT,    -- 新增字段
+                `colorInt` INTEGER NOT NULL,
+                PRIMARY KEY(`id`),
+                FOREIGN KEY(`courseTableId`) REFERENCES `course_tables`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """
+        )
+
+        // 将原表数据复制到新表
+        // 注意：新字段使用默认值或 NULL
+        db.execSQL(
+            """
+            INSERT INTO courses_new (id, courseTableId, name, teacher, position, day, startSection, endSection, colorInt, isCustomTime, customStartTime, customEndTime)
+            SELECT id, courseTableId, name, teacher, position, day, startSection, endSection, colorInt, 0, NULL, NULL
+            FROM courses
+            """
+        )
+
+        // 移除原表并重命名新表
+        db.execSQL("DROP TABLE courses")
+        db.execSQL("ALTER TABLE courses_new RENAME TO courses")
+
+        // 重新创建必要的索引和外键索引
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_courses_courseTableId` ON `courses` (`courseTableId`)")
+    }
+}
+
+
 // 【集中管理所有迁移对象】
 val ALL_MIGRATIONS = arrayOf(
     MIGRATION_1_2,
-    // 未来在这里添加 MIGRATION_2_3, MIGRATION_3_4 等...
+    MIGRATION_2_3,
 )

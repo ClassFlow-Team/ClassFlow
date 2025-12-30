@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
 /**
  * Room 实体类，代表“课程”数据表。
  * 它存储每门课程的详细信息，并与 `CourseTable` 关联。
+ * 支持标准节次时间和自定义周重复时间两种模式。
  */
 @Entity(
     tableName = "courses",
@@ -27,7 +28,13 @@ data class Course(
     val teacher: String, // 授课老师姓名
     val position: String, // 上课地点，例如 "主楼A101"
     val day: Int, // 上课的星期几，例如 1=周一, 7=周日
-    val startSection: Int, // 课程开始的节次
-    val endSection: Int,   // 课程结束的节次
-    val colorInt: Int // 课程卡片的颜色值
+
+    // 设为可空：当使用自定义时间时，这些字段将被忽略
+    val startSection: Int?, // 课程开始的节次
+    val endSection: Int?,   // 课程结束的节次
+    val isCustomTime: Boolean = false, // 是否使用自定义时间 (true: 使用 HH:MM 字符串)
+    val customStartTime: String?, // 自定义起始时间，格式为 "HH:MM"
+    val customEndTime: String?,   // 自定义结束时间，格式为 "HH:MM"
+
+    val colorInt: Int // 课程卡片的颜色索引
 )

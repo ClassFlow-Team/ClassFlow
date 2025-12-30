@@ -61,7 +61,7 @@ class AppSettingsRepository(
     }
 
     /**
-     * 【新增函数】获取一次性的应用设置，用于不需要监听变化的场景。
+     * 获取一次性的应用设置，用于不需要监听变化的场景。
      * @return 返回 AppSettings 对象，如果找不到则返回 null。
      */
     suspend fun getAppSettingsOnce(): AppSettings? {
@@ -69,7 +69,7 @@ class AppSettingsRepository(
     }
 
     /**
-     * 【新增函数】根据课表ID，获取该课表的配置信息（一次性）。
+     * 根据课表ID，获取该课表的配置信息（一次性）。
      * 此函数用于不需要监听配置变化，只需要获取当前快照的场景。
      */
     suspend fun getCourseConfigOnce(tableId: String): CourseTableConfig? {
@@ -77,7 +77,7 @@ class AppSettingsRepository(
     }
 
     /**
-     * 【新增函数】根据课表 ID，实时获取该课表的配置信息，返回一个数据流。
+     * 根据课表 ID，实时获取该课表的配置信息，返回一个数据流。
      * 此函数专为需要监听配置变化（如 ViewModel 中的 combine 和 flatMapLatest）的场景设计。
      * * @param courseTableId 关联的课表 ID
      */
@@ -136,16 +136,11 @@ class AppSettingsRepository(
     }
 
     /**
-     * 【新增函数】插入或更新课表配置。
+     * 插入或更新课表配置。
      */
     suspend fun insertOrUpdateCourseConfig(newConfig: CourseTableConfig) {
         courseTableConfigDao.insertOrUpdate(newConfig)
     }
-
-
-    // ---------------------------------------------------------------------------------------------
-    // 【现代化计算方法：基于 java.time】
-    // ---------------------------------------------------------------------------------------------
 
     /**
      * 根据学期开始日期和总周数，计算当前周数。
@@ -156,7 +151,7 @@ class AppSettingsRepository(
 
         return try {
             // 1. 将开学日期对齐到设置的一周起始日
-            val alignedStartDateString = getStartDayOfWeek(startDate!!, firstDayOfWeekInt)
+            val alignedStartDateString = getStartDayOfWeek(startDate, firstDayOfWeekInt)
             val alignedStartDate = LocalDate.parse(alignedStartDateString, DATE_FORMATTER)
 
             // 2. 将当前日期也对齐到设置的一周起始日

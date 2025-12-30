@@ -1,14 +1,14 @@
 package com.xingheyuzhuan.shiguangschedule.data.repository
 
-import androidx.compose.ui.graphics.toArgb
 import androidx.room.Transaction
 import com.xingheyuzhuan.shiguangschedule.data.db.main.Course
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseDao
+import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWeek
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWeekDao
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlotDao
-import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
+import com.xingheyuzhuan.shiguangschedule.data.model.ScheduleGridStyle
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.CourseConfigJsonModel
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.CourseTableExportModel
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.CourseTableImportModel
@@ -24,50 +24,44 @@ class CourseConversionRepository(
     private val courseDao: CourseDao,
     private val courseWeekDao: CourseWeekDao,
     private val timeSlotDao: TimeSlotDao,
-    private val appSettingsRepository: AppSettingsRepository
+    private val appSettingsRepository: AppSettingsRepository,
+    private val styleSettingsRepository: StyleSettingsRepository
 ) {
     /**
-     * 确定最终要存储的颜色索引。
-     * 逻辑：强制将导入的 color 字段视为索引，并验证其范围。
-     * 1. 如果提供了 color 值 (Int?)，且它在 [0, COURSE_COLOR_MAPS.size - 1] 范围内，则使用它。
-     * 2. 否则（color 缺失或超出索引范围），随机选择一个索引。
-     *
-     * @param importColor 导入的颜色值（Int 或 null），现将其视为索引。
-     * @return 最终写入数据库的颜色索引（Int）。
+     * @param importColor 导入的颜色值（Int 或 null）。
+     * @param currentStyle 当前的样式配置对象。
+     * @return 最终写入数据库的颜色索引。
      */
-    private fun getValidatedOrRandomColorIndex(importColor: Int?): Int {
-        val colorMapsSize = CourseImportExport.COURSE_COLOR_MAPS.size
-
-        return if (importColor != null && importColor >= 0 && importColor < colorMapsSize) {
-            // 颜色值存在，且在有效的索引范围内，直接使用
+    private fun getValidatedOrRandomColorIndex(importColor: Int?, currentStyle: ScheduleGridStyle): Int {
+        // 使用 in indices 检查范围，既安全又符合 Kotlin 习惯
+        return if (importColor != null && importColor in currentStyle.courseColorMaps.indices) {
             importColor
         } else {
-            // 颜色值缺失 (null) 或超出索引范围，随机选择一个索引
-            CourseImportExport.getRandomColorIndex()
+            // 如果索引无效，调用模型自带的随机逻辑
+            currentStyle.generateRandomColorIndex()
         }
     }
 
-
     /**
-     * 从一个 JSON 课程列表导入课程，并覆盖指定的现有课表。
-     *
-     * @param tableId 要覆盖的现有课表的 ID。
-     * @param coursesJsonModel 包含课程数据的 JSON 列表。
+     * 从一个 JSON 课程列表导入课程。
      */
     @Transaction
     suspend fun importCoursesFromList(
         tableId: String,
         coursesJsonModel: List<ImportCourseJsonModel>
     ) {
+        val currentStyle = styleSettingsRepository.styleFlow.first()
+
         courseDao.deleteCoursesByTableId(tableId)
 
-        val courseEntities = mutableListOf<Course>()
+        // 优化：预设 ArrayList 容量避免频繁扩容
+        val courseEntities = ArrayList<Course>(coursesJsonModel.size)
         val courseWeekEntities = mutableListOf<CourseWeek>()
 
         coursesJsonModel.forEach { jsonCourse ->
             val courseId = UUID.randomUUID().toString()
-            // 修正 1: 使用索引验证逻辑，获取颜色索引
-            val courseIndex = getValidatedOrRandomColorIndex(jsonCourse.color)
+
+            val courseIndex = getValidatedOrRandomColorIndex(jsonCourse.color, currentStyle)
 
             courseEntities.add(
                 Course(
@@ -79,7 +73,10 @@ class CourseConversionRepository(
                     day = jsonCourse.day,
                     startSection = jsonCourse.startSection,
                     endSection = jsonCourse.endSection,
-                    colorInt = courseIndex // 写入颜色索引
+                    isCustomTime = jsonCourse.isCustomTime,
+                    customStartTime = jsonCourse.customStartTime,
+                    customEndTime = jsonCourse.customEndTime,
+                    colorInt = courseIndex
                 )
             )
 
@@ -90,37 +87,31 @@ class CourseConversionRepository(
             }
         }
 
-        if (courseEntities.isNotEmpty()) {
-            courseDao.insertAll(courseEntities)
-        }
-        if (courseWeekEntities.isNotEmpty()) {
-            courseWeekDao.insertAll(courseWeekEntities)
-        }
+        if (courseEntities.isNotEmpty()) courseDao.insertAll(courseEntities)
+        if (courseWeekEntities.isNotEmpty()) courseWeekDao.insertAll(courseWeekEntities)
     }
 
     /**
-     * 从一个完整的 JSON 模型导入课表数据，并覆盖指定的现有课表。
-     * 包含课程和时间段。
-     *
-     * @param tableId 要覆盖的现有课表的 ID。
-     * @param courseTableJsonModel 包含课程和时间段的完整 JSON 模型。
+     * 从一个完整的 JSON 模型导入课表数据。
      */
     @Transaction
     suspend fun importCourseTableFromJson(
         tableId: String,
         courseTableJsonModel: CourseTableImportModel
     ) {
+        val currentStyle = styleSettingsRepository.styleFlow.first()
+
         courseDao.deleteCoursesByTableId(tableId)
         timeSlotDao.deleteAllTimeSlotsByCourseTableId(tableId)
 
-        val courseEntities = mutableListOf<Course>()
+        val courseEntities = ArrayList<Course>(courseTableJsonModel.courses.size)
         val courseWeekEntities = mutableListOf<CourseWeek>()
         val timeSlotEntities = mutableListOf<TimeSlot>()
 
         courseTableJsonModel.courses.forEach { jsonCourse ->
             val courseId = jsonCourse.id ?: UUID.randomUUID().toString()
-            // 修正 2: 使用索引验证逻辑，获取颜色索引
-            val courseIndex = getValidatedOrRandomColorIndex(jsonCourse.color)
+
+            val courseIndex = getValidatedOrRandomColorIndex(jsonCourse.color, currentStyle)
 
             courseEntities.add(
                 Course(
@@ -132,7 +123,10 @@ class CourseConversionRepository(
                     day = jsonCourse.day,
                     startSection = jsonCourse.startSection,
                     endSection = jsonCourse.endSection,
-                    colorInt = courseIndex // 写入颜色索引
+                    isCustomTime = jsonCourse.isCustomTime,
+                    customStartTime = jsonCourse.customStartTime,
+                    customEndTime = jsonCourse.customEndTime,
+                    colorInt = courseIndex
                 )
             )
 
@@ -154,17 +148,11 @@ class CourseConversionRepository(
             )
         }
 
-        if (courseEntities.isNotEmpty()) {
-            courseDao.insertAll(courseEntities)
-        }
-        if (courseWeekEntities.isNotEmpty()) {
-            courseWeekDao.insertAll(courseWeekEntities)
-        }
-        if (timeSlotEntities.isNotEmpty()) {
-            timeSlotDao.insertAll(timeSlotEntities)
-        }
+        if (courseEntities.isNotEmpty()) courseDao.insertAll(courseEntities)
+        if (courseWeekEntities.isNotEmpty()) courseWeekDao.insertAll(courseWeekEntities)
+        if (timeSlotEntities.isNotEmpty()) timeSlotDao.insertAll(timeSlotEntities)
 
-        // 处理课表配置的导入（兼容旧格式，允许 config 为 null）
+        // 配置导入逻辑保持不变...
         val configJson = courseTableJsonModel.config
         if (configJson != null) {
             val currentConfig = appSettingsRepository.getCourseConfigOnce(tableId)
@@ -177,8 +165,6 @@ class CourseConversionRepository(
                 defaultBreakDuration = configJson.defaultBreakDuration,
                 firstDayOfWeek = configJson.firstDayOfWeek
             )
-
-            // 3. 插入或更新配置
             appSettingsRepository.insertOrUpdateCourseConfig(updatedConfig)
         }
     }
@@ -223,25 +209,25 @@ class CourseConversionRepository(
 
         val coursesWithWeeks = courseDao.getCoursesWithWeeksByTableId(tableId).first()
         val exportCourses = coursesWithWeeks.map { courseWithWeeks ->
+            val course = courseWithWeeks.course
             val weeks = courseWithWeeks.weeks.map { it.weekNumber }
 
-            // 修正 3: 从数据库获取索引，映射回 Light 颜色的 ARGB 值用于导出 JSON
-            val colorIndex = courseWithWeeks.course.colorInt
-            val exportedColorArgb = CourseImportExport.COURSE_COLOR_MAPS
-                .getOrNull(colorIndex)
-                ?.light?.toArgb()
-                ?: CourseImportExport.COURSE_COLOR_MAPS.first().light.toArgb()
+            // 修正 3: 从数据库获取索引，直接导出索引编号（Int），而不是 ARGB 值。
+            val colorIndex = course.colorInt
 
             ExportCourseJsonModel(
-                id = courseWithWeeks.course.id,
-                name = courseWithWeeks.course.name,
-                teacher = courseWithWeeks.course.teacher,
-                position = courseWithWeeks.course.position,
-                day = courseWithWeeks.course.day,
-                startSection = courseWithWeeks.course.startSection,
-                endSection = courseWithWeeks.course.endSection,
-                color = exportedColorArgb,
-                weeks = weeks
+                id = course.id,
+                name = course.name,
+                teacher = course.teacher,
+                position = course.position,
+                day = course.day,
+                startSection = course.startSection,
+                endSection = course.endSection,
+                color = colorIndex,
+                weeks = weeks,
+                isCustomTime = course.isCustomTime,
+                customStartTime = course.customStartTime,
+                customEndTime = course.customEndTime
             )
         }
 

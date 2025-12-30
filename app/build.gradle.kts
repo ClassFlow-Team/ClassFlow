@@ -16,8 +16,8 @@ android {
         applicationId = "com.xingheyuzhuan.shiguangschedule"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.1.11"
+        versionCode = 12
+        versionName = "1.1.12-beta"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -25,6 +25,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -40,6 +41,9 @@ android {
             // 开发者版本的包名后缀，使其可以和正式版共存
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
+
+            // 环境标识变量
+            buildConfigField("String", "CURRENT_FLAVOR_ID", "\"dev\"")
 
             // 注入开关：开发者版本不隐藏，显示自定义/私有仓库
             buildConfigField("Boolean", "HIDE_CUSTOM_REPOS", "false")
@@ -58,6 +62,8 @@ android {
         create("prod") {
             dimension = "version"
 
+            // 环境标识变量
+            buildConfigField("String", "CURRENT_FLAVOR_ID", "\"prod\"")
             // 注入开关：正式版本隐藏自定义/私有仓库
             buildConfigField("Boolean", "HIDE_CUSTOM_REPOS", "true")
             // 注入开关：正式版本开启基准灯塔标签验证
@@ -126,16 +132,17 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.datastore.core)
-    implementation(libs.material)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.gson)
     implementation(libs.okhttp)
-    implementation(libs.okhttp.logging.interceptor)
+    debugImplementation(libs.okhttp.logging.interceptor)
     implementation(libs.gson)
     implementation(libs.androidx.glance)
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.glance.material3)
+    implementation(libs.androidx.glance.preview)
+    implementation(libs.androidx.glance.appwidget.preview)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     implementation(libs.jgit)
@@ -145,6 +152,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.protobuf.kotlin.lite)
     implementation(libs.protobuf.java.lite)
+    implementation(libs.javax.inject)
     ksp(libs.androidx.room.compiler)
 
     testImplementation(libs.junit)

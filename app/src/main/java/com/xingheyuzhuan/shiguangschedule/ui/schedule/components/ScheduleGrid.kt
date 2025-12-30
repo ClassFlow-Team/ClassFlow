@@ -40,10 +40,10 @@ import com.xingheyuzhuan.shiguangschedule.R
 
 /**
  * 渲染课表网格的 UI 组件。
- * 它不关心数据逻辑，只负责根据传入的数据进行绘制。
  */
 @Composable
 fun ScheduleGrid(
+    style: ScheduleGridStyleComposed,
     dates: List<String>,
     timeSlots: List<TimeSlot>,
     mergedCourses: List<MergedCourseBlock>,
@@ -55,18 +55,16 @@ fun ScheduleGrid(
     onTimeSlotClicked: () -> Unit
 ) {
     val weekDays = stringArrayResource(R.array.week_days_full_names).toList()
-
     val reorderedWeekDays = rearrangeDays(weekDays, firstDayOfWeek)
-
     val displayDays = if (showWeekends) reorderedWeekDays else reorderedWeekDays.take(5)
     val displayDayCount = displayDays.size
 
-    val screenWidth = with(LocalDensity.current) {
-        LocalWindowInfo.current.containerSize.width.toDp()
-    }
-    val timeColumnWidth = ScheduleGridDefaults.TimeColumnWidth
-    val dayHeaderHeight = ScheduleGridDefaults.DayHeaderHeight
-    val sectionHeight = ScheduleGridDefaults.SectionHeight
+    val density = LocalDensity.current
+    val screenWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
+
+    val timeColumnWidth = style.timeColumnWidth
+    val dayHeaderHeight = style.dayHeaderHeight
+    val sectionHeight = style.sectionHeight
     val gridLineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
 
     val gridWidth = screenWidth - timeColumnWidth
@@ -75,8 +73,12 @@ fun ScheduleGrid(
     val timeSlotsCount = timeSlots.size
     val totalGridContentHeight = timeSlotsCount * sectionHeight
 
+    val sectionHeightPx = with(density) { sectionHeight.toPx() }
+
+
     Column(modifier = Modifier.fillMaxSize()) {
         DayHeader(
+            style = style,
             displayDays = displayDays,
             dates = dates,
             cellWidth = cellWidth,
@@ -92,6 +94,7 @@ fun ScheduleGrid(
                 .verticalScroll(rememberScrollState())
         ) {
             TimeColumn(
+                style = style,
                 timeSlots = timeSlots,
                 timeColumnWidth = timeColumnWidth,
                 sectionHeight = sectionHeight,
@@ -131,10 +134,22 @@ fun ScheduleGrid(
 
                     // 只有当课程在显示的列范围内时才绘制
                     if (newDayIndex != -1) {
+
+                        // 根据起始节次查找对应的标准开始时间
+                        val sectionStartTime = timeSlots.find { it.number == mergedBlock.startSection }?.startTime
+
                         // 使用 0-based 的索引计算 offsetX
                         val offsetX = newDayIndex * cellWidth
-                        val offsetY = (mergedBlock.startSection - 1) * sectionHeight
-                        val blockHeight = (mergedBlock.endSection - mergedBlock.startSection + 1) * sectionHeight
+
+                        val (offsetYPx, heightPx) = if (mergedBlock.needsProportionalRendering) {
+                            calculateProportionalLayout(mergedBlock, timeSlots, sectionHeightPx)
+                        } else {
+                            calculateFixedLayout(mergedBlock, sectionHeightPx)
+                        }
+
+                        // 将像素值转换回 Dp，用于 Compose UI 布局
+                        val offsetY = with(density) { offsetYPx.toDp() }
+                        val blockHeight = with(density) { heightPx.toDp() }
 
                         Box(
                             modifier = Modifier
@@ -143,7 +158,9 @@ fun ScheduleGrid(
                                 .clickable { onCourseBlockClicked(mergedBlock) }
                         ) {
                             CourseBlock(
-                                mergedBlock = mergedBlock
+                                mergedBlock = mergedBlock,
+                                style = style,
+                                startTime = sectionStartTime
                             )
                         }
                     }
@@ -153,11 +170,128 @@ fun ScheduleGrid(
     }
 }
 
+
+/**
+ * 辅助函数：将 "HH:MM" 格式的时间字符串转换为从午夜开始的总分钟数。
+ */
+private fun timeToMinutes(time: String): Int {
+    return try {
+        val parts = time.split(":")
+        val hour = parts[0].toInt()
+        val minute = parts[1].toInt()
+        hour * 60 + minute
+    } catch (e: Exception) {
+        // 时间格式错误或解析失败时，返回 0
+        0
+    }
+}
+
+/**
+ * 计算标准节次课程块的布局参数 (固定高度)。
+ */
+private fun calculateFixedLayout(
+    mergedBlock: MergedCourseBlock,
+    sectionHeightPx: Float // 单节课的像素高度
+): Pair<Float, Float> {
+    // 偏移量：从第一节课开始 (startSection - 1)
+    val offsetY = (mergedBlock.startSection - 1) * sectionHeightPx
+
+    // 高度：占据的节次数 * 单节课的像素高度
+    val sectionsCount = mergedBlock.endSection - mergedBlock.startSection + 1
+    val height = sectionsCount * sectionHeightPx
+
+    return Pair(offsetY, height)
+}
+
+/**
+ * 计算自定义时间课程块的布局参数 (比例计算)。
+ */
+private fun calculateProportionalLayout(
+    mergedBlock: MergedCourseBlock,
+    timeSlots: List<TimeSlot>,
+    sectionHeightPx: Float // 单节课的像素高度 (例如 140.0 Px)
+): Pair<Float, Float> {
+    val timeSlotMap = timeSlots.associateBy { it.number }
+
+    val course = mergedBlock.courses.firstOrNull()?.course ?: return calculateFixedLayout(mergedBlock, sectionHeightPx)
+
+    val customStartTimeStr = course.customStartTime
+    val customEndTimeStr = course.customEndTime
+    if (customStartTimeStr == null || customEndTimeStr == null) {
+        return calculateFixedLayout(mergedBlock, sectionHeightPx)
+    }
+
+    val customStartMinutes = timeToMinutes(customStartTimeStr)
+    val customEndMinutes = timeToMinutes(customEndTimeStr)
+
+    val S_real = timeSlots.firstOrNull { slot ->
+        timeToMinutes(slot.endTime) > customStartMinutes
+    }?.number ?: 1
+
+    val E_real = timeSlots.firstOrNull { slot ->
+        timeToMinutes(slot.endTime) >= customEndMinutes
+    }?.number ?: timeSlots.size.coerceAtLeast(1)
+
+    val realStartSlot = timeSlotMap[S_real]
+    val realEndSlot = timeSlotMap[E_real]
+
+    if (realStartSlot == null || realEndSlot == null || customStartMinutes >= customEndMinutes || S_real > E_real) {
+        return calculateFixedLayout(mergedBlock, sectionHeightPx)
+    }
+
+    val totalSections = E_real - S_real + 1
+    val totalSpanHeightPx = totalSections * sectionHeightPx
+
+    val spanStartMinutes = timeToMinutes(realStartSlot.startTime)
+    val spanEndMinutes = timeToMinutes(realEndSlot.endTime)
+    val totalSpanDurationMinutes = spanEndMinutes - spanStartMinutes
+
+    if (totalSpanDurationMinutes <= 0) {
+        return calculateFixedLayout(mergedBlock, sectionHeightPx)
+    }
+    val pxPerMinute = totalSpanHeightPx / totalSpanDurationMinutes.toFloat()
+
+    val fixedOffsetY = (S_real - 1) * sectionHeightPx
+    val totalDurationMinutes = customEndMinutes - customStartMinutes
+
+    val minuteOffsetInSpan = customStartMinutes - spanStartMinutes
+
+    var finalOffsetY = fixedOffsetY + (minuteOffsetInSpan * pxPerMinute)
+    var finalHeight = totalDurationMinutes.coerceAtLeast(0) * pxPerMinute
+
+    val spanTopY = fixedOffsetY
+    if (finalOffsetY < spanTopY) {
+        val overflowHeight = spanTopY - finalOffsetY
+
+        finalOffsetY = spanTopY
+        finalHeight -= overflowHeight
+    }
+    val spanBottomY = fixedOffsetY + totalSpanHeightPx
+    val courseBottomY = finalOffsetY + finalHeight
+
+    if (courseBottomY > spanBottomY) {
+        val overflowHeight = courseBottomY - spanBottomY
+
+        finalHeight -= overflowHeight
+    }
+    if (finalHeight <= 0f) {
+        finalHeight = sectionHeightPx
+        finalOffsetY = fixedOffsetY
+    }
+    else if (finalHeight < sectionHeightPx) {
+        finalHeight = sectionHeightPx
+    }
+
+    return Pair(finalOffsetY, finalHeight)
+}
+
+
 /**
  * 星期栏 UI 组件。
  */
 @Composable
 private fun DayHeader(
+    style: ScheduleGridStyleComposed,
     displayDays: List<String>,
     dates: List<String>,
     cellWidth: Dp,
@@ -170,7 +304,10 @@ private fun DayHeader(
         modifier = Modifier
             .fillMaxWidth()
             .height(dayHeaderHeight)
-            .background(MaterialTheme.colorScheme.background)
+            .background(
+                if (style.backgroundImagePath.isNotEmpty()) Color.Transparent
+                else MaterialTheme.colorScheme.surface
+            )
             .drawBehind {
                 drawLine(
                     color = gridLineColor.copy(alpha = 0.3f),
@@ -189,7 +326,12 @@ private fun DayHeader(
         // 星期几和日期
         displayDays.forEachIndexed { index, day ->
             val isToday = index == todayIndex
-            val backgroundColor = if (isToday) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+            val backgroundColor = if (isToday) {
+                if (style.backgroundImagePath.isNotEmpty()) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                else MaterialTheme.colorScheme.primaryContainer
+            } else {
+                Color.Transparent
+            }
             val textColor = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
             val dateColor = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
 
@@ -211,20 +353,9 @@ private fun DayHeader(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Text(
-                    text = day,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = textColor,
-                    lineHeight = 14.sp
-                )
-                if (dates.size > index) {
-                    Text(
-                        text = dates[index],
-                        fontSize = 10.sp,
-                        color = dateColor,
-                        lineHeight = 10.sp
-                    )
+                Text(text = day, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textColor, lineHeight = 14.sp)
+                if (!style.hideDateUnderDay && dates.size > index) {
+                    Text(text = dates[index], fontSize = 10.sp, color = dateColor, lineHeight = 10.sp)
                 }
             }
         }
@@ -236,6 +367,7 @@ private fun DayHeader(
  */
 @Composable
 private fun TimeColumn(
+    style: ScheduleGridStyleComposed,
     timeSlots: List<TimeSlot>,
     timeColumnWidth: Dp,
     sectionHeight: Dp,
@@ -247,7 +379,10 @@ private fun TimeColumn(
     Column(
         modifier = modifier
             .width(timeColumnWidth)
-            .background(MaterialTheme.colorScheme.background)
+            .background(
+                if (style.backgroundImagePath.isNotEmpty()) Color.Transparent
+                else MaterialTheme.colorScheme.surface
+            )
             .drawBehind {
                 val strokeWidth = 1f
                 val transparentColor = gridLineColor.copy(alpha = 0.3f)
@@ -285,9 +420,11 @@ private fun TimeColumn(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Text(text = slot.number.toString(), fontSize = 16.sp, fontWeight = FontWeight.Bold, lineHeight = 16.sp)
-                Text(text = slot.startTime, fontSize = 10.sp, lineHeight = 10.sp)
-                Text(text = slot.endTime, fontSize = 10.sp, lineHeight = 10.sp)
+                Text(text = slot.number.toString(), fontSize = 16.sp, fontWeight = FontWeight.Bold, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                if (!style.hideSectionTime) {
+                    Text(text = slot.startTime, fontSize = 10.sp, lineHeight = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(text = slot.endTime, fontSize = 10.sp, lineHeight = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }
@@ -308,7 +445,6 @@ private fun GridLines(
     val strokeWidth = 1f
     val transparentColor = gridLineColor.copy(alpha = 0.3f)
 
-    // Canvas 填充父级 Box，由父级 Box 决定高度
     Canvas(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -351,7 +487,6 @@ private fun ClickableGrid(
             Row(modifier = Modifier
                 .fillMaxWidth()
                 .height(sectionHeight)) {
-                // 【修改 5.1：遍历 0-based 索引】
                 for (displayIndex in 0 until dayCount) {
                     Spacer(
                         modifier = Modifier
@@ -394,12 +529,10 @@ private fun rearrangeDays(originalDays: List<String>, firstDayOfWeek: Int): List
 private fun mapDayToDisplayIndex(courseDay: Int, firstDayOfWeek: Int, showWeekends: Boolean): Int {
     val totalDays = if (showWeekends) 7 else 5
 
-    // 1. 计算理论上的 0-based 索引
-    // (courseDay - firstDayOfWeek) 给出相对于起始日的偏移量，
-    // + 7 确保结果为正，% 7 得到最终的 0-6 索引。
+    // 计算 0-based 索引: (课程日 - 起始日 + 7) % 7
     val theoreticalIndex = (courseDay - firstDayOfWeek + 7) % 7
 
-    // 2. 检查是否在显示的列数范围内
+    // 检查是否在显示的列数范围内
     if (theoreticalIndex >= totalDays) {
         return -1
     }
@@ -409,14 +542,10 @@ private fun mapDayToDisplayIndex(courseDay: Int, firstDayOfWeek: Int, showWeeken
 
 /**
  * 将网格的显示索引 (0-N) 映射回课程 DayOfWeek (1-7)。
- * 用于 onGridCellClicked 回调。
  */
 private fun mapDisplayIndexToDay(displayIndex: Int, firstDayOfWeek: Int): Int {
-    // 1. 计算理论上的 1-based 索引
-    // (firstDayOfWeek - 1) 是起始日的 0-based 索引
-    // (firstDayOfWeek - 1 + displayIndex) 是目标日期的 0-based 索引
-    // % 7 得到 0-6 循环索引
-    // + 1 转换回 1-7 DayOfWeek
+    // 0-based 索引: (起始日 0-based + 显示索引) % 7
+    // 1-based DayOfWeek: + 1
     val day = (firstDayOfWeek - 1 + displayIndex) % 7 + 1
     return day
 }

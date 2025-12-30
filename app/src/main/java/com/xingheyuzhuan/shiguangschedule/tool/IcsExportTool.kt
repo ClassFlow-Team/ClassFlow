@@ -16,9 +16,10 @@ import java.util.UUID
 object IcsExportTool {
 
     private val DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
+    private val TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm")
 
     /**
-     * 【新增】生成 ICS 日历文件的内容字符串。
+     * 生成 ICS 日历文件的内容字符串。
      *
      * @param courses 包含所有课程和周数的数据列表。
      * @param timeSlots 包含所有时间段的数据列表。
@@ -69,13 +70,40 @@ object IcsExportTool {
             val course = courseWithWeeks.course
             val weeks = courseWithWeeks.weeks.map { it.weekNumber }
 
-            val startSectionTime = timeSlotMap[course.startSection]?.startTime?.let {
-                LocalTime.parse(it, DateTimeFormatter.ofPattern("HH:mm"))
-            } ?: return@forEach
+            val startTime: LocalTime
+            val endTime: LocalTime
 
-            val endSectionTime = timeSlotMap[course.endSection]?.endTime?.let {
-                LocalTime.parse(it, DateTimeFormatter.ofPattern("HH:mm"))
-            } ?: return@forEach
+            if (course.isCustomTime) {
+                // 处理自定义时间模式
+                val customStartTimeStr = course.customStartTime
+                val customEndTimeStr = course.customEndTime
+
+                if (customStartTimeStr == null || customEndTimeStr == null) {
+                    return@forEach // 跳过缺少自定义时间字符串的课程
+                }
+
+                try {
+                    startTime = LocalTime.parse(customStartTimeStr, TIME_FORMATTER)
+                    endTime = LocalTime.parse(customEndTimeStr, TIME_FORMATTER)
+                } catch (e: Exception) {
+                    return@forEach // 解析失败，跳过
+                }
+            } else {
+                // 处理标准节次模式
+                val startSectionTimeStr = timeSlotMap[course.startSection]?.startTime
+                val endSectionTimeStr = timeSlotMap[course.endSection]?.endTime
+
+                if (startSectionTimeStr == null || endSectionTimeStr == null) {
+                    return@forEach // 跳过缺少节次时间槽的课程
+                }
+
+                try {
+                    startTime = LocalTime.parse(startSectionTimeStr, TIME_FORMATTER)
+                    endTime = LocalTime.parse(endSectionTimeStr, TIME_FORMATTER)
+                } catch (e: Exception) {
+                    return@forEach // 解析失败，跳过
+                }
+            }
 
             val dayOfWeek = dayOfWeekMap[course.day] ?: return@forEach
 
@@ -95,9 +123,9 @@ object IcsExportTool {
                     return@forEach
                 }
 
-                // 组合日期和时间
-                val startDateTime = LocalDateTime.of(date, startSectionTime)
-                val endDateTime = LocalDateTime.of(date, endSectionTime)
+                // 组合日期和时间 (使用统一的 startTime 和 endTime)
+                val startDateTime = LocalDateTime.of(date, startTime)
+                val endDateTime = LocalDateTime.of(date, endTime)
 
                 // 拼接 VEVENT 事件块
                 icsContent.append("BEGIN:VEVENT\r\n")

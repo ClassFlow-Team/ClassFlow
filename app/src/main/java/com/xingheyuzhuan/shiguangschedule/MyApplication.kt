@@ -7,8 +7,10 @@ import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetDatabase
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseConversionRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseTableRepository
+import com.xingheyuzhuan.shiguangschedule.data.repository.StyleSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.WidgetRepository
+import com.xingheyuzhuan.shiguangschedule.data.repository.scheduleGridStyleDataStore
 import com.xingheyuzhuan.shiguangschedule.data.sync.SyncManager
 import com.xingheyuzhuan.shiguangschedule.data.sync.WidgetDataSynchronizer
 import com.xingheyuzhuan.shiguangschedule.service.AppWorkerFactory
@@ -27,16 +29,23 @@ class MyApplication : Application(), Configuration.Provider {
     // Widget 数据库
     val widgetDatabase: WidgetDatabase by lazy { WidgetDatabase.getDatabase(this) }
 
+
+    // 样式设置仓库
+    val styleSettingsRepository: StyleSettingsRepository by lazy {
+        StyleSettingsRepository(scheduleGridStyleDataStore, applicationContext)
+    }
     // 主数据库仓库
     val appSettingsRepository: AppSettingsRepository by lazy {
         AppSettingsRepository(
-            database.appSettingsDao(),
-            database.courseTableConfigDao()
+            appSettingsDao = database.appSettingsDao(),
+            courseTableConfigDao = database.courseTableConfigDao()
         )
     }
+
     val timeSlotRepository: TimeSlotRepository by lazy {
         TimeSlotRepository(database.timeSlotDao())
     }
+
     val courseTableRepository: CourseTableRepository by lazy {
         CourseTableRepository(
             database.courseTableDao(),
@@ -49,13 +58,14 @@ class MyApplication : Application(), Configuration.Provider {
 
     val courseConversionRepository: CourseConversionRepository by lazy {
         CourseConversionRepository(
-            database.courseDao(),
-            database.courseWeekDao(),
-            database.timeSlotDao(),
-            appSettingsRepository
+            courseDao = database.courseDao(),
+            courseWeekDao = database.courseWeekDao(),
+            timeSlotDao = database.timeSlotDao(),
+            appSettingsRepository = appSettingsRepository,
+            styleSettingsRepository = styleSettingsRepository
         )
     }
-    // 新增：Widget 数据库仓库
+    // Widget 数据库仓库
     val widgetRepository: WidgetRepository by lazy {
         WidgetRepository(
             widgetDatabase.widgetCourseDao(),

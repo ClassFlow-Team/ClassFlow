@@ -1,31 +1,10 @@
 package com.xingheyuzhuan.shiguangschedule.data.repository
 
-import androidx.compose.ui.graphics.Color
 import kotlinx.serialization.Serializable
-import kotlin.random.Random
 
-data class DualColor(val light: Color, val dark: Color)
 
 object CourseImportExport {
 
-    /**
-     * 颜色映射表：索引（对应 Course.colorInt） -> 浅色模式颜色 & 深色模式颜色
-     * 数据库中存储的是这个 List 的 Index (0, 1, 2...)
-     */
-    val COURSE_COLOR_MAPS = listOf(
-        DualColor(light = Color(0xFFFFCC99), dark = Color(0xFF663300)),
-        DualColor(light = Color(0xFFFFE699), dark = Color(0xFF664D00)),
-        DualColor(light = Color(0xFFE6FF99), dark = Color(0xFF4D6600)),
-        DualColor(light = Color(0xFFCCFF99), dark = Color(0xFF336600)),
-        DualColor(light = Color(0xFF99FFB3), dark = Color(0xFF00661A)),
-        DualColor(light = Color(0xFF99FFE6), dark = Color(0xFF00664D)),
-        DualColor(light = Color(0xFF99FFFF), dark = Color(0xFF006666)),
-        DualColor(light = Color(0xFF99E6FF), dark = Color(0xFF004D66)),
-        DualColor(light = Color(0xFFB399FF), dark = Color(0xFF1A0066)),
-        DualColor(light = Color(0xFFFF99E6), dark = Color(0xFF66004D)),
-        DualColor(light = Color(0xFFFF99CC), dark = Color(0xFF660033)),
-        DualColor(light = Color(0xFFFF99B3), dark = Color(0xFF66001A)),
-    )
 
 
     // 用于 JSON 导入和导出的配置模型
@@ -53,9 +32,12 @@ object CourseImportExport {
         val teacher: String,
         val position: String,
         val day: Int,
-        val startSection: Int,
-        val endSection: Int,
+        val startSection: Int? = null,
+        val endSection: Int? = null,
         val weeks: List<Int>,
+        val isCustomTime: Boolean = false,
+        val customStartTime: String? = null,
+        val customEndTime: String? = null,
         val color: Int? = null
     )
 
@@ -74,10 +56,13 @@ object CourseImportExport {
         val teacher: String,
         val position: String,
         val day: Int,
-        val startSection: Int,
-        val endSection: Int,
+        val startSection: Int? = null,
+        val endSection: Int? = null,
         val color: Int, // 导出时颜色必须
-        val weeks: List<Int>
+        val weeks: List<Int>,
+        val isCustomTime: Boolean = false,
+        val customStartTime: String? = null,
+        val customEndTime: String? = null
     )
 
     // 导入和导出都通用的时间段模型
@@ -88,10 +73,4 @@ object CourseImportExport {
         val endTime: String
     )
 
-    /**
-     * 在创建新课程时使用，用于获取一个随机的颜色索引。
-     */
-    fun getRandomColorIndex(): Int {
-        return Random.nextInt(COURSE_COLOR_MAPS.size)
-    }
 }

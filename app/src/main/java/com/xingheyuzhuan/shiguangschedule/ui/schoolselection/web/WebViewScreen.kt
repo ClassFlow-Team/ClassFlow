@@ -1,7 +1,6 @@
 package com.xingheyuzhuan.shiguangschedule.ui.schoolselection.web
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.net.http.SslError
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -30,6 +29,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -64,7 +64,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavController
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.xingheyuzhuan.shiguangschedule.BuildConfig
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseConversionRepository
@@ -90,15 +89,28 @@ fun WebViewScreen(
 
     val startedEmpty: Boolean = remember { initialUrl.isNullOrBlank() || initialUrl == "about:blank" }
 
+    // --- 预取字符串资源 ---
+    val titleEnterUrl = stringResource(R.string.title_enter_url)
+    val titleLoading = stringResource(R.string.title_loading)
+    val toastImportFinished = stringResource(R.string.toast_import_script_finished)
+    val toastSwitchedToDesktop = stringResource(R.string.toast_switched_to_desktop)
+    val toastSwitchedToPhone = stringResource(R.string.toast_switched_to_phone)
+    val toastUrlEmpty = stringResource(R.string.toast_url_empty_enter_first)
+    val toastDevToolsEnabledFmt = stringResource(R.string.toast_devtools_enabled_format)
+    val statusEnabled = stringResource(R.string.status_enabled)
+    val statusDisabled = stringResource(R.string.status_disabled)
+    val toastNoManualImport = stringResource(R.string.toast_no_script_manual_import)
+    val toastExecutingImport = stringResource(R.string.toast_executing_import_script)
+    val toastNoImportScript = stringResource(R.string.toast_no_import_script)
+    val toastImportNotFoundFmt = stringResource(R.string.toast_import_script_not_found)
+    val toastLoadImportFailedFmt = stringResource(R.string.toast_load_import_script_failed)
+
     var currentUrl by remember { mutableStateOf(initialUrl ?: "about:blank") }
     var inputUrl by remember { mutableStateOf(initialUrl ?: "https://") }
     var loadingProgress by remember { mutableFloatStateOf(0f) }
     var pageTitle by remember {
         mutableStateOf(
-            if (currentUrl.isBlank() || currentUrl == "about:blank")
-                context.getString(R.string.title_enter_url)
-            else
-                context.getString(R.string.title_loading)
+            if (startedEmpty) titleEnterUrl else titleLoading
         )
     }
     var expanded by remember { mutableStateOf(false) }
@@ -110,6 +122,10 @@ fun WebViewScreen(
 
     var isDevToolsEnabled by remember { mutableStateOf(false) }
     var showCourseTablePicker by remember { mutableStateOf(false) }
+
+    var sslErrorHandleState by remember {
+        mutableStateOf<Pair<SslErrorHandler, SslError>?>(null)
+    }
 
     // --- DevTools 逻辑 ---
     val enableDevToolsOptionInUi = BuildConfig.ENABLE_DEV_TOOLS_OPTION_IN_UI
@@ -155,7 +171,8 @@ fun WebViewScreen(
                 courseConversionRepository = courseConversionRepository,
                 timeSlotRepository = timeSlotRepository,
                 onTaskCompleted = {
-                    Toast.makeText(context, context.getString(R.string.toast_import_script_finished), Toast.LENGTH_LONG).show()
+                    // 使用预取的字符串
+                    Toast.makeText(context, toastImportFinished, Toast.LENGTH_LONG).show()
                     navController.popBackStack(
                         route = courseScheduleRoute,
                         inclusive = false
@@ -166,27 +183,14 @@ fun WebViewScreen(
 
             // WebViewClient: 页面导航和加载事件
             webViewClient = object : WebViewClient() {
+                @Deprecated("Deprecated in Java")
                 override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
                     return false
                 }
 
                 @SuppressLint("WebViewClientOnReceivedSslError")
                 override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
-                    (context as? Activity)?.let { activity ->
-                        MaterialAlertDialogBuilder(activity)
-                            .setMessage(context.getString(R.string.dialog_ssl_error_message))
-                            .setPositiveButton(context.getString(R.string.action_continue_browsing)) { _, _ ->
-                                handler.proceed()
-                            }
-                            .setNegativeButton(context.getString(R.string.action_cancel)) { _, _ ->
-                                handler.cancel()
-                            }
-                            .setCancelable(false)
-                            .show()
-                    } ?: run {
-                        Toast.makeText(context, context.getString(R.string.toast_ssl_error_cancelled), Toast.LENGTH_LONG).show()
-                        handler.cancel()
-                    }
+                    sslErrorHandleState = Pair(handler, error)
                 }
 
                 override fun onPageFinished(view: WebView?, url: String?) {
@@ -197,9 +201,9 @@ fun WebViewScreen(
                 override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
                     if (request.isForMainFrame) {
                         val description = error.description.toString()
-                        val context = view.context
+                        val ctx = view.context
                         view.post {
-                            Toast.makeText(context, context.getString(R.string.toast_web_load_error_format, description), Toast.LENGTH_LONG).show()
+                            Toast.makeText(ctx, ctx.getString(R.string.toast_web_load_error_format, description), Toast.LENGTH_LONG).show()
                         }
                     }
                 }
@@ -256,7 +260,7 @@ fun WebViewScreen(
         keyboardController?.hide()
         currentUrl = query
         isEditingUrl = false
-        pageTitle = context.getString(R.string.title_loading)
+        pageTitle = titleLoading // 使用预取字符串
     }
 
     Scaffold(
@@ -287,7 +291,7 @@ fun WebViewScreen(
                             placeholder = { Text(stringResource(R.string.placeholder_enter_url_full)) },
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                             keyboardActions = KeyboardActions(
-                                onGo = { ->
+                                onGo = {
                                     onSearch(inputUrl)
                                     isEditingUrl = false
                                 }
@@ -356,13 +360,13 @@ fun WebViewScreen(
                                     webView.settings.userAgentString = if (isDesktopMode) DESKTOP_USER_AGENT else defaultUserAgent
                                     webView.settings.loadWithOverviewMode = !isDesktopMode
 
-                                    val toastText = context.getString(if (isDesktopMode) R.string.toast_switched_to_desktop else R.string.toast_switched_to_phone)
-                                    Toast.makeText(context, toastText, Toast.LENGTH_SHORT).show()
+                                    val tText = if (isDesktopMode) toastSwitchedToDesktop else toastSwitchedToPhone
+                                    Toast.makeText(context, tText, Toast.LENGTH_SHORT).show()
 
                                     if (currentUrl.isNotBlank() && currentUrl != "about:blank") {
                                         webView.loadUrl(currentUrl)
                                     } else {
-                                        Toast.makeText(context, context.getString(R.string.toast_url_empty_enter_first), Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, toastUrlEmpty, Toast.LENGTH_LONG).show()
                                     }
                                     expanded = false
                                 },
@@ -380,10 +384,10 @@ fun WebViewScreen(
                                         isDevToolsEnabled = !isDevToolsEnabled
                                         WebView.setWebContentsDebuggingEnabled(isDevToolsEnabled)
 
-                                        val statusTextId = if (isDevToolsEnabled) R.string.status_enabled else R.string.status_disabled
+                                        val statusText = if (isDevToolsEnabled) statusEnabled else statusDisabled
                                         Toast.makeText(
                                             context,
-                                            context.getString(R.string.toast_devtools_enabled_format, context.getString(statusTextId)),
+                                            toastDevToolsEnabledFmt.format(statusText),
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     },
@@ -420,7 +424,7 @@ fun WebViewScreen(
                                 assetJsPath?.let {
                                     showCourseTablePicker = true
                                 } ?: run {
-                                    Toast.makeText(context, context.getString(R.string.toast_no_script_manual_import), Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, toastNoManualImport, Toast.LENGTH_LONG).show()
                                 }
                             },
                             enabled = assetJsPath != null
@@ -470,15 +474,48 @@ fun WebViewScreen(
                                 if (jsFile.exists()) {
                                     val jsCode = jsFile.readText()
                                     webView.evaluateJavascript(jsCode, null)
-                                    Toast.makeText(context, context.getString(R.string.toast_executing_import_script), Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, toastExecutingImport, Toast.LENGTH_SHORT).show()
                                 } else {
-                                    Toast.makeText(context, context.getString(R.string.toast_import_script_not_found, jsFile.path), Toast.LENGTH_LONG).show()
+                                    val msg = toastImportNotFoundFmt.format(jsFile.path)
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                                 }
                             } catch (e: Exception) {
-                                Toast.makeText(context, context.getString(R.string.toast_load_import_script_failed, e.localizedMessage), Toast.LENGTH_LONG).show()
+                                val errMsg = toastLoadImportFailedFmt.format(e.localizedMessage ?: "")
+                                Toast.makeText(context, errMsg, Toast.LENGTH_LONG).show()
                             }
                         } ?: run {
-                            Toast.makeText(context, context.getString(R.string.toast_no_import_script), Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, toastNoImportScript, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                )
+            }
+
+            sslErrorHandleState?.let { (handler, _) ->
+                AlertDialog(
+                    onDismissRequest = {
+                        handler.cancel()
+                        sslErrorHandleState = null
+                    },
+                    title = { Text(stringResource(R.string.dialog_ssl_error_title)) },
+                    text = { Text(stringResource(R.string.dialog_ssl_error_message)) },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                handler.proceed()
+                                sslErrorHandleState = null
+                            }
+                        ) {
+                            Text(stringResource(R.string.action_continue_browsing))
+                        }
+                    },
+                    dismissButton = {
+                        Button(
+                            onClick = {
+                                handler.cancel()
+                                sslErrorHandleState = null
+                            }
+                        ) {
+                            Text(stringResource(R.string.action_cancel))
                         }
                     }
                 )

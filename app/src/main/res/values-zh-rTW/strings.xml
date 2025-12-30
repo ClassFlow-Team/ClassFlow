@@ -14,6 +14,8 @@
     <string name="title_loading">載入中...</string>
     <string name="text_error">錯誤</string>
     <string name="label_none">無</string>
+    <string name="action_select_all">全選</string>
+    <string name="action_deselect_all">取消全選</string>
     
     <!-- 主介面及今日課表 -->
     <string name="nav_today_schedule">今日課表</string>
@@ -40,7 +42,6 @@
     <string name="label_end_section">結束節次</string>
     <string name="toast_time_invalid">開始節次不能大於結束節次</string>
     <string name="label_course_weeks">上課週次</string>
-    <string name="action_select_all">全選</string>
     <string name="action_single_week">單週</string>
     <string name="action_double_week">雙週</string>
     <string name="label_course_color">課程顏色</string>
@@ -53,6 +54,12 @@
     <string name="title_select_weeks">選擇上課週次</string>
     <string name="title_select_color">選擇課程顏色</string>
     <string name="a11y_color_selected">已選擇</string>
+    <string name="label_custom_time_range">自訂時間段</string>
+    <string name="label_select_custom_time">選擇自訂時間</string>
+    <string name="toast_custom_time_empty">起始時間或結束時間不能為空</string>
+    <string name="label_custom_time">自訂時間</string>
+    <string name="label_start_time">開始時間</string>
+    <string name="label_end_time">結束時間</string>
 
     <!-- 課程相關 -->
     <string name="course_time_description">時間: 第%1$s-%2$s節 (%3$s-%4$s)</string>
@@ -209,6 +216,17 @@
     <string name="toast_delete_table_success">%1$s 已刪除</string>
     <string name="toast_delete_last_table_failed">不能刪除最後一個課表</string>
     <string name="a11y_current_table">目前課表</string>
+    <string name="item_course_management">課程管理</string>
+    <string name="desc_course_management">按名稱查看和編輯所有課程</string>
+
+    <!-- 課程管理 -->
+    <string name="title_selected_items_count">已選擇 %1$d 項</string>
+    <string name="text_no_unique_courses_hint">目前課表暫無課程資料</string>
+    <string name="a11y_cancel_selection">取消多選</string>
+    <string name="a11y_exit_selection_mode">退出選擇模式</string>
+    <string name="a11y_enter_selection_mode">進入選擇模式</string>
+    <string name="a11y_not_selected">未選中</string>
+    <string name="label_weeks_format">週次: %1$s</string>
 
     <!-- 時間段管理 -->
     <string name="title_time_slot_management">時間段管理</string>
@@ -284,7 +302,21 @@
     <string name="item_contributors">貢獻者清單</string>
     <string name="label_version_prefix">版本: %1$s</string>
     <string name="default_app_name">未知應用程式</string>
-    
+    <string name="item_check_software_update">檢查軟體更新</string>
+
+    <string name="dialog_checking_update">正在檢查更新...</string>
+    <string name="tip_please_wait">正在連線伺服器，請稍候。</string>
+
+    <string name="dialog_new_version_found">發現新版本 %s</string>
+    <string name="dialog_current_version_latest">目前版本已是最新</string>
+    <string name="dialog_update_check_failed">更新檢查失敗</string>
+    <string name="label_error_message">錯誤資訊：%s</string>
+    <string name="btn_download_update">下載更新</string>
+    <string name="btn_update_now">立即更新</string>
+    <string name="tip_non_mandatory_update">提示：強制更新不會顯示此取消按鈕。</string>
+    <string name="dialog_select_update_channel">選擇更新渠道</string>
+    <string name="a11y_selected">已選中</string>
+
     <!-- 課程調動 -->
     <string name="title_tweak_schedule">調課</string>
     <string name="a11y_save_tweak">儲存調課變更</string>
@@ -302,6 +334,7 @@
     <string name="toast_tweak_success">調課成功！</string>
     <string name="error_tweak_failed">調課失敗：%1$s</string>
     <string name="course_time_day_section_details_tweak">%1$s | 節次 %2$s-%3$s</string>
+    <string name="course_time_day_time_details_tweak">%1$s | 時間 %2$s-%3$s</string>
 
     <!-- 教務匯入 -->
     <string name="title_select_school">選擇學校</string>
@@ -344,6 +377,7 @@
     <string name="toast_load_import_script_failed">載入匯入指令碼失敗: %1$s</string>
     <string name="toast_no_import_script">該適配器沒有匯入指令碼</string>
     <string name="toast_import_script_finished">匯入指令碼執行完畢，返回課表頁面。</string>
+    <string name="dialog_ssl_error_title">SSL 憑證錯誤</string>
     <string name="dialog_ssl_error_message">SSL憑證驗證失敗，這可能意味著連線不安全。是否繼續瀏覽？</string>
     <string name="action_continue_browsing">繼續瀏覽</string>
     <string name="toast_ssl_error_cancelled">SSL憑證驗證失敗，已取消連線。</string>
@@ -372,4 +406,49 @@
     <string name="label_username_or_token_key">使用者名稱或 Token Key</string>
     <string name="label_password_or_token_value">密碼或 Token Value</string>
     <string name="title_update_log">更新日誌</string>
+
+    <!-- 色彩編輯器 -->
+    <string name="color_picker_title_edit">顏色調節</string>
+    <string name="color_picker_title_precise">精準數值</string>
+    <string name="color_picker_mode_visual">滑塊模式</string>
+    <string name="color_picker_mode_input">數字模式</string>
+    <string name="color_picker_label_hue">色相</string>
+    <string name="color_picker_label_saturation">飽和度</string>
+    <string name="color_picker_label_value">亮度</string>
+    <string name="color_picker_label_alpha">透明度</string>
+    <string name="a11y_switch_color_mode">切換輸入方式</string>
+
+    <!-- 個性化配置 -->
+    <string name="item_personalization">個性化配置</string>
+    <string name="desc_personalization">調整課表格子高度、圓角、間距及透明度</string>
+    <string name="style_category_interface">介面顯示</string>
+    <string name="style_category_grid_size">網格尺寸</string>
+    <string name="style_category_course_block">課程塊配置</string>
+    <string name="style_category_color_scheme">顏色方案 (點擊圓形編輯)</string>
+    <string name="label_wallpaper">課表背景桌布</string>
+    <string name="desc_wallpaper_set">已設置 (長按可清除)</string>
+    <string name="desc_wallpaper_unset">未設置 (點擊選擇圖片)</string>
+    <string name="label_hide_section_time">隱藏節次具體時間</string>
+    <string name="label_hide_date_under_day">隱藏日期 (週幾下方)</string>
+    <string name="label_show_start_time">顯示課程格開始時間</string>
+    <string name="label_section_height">格子高度</string>
+    <string name="label_time_column_width">側邊欄寬度</string>
+    <string name="label_day_header_height">頂部表頭高度</string>
+    <string name="label_hide_location">隱藏上課地點</string>
+    <string name="label_hide_teacher">隱藏授課老師</string>
+    <string name="label_remove_location_at">移除地點前的 @ 符號</string>
+    <string name="label_font_scale">文字縮放比例</string>
+    <string name="label_corner_radius">圓角半徑</string>
+    <string name="label_inner_padding">內部填充</string>
+    <string name="label_outer_padding">外部間距</string>
+    <string name="label_opacity">不透明度</string>
+    <string name="title_light_color_pool">淺色模式顏色池</string>
+    <string name="title_dark_color_pool">深色模式顏色池</string>
+    <string name="label_color_conflict">衝突</string>
+    <string name="preview_light_mode">淺色模式預覽\n固定深色文字</string>
+    <string name="preview_dark_mode">深色模式預覽\n固定淺色文字</string>
+    <string name="action_reset_style">恢復預設樣式設置</string>
+    <string name="dialog_reset_title">重置樣式</string>
+    <string name="dialog_reset_message">確定要將所有樣式設置恢復為預設值嗎？此操作不可撤銷。</string>
+
 </resources>

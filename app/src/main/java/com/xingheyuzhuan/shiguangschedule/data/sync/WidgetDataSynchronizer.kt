@@ -186,8 +186,18 @@ class WidgetDataSynchronizer(
             for (courseWithWeeks in coursesWithWeeks) {
                 if (courseWithWeeks.weeks.any { it.weekNumber == weekNumber } && courseWithWeeks.course.day == dayOfWeek) {
                     val course = courseWithWeeks.course
-                    val startTime = timeSlotMap[course.startSection]?.startTime ?: ""
-                    val endTime = timeSlotMap[course.endSection]?.endTime ?: ""
+
+                    val startTime: String
+                    val endTime: String
+
+                    if (course.isCustomTime) {
+                        startTime = course.customStartTime ?: ""
+                        endTime = course.customEndTime ?: ""
+                    } else {
+                        startTime = timeSlotMap[course.startSection]?.startTime ?: ""
+                        endTime = timeSlotMap[course.endSection]?.endTime ?: ""
+                    }
+
                     val isSkipped = skippedDates.contains(dateString)
 
                     val widgetCourse = WidgetCourse(
@@ -198,7 +208,8 @@ class WidgetDataSynchronizer(
                         startTime = startTime,
                         endTime = endTime,
                         isSkipped = isSkipped,
-                        date = dateString
+                        date = dateString,
+                        colorInt = course.colorInt
                     )
                     widgetCourses.add(widgetCourse)
                 }

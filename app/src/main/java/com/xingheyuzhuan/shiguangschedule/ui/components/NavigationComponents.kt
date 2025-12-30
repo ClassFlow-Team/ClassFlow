@@ -28,8 +28,11 @@ import com.xingheyuzhuan.shiguangschedule.R
 
 
 @Composable
-fun BottomNavigationBar(navController: NavHostController, currentRoute: String?) {
-
+fun BottomNavigationBar(
+    navController: NavHostController,
+    currentRoute: String?,
+    isTransparent: Boolean = false
+) {
     val navItems = listOf(
         stringResource(R.string.nav_today_schedule) to Screen.TodaySchedule.route,
         stringResource(R.string.nav_course_schedule) to Screen.CourseSchedule.route,
@@ -39,8 +42,11 @@ fun BottomNavigationBar(navController: NavHostController, currentRoute: String?)
     val iconSize = 24.dp
     val textSize = 12.sp
 
-
-    NavigationBar {
+    NavigationBar(
+        // 根据传入的参数决定颜色
+        containerColor = if (isTransparent) Color.Transparent else MaterialTheme.colorScheme.surface,
+        tonalElevation = if (isTransparent) 0.dp else 3.dp
+    ) {
         navItems.forEach { (label, route) ->
             val isSelected = currentRoute == route
 
@@ -49,9 +55,7 @@ fun BottomNavigationBar(navController: NavHostController, currentRoute: String?)
                 onClick = {
                     if (currentRoute != route) {
                         navController.navigate(route) {
-                            popUpTo(navController.graph.startDestinationId) {
-                                saveState = true
-                            }
+                            popUpTo(navController.graph.startDestinationId) { saveState = true }
                             launchSingleTop = true
                             restoreState = true
                         }
@@ -64,30 +68,17 @@ fun BottomNavigationBar(navController: NavHostController, currentRoute: String?)
                         Screen.Settings.route -> Icons.Filled.AccountCircle to Icons.Outlined.AccountCircle
                         else -> Icons.Filled.AccountCircle to Icons.Outlined.AccountCircle
                     }
-
                     val icon = if (isSelected) selectedIcon else unselectedIcon
-
-                    Icon(
-                        icon,
-                        contentDescription = label,
-                        modifier = Modifier.size(iconSize)
-                    )
+                    Icon(icon, contentDescription = label, modifier = Modifier.size(iconSize))
                 },
-                label = {
-                    Text(
-                        label,
-                        fontSize = textSize
-                    )
-                },
+                label = { Text(label, fontSize = textSize) },
                 colors = NavigationBarItemDefaults.colors(
-                    indicatorColor = Color.Transparent,
-
+                    // 只有在明确透明模式下，才隐藏指示器，否则保留默认胶囊背景
+                    indicatorColor = if (isTransparent) Color.Transparent else MaterialTheme.colorScheme.secondaryContainer,
                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-
                     unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-
-                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    selectedTextColor = MaterialTheme.colorScheme.onSurface
+                    selectedIconColor = if (isTransparent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSecondaryContainer,
+                    selectedTextColor = if (isTransparent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 )
             )
         }
@@ -97,5 +88,10 @@ fun BottomNavigationBar(navController: NavHostController, currentRoute: String?)
 @Preview(showBackground = true)
 @Composable
 fun BottomNavigationBarPreview() {
-    BottomNavigationBar(navController = rememberNavController(), currentRoute = Screen.Settings.route)
+    MaterialTheme {
+        BottomNavigationBar(
+            navController = rememberNavController(),
+            currentRoute = Screen.Settings.route
+        )
+    }
 }

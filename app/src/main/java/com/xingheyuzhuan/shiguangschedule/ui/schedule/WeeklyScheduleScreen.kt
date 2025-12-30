@@ -2,13 +2,14 @@ package com.xingheyuzhuan.shiguangschedule.ui.schedule
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -23,17 +24,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import coil.compose.AsyncImage
+import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Screen
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
+import com.xingheyuzhuan.shiguangschedule.navigation.AddEditCourseChannel
+import com.xingheyuzhuan.shiguangschedule.navigation.PresetCourseData
 import com.xingheyuzhuan.shiguangschedule.ui.components.BottomNavigationBar
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ConflictCourseBottomSheet
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGrid
+import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGridStyleComposed
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.WeekSelectorBottomSheet
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -42,8 +51,6 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
-import androidx.compose.ui.res.stringResource
-import com.xingheyuzhuan.shiguangschedule.R
 
 // Pager 的总页数和初始中心页码作为常量，便于管理
 private const val TOTAL_PAGER_WEEKS = 1000
@@ -86,18 +93,25 @@ fun WeeklyScheduleScreen(
         INITIAL_PAGER_INDEX + initialOffset
     }
 
-    // 初始化 pagerState，使用基于 ViewModel 数据的初始页码
+    // 初始化 pagerState
     val pagerState = rememberPagerState(
         initialPage = initialPage,
         pageCount = { TOTAL_PAGER_WEEKS }
     )
+
+    val composedStyle by remember(uiState.style) {
+        derivedStateOf {
+            with(ScheduleGridStyleComposed) {
+                uiState.style.toComposedStyle()
+            }
+        }
+    }
 
     // 当 Pager 状态改变时，更新 selectedWeek
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.currentPage }
             .distinctUntilChanged()
             .collect { pageIndex ->
-                // 将 Pager 页码映射到实际周偏移量
                 val newSelectedWeek = pageIndex - INITIAL_PAGER_INDEX
                 selectedWeek = newSelectedWeek
             }
@@ -124,15 +138,13 @@ fun WeeklyScheduleScreen(
     // 根据 ViewModel 数据和 selectedWeek 动态计算当前周的课程
     val currentCourses by remember(uiState.allCourses, uiState.timeSlots, selectedWeek, uiState.currentWeekNumber) {
         derivedStateOf {
-            val currentWeek = uiState.currentWeekNumber // 使用 ViewModel 计算的当前周数
-
+            val currentWeek = uiState.currentWeekNumber
             if (currentWeek == null || uiState.semesterStartDate == null) {
                 // 如果当前学期周数未知，则显示空课表
                 emptyList()
             } else {
                 selectedWeek?.let { weekOffset ->
                     val targetWeekNumber = currentWeek + weekOffset
-
                     val coursesForWeek = uiState.allCourses.filter { courseWithWeeks ->
                         courseWithWeeks.weeks.any { it.weekNumber == targetWeekNumber }
                     }
@@ -151,13 +163,11 @@ fun WeeklyScheduleScreen(
             when {
                 // 学期未设置
                 !uiState.isSemesterSet -> titleSemesterNotSet
-
                 // 学期已设置，但开学日期在未来
                 semesterStartDate != null && today.isBefore(semesterStartDate) -> {
                     val daysUntilStart = ChronoUnit.DAYS.between(today, semesterStartDate)
                     String.format(titleVacationUntilStart, daysUntilStart.toString())
                 }
-
                 // 学期已设置，并且在学期内
                 uiState.isSemesterSet && selectedWeek != null && currentWeek != null -> {
                     val targetWeekNumber = currentWeek + selectedWeek!!
@@ -171,74 +181,99 @@ fun WeeklyScheduleScreen(
             }
         }
     }
-    val isSemesterStarted = uiState.semesterStartDate != null && !today.isBefore(uiState.semesterStartDate)
 
+    val isSemesterStarted = uiState.semesterStartDate != null && !today.isBefore(uiState.semesterStartDate)
     val isTopBarClickable = !uiState.isSemesterSet || isSemesterStarted
 
     val topBarClickAction: () -> Unit = {
         if (!uiState.isSemesterSet) {
             navController.navigate(Screen.Settings.route) {
-                popUpTo(navController.graph.id) {
-                    inclusive = true
-                }
+                popUpTo(navController.graph.id) { inclusive = true }
             }
         } else if (isSemesterStarted) {
             showWeekSelector = true
         }
     }
 
-
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = topBarTitle,
-                        modifier = Modifier.clickable(
-                            enabled = isTopBarClickable,
-                            onClick = topBarClickAction
-                        )
-                    )
-                },
-                scrollBehavior = scrollBehavior
+    // 使用 Box 作为根容器实现真正的全屏背景
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 1. 最底层：全屏壁纸
+        if (composedStyle.backgroundImagePath.isNotEmpty()) {
+            AsyncImage(
+                model = composedStyle.backgroundImagePath,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
             )
-        },
-        bottomBar = {
-            BottomNavigationBar(navController = navController, currentRoute = currentRoute)
-        },
-        snackbarHost = {
-            SnackbarHost(hostState = snackbarHostState)
         }
-    ) { innerPadding ->
-        Column(
+
+        // 2. 上层：Scaffold 容器
+        Scaffold(
             modifier = Modifier
-                .padding(innerPadding)
                 .fillMaxSize()
-        ) {
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
+            containerColor = Color.Transparent, // 必须透明以显示底层壁纸
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Text(
+                            text = topBarTitle,
+                            modifier = Modifier.clickable(
+                                enabled = isTopBarClickable,
+                                onClick = topBarClickAction
+                            )
+                        )
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = if (composedStyle.backgroundImagePath.isNotEmpty())
+                            Color.Transparent else MaterialTheme.colorScheme.surface,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+                    ),
+                    scrollBehavior = scrollBehavior
+                )
+            },
+            bottomBar = {
+                BottomNavigationBar(
+                    navController = navController,
+                    currentRoute = currentRoute,
+                    isTransparent = composedStyle.backgroundImagePath.isNotEmpty()
+                )
+            },
+            snackbarHost = {
+                SnackbarHost(hostState = snackbarHostState)
+            }
+        ) { innerPadding ->
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .padding(innerPadding)
+                    .fillMaxSize()
             ) { pageIndex ->
-
-                // 确保只有当前页面的 ScheduleGrid 接收到最新的数据
                 if (pageIndex - INITIAL_PAGER_INDEX == selectedWeek) {
                     val semesterStartDate = uiState.semesterStartDate
 
                     val onGridCellClicked: (Int, Int) -> Unit = { day, section ->
                         val isSemesterStarted = semesterStartDate != null && !today.isBefore(semesterStartDate)
                         if (isSemesterStarted) {
-                            navController.navigate(Screen.AddEditCourse.createRouteForNewCourse(day, section))
+                            viewModel.viewModelScope.launch {
+                                AddEditCourseChannel.sendEvent(
+                                    PresetCourseData(
+                                        day = day,
+                                        startSection = section,
+                                        endSection = section
+                                    )
+                                )
+                                navController.navigate(Screen.AddEditCourse.createRouteForNewCourse())
+                            }
                         } else {
                             viewModel.viewModelScope.launch {
-                                // 【✅ 修复 3/3：使用普通变量】
                                 snackbarHostState.showSnackbar(snackbarAddCourseAfterStart)
                             }
                         }
                     }
 
-                    // 直接调用 ScheduleGrid，让它处理内部的滚动
                     ScheduleGrid(
+                        style = composedStyle,
                         dates = dates,
                         timeSlots = uiState.timeSlots,
                         mergedCourses = currentCourses,
@@ -262,8 +297,7 @@ fun WeeklyScheduleScreen(
                         }
                     )
                 } else {
-                    // 非当前页面的占位符
-                    Column(modifier = Modifier.fillMaxSize()) { }
+                    Box(modifier = Modifier.fillMaxSize())
                 }
             }
         }
@@ -293,6 +327,7 @@ fun WeeklyScheduleScreen(
     // 冲突课程列表 BottomSheet
     if (showConflictBottomSheet) {
         ConflictCourseBottomSheet(
+            style = composedStyle,
             courses = conflictCoursesToShow,
             timeSlots = uiState.timeSlots,
             onCourseClicked = { course ->
@@ -310,16 +345,8 @@ fun WeeklyScheduleScreen(
  */
 private fun calculateDatesForPager(weekOffset: Int, firstDayOfWeek: Int): List<LocalDate> {
     val today = LocalDate.now()
-    // 1. 将设置的 Int (1=周一, 7=周日) 转换为 java.time.DayOfWeek
     val dayOfWeekStart = DayOfWeek.of(firstDayOfWeek)
-
-    // 2. 找到当前日期所在周的起始日
-    // 使用用户设置的起始日替换硬编码的 DayOfWeek.MONDAY
     val startDayOfCurrentWeek = today.with(TemporalAdjusters.previousOrSame(dayOfWeekStart))
-
-    // 3. 加上偏移量，得到目标周的起始日
     val firstDayOfTargetWeek = startDayOfCurrentWeek.plusWeeks(weekOffset.toLong())
-
-    // 4. 生成目标周的 7 天日期
     return (0..6).map { firstDayOfTargetWeek.plusDays(it.toLong()) }
 }
