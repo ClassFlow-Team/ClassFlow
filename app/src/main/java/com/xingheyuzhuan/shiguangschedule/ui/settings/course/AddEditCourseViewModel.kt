@@ -176,8 +176,15 @@ class AddEditCourseViewModel(
     fun onWeeksChange(newWeeks: Set<Int>) { _uiState.update { it.copy(weeks = newWeeks) } }
     fun onColorChange(colorIndex: Int) { _uiState.update { it.copy(colorIndex = colorIndex) } }
     fun onIsCustomTimeChange(isCustom: Boolean) { _uiState.update { it.copy(isCustomTime = isCustom) } }
-    fun onCustomStartTimeChange(time: String) { _uiState.update { it.copy(customStartTime = time) } }
-    fun onCustomEndTimeChange(time: String) { _uiState.update { it.copy(customEndTime = time) } }
+
+    fun onCustomTimeChange(startTime: String, endTime: String) {
+        _uiState.update {
+            it.copy(
+                customStartTime = startTime,
+                customEndTime = endTime
+            )
+        }
+    }
 
     fun onSave() {
         viewModelScope.launch {

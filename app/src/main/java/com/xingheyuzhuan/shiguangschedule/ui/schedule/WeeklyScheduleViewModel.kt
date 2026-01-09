@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
@@ -171,6 +173,19 @@ class WeeklyScheduleViewModel(
     }
 }
 
+
+// 时间格式化器，用于解析 "HH:mm" 字符串
+private val TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
+/**
+ * 辅助数据类，用于在合并前将所有课程（无论类型）统一为包含精确时间范围的对象。
+ */
+private data class NormalizableCourse(
+    val courseWithWeeks: CourseWithWeeks,
+    val startTime: LocalTime,
+    val endTime: LocalTime
+)
+
 /**
  * 合并课程块，处理连续课程和冲突课程。
  */
@@ -178,79 +193,102 @@ fun mergeCourses(
     courses: List<CourseWithWeeks>,
     timeSlots: List<TimeSlot>
 ): List<MergedCourseBlock> {
-    val mergedBlocks = mutableListOf<MergedCourseBlock>()
+    if (timeSlots.isEmpty() && courses.any { it.course.isCustomTime }) {
+        return emptyList()
+    }
 
-    // 1. 预处理课程：确保所有课程都有非空的节次。自定义课程使用虚拟节次来通过排序。
-    val processedCourses = courses.mapNotNull { courseWithWeeks ->
+    val normalizableCourses = courses.mapNotNull { courseWithWeeks ->
         val c = courseWithWeeks.course
-
-        if (c.isCustomTime) {
-            val start = c.startSection ?: 1
-            val end = c.endSection ?: 1
-
-            courseWithWeeks.copy(
-                course = c.copy(
-                    startSection = start,
-                    endSection = end
+        try {
+            val (startTime, endTime) = if (c.isCustomTime) {
+                Pair(
+                    LocalTime.parse(c.customStartTime, TIME_FORMATTER),
+                    LocalTime.parse(c.customEndTime, TIME_FORMATTER)
                 )
-            )
-        } else {
-            if (c.startSection == null || c.endSection == null) {
-                return@mapNotNull null
+            } else {
+                val startSlot = timeSlots.find { it.number == c.startSection }
+                val endSlot = timeSlots.find { it.number == c.endSection }
+                if (startSlot == null || endSlot == null) return@mapNotNull null
+                Pair(
+                    LocalTime.parse(startSlot.startTime, TIME_FORMATTER),
+                    LocalTime.parse(endSlot.endTime, TIME_FORMATTER)
+                )
             }
-            courseWithWeeks
+            NormalizableCourse(courseWithWeeks, startTime, endTime)
+        } catch (e: Exception) {
+            null
         }
     }
 
-    // 2. 按天分组并进行合并
-    val coursesByDay = processedCourses
-        .filter { it.course.day in 1..7 }
-        .groupBy { it.course.day }
+    val mergedBlocks = mutableListOf<MergedCourseBlock>()
+    val coursesByDay = normalizableCourses
+        .filter { it.courseWithWeeks.course.day in 1..7 }
+        .groupBy { it.courseWithWeeks.course.day }
 
     for ((day, dailyCourses) in coursesByDay) {
-        val coursesSorted = dailyCourses.sortedBy { it.course.startSection!! }
-        val processedInDay = mutableSetOf<CourseWithWeeks>()
+        val coursesSorted = dailyCourses.sortedBy { it.startTime }
+        val processedCourses = mutableSetOf<NormalizableCourse>()
 
-        for (course in coursesSorted) {
-            if (!processedInDay.contains(course)) {
-                val combinedCourses = mutableListOf(course)
+        for (baseCourse in coursesSorted) {
+            if (baseCourse in processedCourses) continue
 
-                var currentStartSection = course.course.startSection!!
-                var currentEndSection = course.course.endSection!!
-                var isConflict = false
-
-                val overlappingCourses = coursesSorted.filter { other ->
-                    other != course &&
-                            !(other.course.endSection!! < currentStartSection ||
-                                    other.course.startSection!! > currentEndSection)
-                }
-
-                if (overlappingCourses.isNotEmpty()) {
-                    isConflict = true
-                    combinedCourses.addAll(overlappingCourses)
-                    currentStartSection = combinedCourses.minOf { it.course.startSection!! }
-                    currentEndSection = combinedCourses.maxOf { it.course.endSection!! }
-                }
-
-                val needsProportionalRendering = combinedCourses.any { it.course.isCustomTime }
-
-                mergedBlocks.add(
-                    MergedCourseBlock(
-                        day = day,
-                        startSection = currentStartSection,
-                        endSection = currentEndSection,
-                        courses = combinedCourses.distinct(),
-                        isConflict = isConflict,
-                        needsProportionalRendering = needsProportionalRendering
-                    )
-                )
-
-                processedInDay.addAll(combinedCourses)
+            val overlappingGroup = coursesSorted.filter { otherCourse ->
+                baseCourse.startTime < otherCourse.endTime && baseCourse.endTime > otherCourse.startTime
             }
+
+            val startSection: Int
+            val endSection: Int
+
+            val containsOnlyCustom = overlappingGroup.all { it.courseWithWeeks.course.isCustomTime }
+
+            if (containsOnlyCustom && timeSlots.isNotEmpty()) {
+                val blockStartTime = overlappingGroup.minOf { it.startTime }
+                val blockEndTime = overlappingGroup.maxOf { it.endTime }
+
+                val getSectionForTime = { time: LocalTime ->
+                    val sortedSlots = timeSlots.sortedBy { it.number }
+
+                    val directMatch = sortedSlots.find { slot ->
+                        val slotStart = LocalTime.parse(slot.startTime, TIME_FORMATTER)
+                        val slotEnd = LocalTime.parse(slot.endTime, TIME_FORMATTER)
+                        !time.isBefore(slotStart) && time.isBefore(slotEnd)
+                    }
+                    directMatch?.number
+                        ?: (sortedSlots.lastOrNull { slot ->
+                            val slotStart = LocalTime.parse(slot.startTime, TIME_FORMATTER)
+                            !time.isBefore(slotStart) // 时间晚于或等于该节次开始
+                        }?.number ?: 1)
+                }
+
+                val endSectionTime = if (blockEndTime == LocalTime.MIN) LocalTime.MIN else blockEndTime.minusNanos(1)
+
+                startSection = getSectionForTime(blockStartTime)
+                endSection = getSectionForTime(endSectionTime)
+
+            } else {
+                startSection = overlappingGroup.mapNotNull { it.courseWithWeeks.course.startSection }.minOrNull() ?: 1
+                endSection = overlappingGroup.mapNotNull { it.courseWithWeeks.course.endSection }.maxOrNull() ?: startSection
+            }
+
+            val isConflict = overlappingGroup.size > 1
+            val needsProportionalRendering = overlappingGroup.any { it.courseWithWeeks.course.isCustomTime } && (startSection < endSection)
+
+            mergedBlocks.add(
+                MergedCourseBlock(
+                    day = day,
+                    startSection = startSection,
+                    endSection = endSection,
+                    courses = overlappingGroup.map { it.courseWithWeeks }.distinct(),
+                    isConflict = isConflict,
+                    needsProportionalRendering = needsProportionalRendering
+                )
+            )
+            processedCourses.addAll(overlappingGroup)
         }
     }
     return mergedBlocks
 }
+
 
 /**
  * ViewModel 工厂类

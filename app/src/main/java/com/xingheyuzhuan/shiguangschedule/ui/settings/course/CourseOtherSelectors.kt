@@ -206,7 +206,6 @@ fun ColorPicker(
         Button(
             onClick = onColorClick,
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(containerColor = selectedColor)
         ) {
             Text(buttonSelectColor, color = textColor)

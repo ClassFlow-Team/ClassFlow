@@ -16,6 +16,8 @@
     <string name="label_none">无</string>
     <string name="action_select_all">全选</string>
     <string name="action_deselect_all">取消全选</string>
+    <string name="a11y_state_selected">已选中</string>
+    <string name="a11y_state_not_selected">未选中</string>
     
     <!-- 主界面及今日课表 -->
     <string name="nav_today_schedule">今日课表</string>

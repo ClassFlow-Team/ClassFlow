@@ -37,6 +37,12 @@ import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.MergedCourseBlock
 import androidx.compose.ui.res.stringArrayResource
 import com.xingheyuzhuan.shiguangschedule.R
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+
+// 在文件顶部或适当位置定义时间格式化器
+private val TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 /**
  * 渲染课表网格的 UI 组件。
@@ -141,11 +147,8 @@ fun ScheduleGrid(
                         // 使用 0-based 的索引计算 offsetX
                         val offsetX = newDayIndex * cellWidth
 
-                        val (offsetYPx, heightPx) = if (mergedBlock.needsProportionalRendering) {
-                            calculateProportionalLayout(mergedBlock, timeSlots, sectionHeightPx)
-                        } else {
-                            calculateFixedLayout(mergedBlock, sectionHeightPx)
-                        }
+                        // 统一调用新的、全能的布局计算函数
+                        val (offsetYPx, heightPx) = calculateLayout(mergedBlock, timeSlots, sectionHeightPx)
 
                         // 将像素值转换回 Dp，用于 Compose UI 布局
                         val offsetY = with(density) { offsetYPx.toDp() }
@@ -170,117 +173,77 @@ fun ScheduleGrid(
     }
 }
 
-
 /**
- * 辅助函数：将 "HH:MM" 格式的时间字符串转换为从午夜开始的总分钟数。
+ * 计算课程块布局的核心函数，能独立处理所有情况。
  */
-private fun timeToMinutes(time: String): Int {
-    return try {
-        val parts = time.split(":")
-        val hour = parts[0].toInt()
-        val minute = parts[1].toInt()
-        hour * 60 + minute
-    } catch (e: Exception) {
-        // 时间格式错误或解析失败时，返回 0
-        0
-    }
-}
-
-/**
- * 计算标准节次课程块的布局参数 (固定高度)。
- */
-private fun calculateFixedLayout(
-    mergedBlock: MergedCourseBlock,
-    sectionHeightPx: Float // 单节课的像素高度
-): Pair<Float, Float> {
-    // 偏移量：从第一节课开始 (startSection - 1)
-    val offsetY = (mergedBlock.startSection - 1) * sectionHeightPx
-
-    // 高度：占据的节次数 * 单节课的像素高度
-    val sectionsCount = mergedBlock.endSection - mergedBlock.startSection + 1
-    val height = sectionsCount * sectionHeightPx
-
-    return Pair(offsetY, height)
-}
-
-/**
- * 计算自定义时间课程块的布局参数 (比例计算)。
- */
-private fun calculateProportionalLayout(
+@Composable
+private fun calculateLayout(
     mergedBlock: MergedCourseBlock,
     timeSlots: List<TimeSlot>,
-    sectionHeightPx: Float // 单节课的像素高度 (例如 140.0 Px)
+    sectionHeightPx: Float
 ): Pair<Float, Float> {
+    val course = mergedBlock.courses.firstOrNull()?.course
+    val isSingleSectionCustomCourse = !mergedBlock.isConflict && course != null && course.isCustomTime
+
+    if (!isSingleSectionCustomCourse) {
+        val offsetY = (mergedBlock.startSection - 1) * sectionHeightPx
+        val sectionsCount = (mergedBlock.endSection - mergedBlock.startSection + 1).coerceAtLeast(1)
+        val height = sectionsCount * sectionHeightPx
+        return Pair(offsetY, height)
+    }
+
+
+    val customStartTime = LocalTime.parse(course.customStartTime, TIME_FORMATTER)
+    val customEndTime = LocalTime.parse(course.customEndTime, TIME_FORMATTER)
+
     val timeSlotMap = timeSlots.associateBy { it.number }
-
-    val course = mergedBlock.courses.firstOrNull()?.course ?: return calculateFixedLayout(mergedBlock, sectionHeightPx)
-
-    val customStartTimeStr = course.customStartTime
-    val customEndTimeStr = course.customEndTime
-    if (customStartTimeStr == null || customEndTimeStr == null) {
-        return calculateFixedLayout(mergedBlock, sectionHeightPx)
+    val getSectionForTime = { time: LocalTime ->
+        val sortedSlots = timeSlots.sortedBy { it.number }
+        val directMatch = sortedSlots.find { slot ->
+            val slotStart = LocalTime.parse(slot.startTime, TIME_FORMATTER)
+            val slotEnd = LocalTime.parse(slot.endTime, TIME_FORMATTER)
+            !time.isBefore(slotStart) && time.isBefore(slotEnd)
+        }
+        directMatch?.number
+            ?: (sortedSlots.lastOrNull { slot ->
+                !time.isBefore(LocalTime.parse(slot.startTime, TIME_FORMATTER))
+            }?.number ?: 1)
     }
 
-    val customStartMinutes = timeToMinutes(customStartTimeStr)
-    val customEndMinutes = timeToMinutes(customEndTimeStr)
+    val sReal = getSectionForTime(customStartTime)
+    val eReal = getSectionForTime(if (customEndTime == LocalTime.MIN) LocalTime.MIN else customEndTime.minusNanos(1))
 
-    val S_real = timeSlots.firstOrNull { slot ->
-        timeToMinutes(slot.endTime) > customStartMinutes
-    }?.number ?: 1
-
-    val E_real = timeSlots.firstOrNull { slot ->
-        timeToMinutes(slot.endTime) >= customEndMinutes
-    }?.number ?: timeSlots.size.coerceAtLeast(1)
-
-    val realStartSlot = timeSlotMap[S_real]
-    val realEndSlot = timeSlotMap[E_real]
-
-    if (realStartSlot == null || realEndSlot == null || customStartMinutes >= customEndMinutes || S_real > E_real) {
-        return calculateFixedLayout(mergedBlock, sectionHeightPx)
+    if (sReal == eReal) {
+        val offsetY = (sReal - 1) * sectionHeightPx
+        return Pair(offsetY, sectionHeightPx)
     }
 
-    val totalSections = E_real - S_real + 1
-    val totalSpanHeightPx = totalSections * sectionHeightPx
+    val realStartSlot = timeSlotMap[sReal]
+    val realEndSlot = timeSlotMap[eReal]
 
-    val spanStartMinutes = timeToMinutes(realStartSlot.startTime)
-    val spanEndMinutes = timeToMinutes(realEndSlot.endTime)
-    val totalSpanDurationMinutes = spanEndMinutes - spanStartMinutes
-
-    if (totalSpanDurationMinutes <= 0) {
-        return calculateFixedLayout(mergedBlock, sectionHeightPx)
+    if (realStartSlot == null || realEndSlot == null) {
+        val offsetY = (mergedBlock.startSection - 1) * sectionHeightPx
+        val height = (mergedBlock.endSection - mergedBlock.startSection + 1) * sectionHeightPx
+        return Pair(offsetY, height)
     }
-    val pxPerMinute = totalSpanHeightPx / totalSpanDurationMinutes.toFloat()
 
-    val fixedOffsetY = (S_real - 1) * sectionHeightPx
-    val totalDurationMinutes = customEndMinutes - customStartMinutes
+    val spanOffsetYPx = (sReal - 1) * sectionHeightPx
+    val spanTotalHeightPx = (eReal - sReal + 1) * sectionHeightPx
 
-    val minuteOffsetInSpan = customStartMinutes - spanStartMinutes
+    val spanStartTime = LocalTime.parse(realStartSlot.startTime, TIME_FORMATTER)
+    val spanEndTime = LocalTime.parse(realEndSlot.endTime, TIME_FORMATTER)
+    val spanDurationMinutes = ChronoUnit.MINUTES.between(spanStartTime, spanEndTime)
 
-    var finalOffsetY = fixedOffsetY + (minuteOffsetInSpan * pxPerMinute)
-    var finalHeight = totalDurationMinutes.coerceAtLeast(0) * pxPerMinute
-
-    val spanTopY = fixedOffsetY
-    if (finalOffsetY < spanTopY) {
-        val overflowHeight = spanTopY - finalOffsetY
-
-        finalOffsetY = spanTopY
-        finalHeight -= overflowHeight
+    if (spanDurationMinutes <= 0) {
+        return Pair(spanOffsetYPx, spanTotalHeightPx)
     }
-    val spanBottomY = fixedOffsetY + totalSpanHeightPx
-    val courseBottomY = finalOffsetY + finalHeight
 
-    if (courseBottomY > spanBottomY) {
-        val overflowHeight = courseBottomY - spanBottomY
+    val pxPerMinute = spanTotalHeightPx / spanDurationMinutes.toFloat()
+    val offsetMinutes = ChronoUnit.MINUTES.between(spanStartTime, customStartTime).coerceAtLeast(0)
+    val courseDurationMinutes = ChronoUnit.MINUTES.between(customStartTime, customEndTime).coerceAtLeast(0)
 
-        finalHeight -= overflowHeight
-    }
-    if (finalHeight <= 0f) {
-        finalHeight = sectionHeightPx
-        finalOffsetY = fixedOffsetY
-    }
-    else if (finalHeight < sectionHeightPx) {
-        finalHeight = sectionHeightPx
-    }
+    val finalOffsetY = spanOffsetYPx + (offsetMinutes * pxPerMinute)
+    val finalHeight = courseDurationMinutes * pxPerMinute
 
     return Pair(finalOffsetY, finalHeight)
 }
