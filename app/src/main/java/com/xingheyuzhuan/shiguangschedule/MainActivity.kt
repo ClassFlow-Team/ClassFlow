@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -36,7 +35,7 @@ import com.xingheyuzhuan.shiguangschedule.ui.settings.style.StyleSettingsScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.time.TimeSlotManagementScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.tweaks.TweakScheduleScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.update.UpdateRepoScreen
-import com.xingheyuzhuan.shiguangschedule.ui.theme.shiguangscheduleTheme
+import com.xingheyuzhuan.shiguangschedule.ui.theme.ShiguangScheduleTheme
 import com.xingheyuzhuan.shiguangschedule.ui.today.TodayScheduleScreen
 
 class MainActivity : ComponentActivity() {
@@ -44,7 +43,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
-            shiguangscheduleTheme {
+            ShiguangScheduleTheme {
                 AppNavigation()
             }
         }
@@ -299,14 +298,5 @@ fun AppNavigation() {
         ) {
             StyleSettingsScreen(navController = navController)
         }
-    }
-}
-
-@Preview(showBackground = true, name = "App Navigation Light")
-@Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES, name = "App Navigation Dark")
-@Composable
-fun PreviewAppNavigation() {
-    shiguangscheduleTheme {
-        AppNavigation()
     }
 }

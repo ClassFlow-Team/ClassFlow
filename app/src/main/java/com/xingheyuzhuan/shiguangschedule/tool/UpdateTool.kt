@@ -87,8 +87,8 @@ class UpdateChecker(private val context: Context) {
                 if (!response.isSuccessful) {
                     throw IOException("更新索引文件下载失败: ${response.code} from $platformUrl")
                 }
-                val jsonString = response.body?.string()
-                if (jsonString.isNullOrEmpty()) {
+                val jsonString = response.body.string()
+                if (jsonString.isEmpty()) {
                     throw IOException("更新索引文件内容为空")
                 }
                 jsonString

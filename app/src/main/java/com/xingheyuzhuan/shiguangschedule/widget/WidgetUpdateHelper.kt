@@ -1,25 +1,35 @@
 package com.xingheyuzhuan.shiguangschedule.widget
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import android.util.Log
-import androidx.glance.appwidget.GlanceAppWidgetManager
-import androidx.glance.appwidget.state.updateAppWidgetState
 import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetDatabase
 import com.xingheyuzhuan.shiguangschedule.data.model.ScheduleGridStyle
 import com.xingheyuzhuan.shiguangschedule.data.model.toProto
 import com.xingheyuzhuan.shiguangschedule.data.repository.WidgetRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.scheduleGridStyleDataStore
-import com.xingheyuzhuan.shiguangschedule.widget.compact.TodayScheduleWidget
-import com.xingheyuzhuan.shiguangschedule.widget.double_days.DoubleDaysScheduleWidget
-import com.xingheyuzhuan.shiguangschedule.widget.large.LargeScheduleWidget
-import com.xingheyuzhuan.shiguangschedule.widget.moderate.ModerateScheduleWidget
-import com.xingheyuzhuan.shiguangschedule.widget.tiny.TinyScheduleWidget
+import com.xingheyuzhuan.shiguangschedule.widget.compact.CompactNativeProvider
+import com.xingheyuzhuan.shiguangschedule.widget.compact.CompactNativeRenderer
+import com.xingheyuzhuan.shiguangschedule.widget.double_days.DoubleDaysNativeProvider
+import com.xingheyuzhuan.shiguangschedule.widget.double_days.DoubleDaysNativeRenderer
+import com.xingheyuzhuan.shiguangschedule.widget.large.LargeNativeProvider
+import com.xingheyuzhuan.shiguangschedule.widget.large.LargeNativeRenderer
+import com.xingheyuzhuan.shiguangschedule.widget.moderate.ModerateNativeProvider
+import com.xingheyuzhuan.shiguangschedule.widget.moderate.ModerateNativeRenderer
+import com.xingheyuzhuan.shiguangschedule.widget.tiny.TinyNativeProvider
+import com.xingheyuzhuan.shiguangschedule.widget.tiny.TinyNativeRenderer
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 
+/**
+ * 小组件统一分发中心
+ * 负责从 Repository 提取数据并分发给所有 5 种规格的原生 Renderer
+ */
 suspend fun updateAllWidgets(context: Context) {
-
     try {
+        // 1. 初始化数据库和仓库
         val widgetDb = WidgetDatabase.getDatabase(context)
         val repository = WidgetRepository(
             widgetCourseDao = widgetDb.widgetCourseDao(),
@@ -27,32 +37,38 @@ suspend fun updateAllWidgets(context: Context) {
             context = context
         )
 
-        // --- 1. 计算日期范围 ---
+        // 2. 准备基础数据
         val today = LocalDate.now()
         val tomorrow = today.plusDays(1)
-        val todayStr = today.toString()
-        val tomorrowStr = tomorrow.toString()
 
-        val dbCourses = repository.getWidgetCoursesByDateRange(todayStr, tomorrowStr).first()
+        // 获取今日和明日的所有课程快照 (超时时间 3秒)
+        val dbCourses = withTimeoutOrNull(3000L) {
+            repository.getWidgetCoursesByDateRange(today.toString(), tomorrow.toString()).first()
+        } ?: emptyList() // 超时则返回空列表
 
-        // --- 2. 获取周数 ---
-        val currentWeek = repository.getCurrentWeekFlow().first() ?: 0
+        // 获取当前周 (超时时间 2秒)
+        val currentWeek = withTimeoutOrNull(2000L) {
+            repository.getCurrentWeekFlow().first()
+        } ?: 0
 
-        // --- 3. 获取样式并处理“颜色为空”的情况 ---
-        val currentStyle = context.scheduleGridStyleDataStore.data.first()
+        // 获取样式 (超时时间 2秒)
+        val currentStyle = withTimeoutOrNull(2000L) {
+            context.scheduleGridStyleDataStore.data.first()
+        }
 
-        val finalStyleToSync = if (currentStyle.courseColorMapsCount == 0) {
+        // 样式保底逻辑
+        val finalStyleToSync = if (currentStyle == null || currentStyle.courseColorMapsCount == 0) {
             ScheduleGridStyle.DEFAULT.toProto()
         } else {
             currentStyle
         }
 
-        // --- 4. 构造二进制快照对象 ---
+        // 3. 构造数据快照 (Protobuf)
         val snapshot = WidgetSnapshot.newBuilder().apply {
             this.currentWeek = currentWeek
-            // 使用兜底后的样式，确保颜色索引对应得上
             this.style = finalStyleToSync
 
+            // 遍历数据库实体并转为 Proto 格式
             dbCourses.forEach { course ->
                 val courseProto = WidgetCourseProto.newBuilder()
                     .setId(course.id)
@@ -61,7 +77,7 @@ suspend fun updateAllWidgets(context: Context) {
                     .setPosition(course.position)
                     .setStartTime(course.startTime)
                     .setEndTime(course.endTime)
-                    .setColorInt(course.colorInt) // 这里是索引
+                    .setColorInt(course.colorInt)
                     .setIsSkipped(course.isSkipped)
                     .setDate(course.date)
                     .build()
@@ -69,30 +85,30 @@ suspend fun updateAllWidgets(context: Context) {
             }
         }.build()
 
-        // --- 5. 分发状态给所有小组件 ---
-        val manager = GlanceAppWidgetManager(context)
-        val widgetClasses = listOf(
-            TinyScheduleWidget::class.java,
-            TodayScheduleWidget::class.java,
-            ModerateScheduleWidget::class.java,
-            DoubleDaysScheduleWidget::class.java,
-            LargeScheduleWidget::class.java
+        // 4. 定义所有原生尺寸的映射列表
+        val appWidgetManager = AppWidgetManager.getInstance(context)
+        val nativeConfigs = listOf(
+            TinyNativeProvider::class.java to TinyNativeRenderer::render,
+            CompactNativeProvider::class.java to CompactNativeRenderer::render,
+            ModerateNativeProvider::class.java to ModerateNativeRenderer::render,
+            DoubleDaysNativeProvider::class.java to DoubleDaysNativeRenderer::render,
+            LargeNativeProvider::class.java to LargeNativeRenderer::render
         )
 
-        widgetClasses.forEach { cls ->
-            val glanceIds = manager.getGlanceIds(cls)
-            if (glanceIds.isNotEmpty()) {
-                glanceIds.forEach { id ->
-                    updateAppWidgetState(context, WidgetStateDefinition, id) {
-                        snapshot
-                    }
-                    // 强制 UI 重新 provideContent
-                    cls.getDeclaredConstructor().newInstance().update(context, id)
+        // 5. 统一分发更新
+        nativeConfigs.forEach { (providerClass, renderFunc) ->
+            val componentName = ComponentName(context, providerClass)
+            val ids = appWidgetManager.getAppWidgetIds(componentName)
+            if (ids.isNotEmpty()) {
+                val remoteViews = renderFunc(context, snapshot)
+                ids.forEach { id ->
+                    appWidgetManager.updateAppWidget(id, remoteViews)
                 }
+                Log.d("WidgetUpdateHelper", "成功刷新规格 ${providerClass.simpleName}: ${ids.size}个实例")
             }
         }
 
     } catch (e: Exception) {
-        Log.e("WidgetUpdateHelper", "更新失败: ${e.stackTraceToString()}")
+        Log.e("WidgetUpdateHelper", "更新流程异常: ${e.stackTraceToString()}")
     }
 }

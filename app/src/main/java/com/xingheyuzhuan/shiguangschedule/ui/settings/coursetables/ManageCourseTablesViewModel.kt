@@ -101,7 +101,7 @@ class ManageCourseTablesViewModel(
                 if (modelClass.isAssignableFrom(ManageCourseTablesViewModel::class.java)) {
                     // 从 MyApplication 中获取仓库实例
                     val appSettingsRepository = (application as MyApplication).appSettingsRepository
-                    val courseTableRepository = (application as MyApplication).courseTableRepository
+                    val courseTableRepository = application.courseTableRepository
                     return ManageCourseTablesViewModel(appSettingsRepository, courseTableRepository) as T
                 }
                 throw IllegalArgumentException("Unknown ViewModel class")

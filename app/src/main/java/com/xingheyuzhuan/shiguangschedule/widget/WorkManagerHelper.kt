@@ -23,7 +23,7 @@ object WorkManagerHelper {
         val uiUpdateWorkRequest = PeriodicWorkRequestBuilder<WidgetUiUpdateWorker>(15, TimeUnit.MINUTES).build()
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             UI_UPDATE_WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.UPDATE,
             uiUpdateWorkRequest
         )
 
@@ -31,7 +31,7 @@ object WorkManagerHelper {
         val fullDataSyncWorkRequest = PeriodicWorkRequestBuilder<FullDataSyncWorker>(1, TimeUnit.DAYS).build()
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             FULL_DATA_SYNC_WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.UPDATE,
             fullDataSyncWorkRequest
         )
     }

@@ -1,34 +1,30 @@
-package com.xingheyuzhuan.shiguangschedule.widget.compact
+package com.xingheyuzhuan.shiguangschedule.widget.tiny
 
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProvider
 import android.content.Context
-import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import com.xingheyuzhuan.shiguangschedule.widget.WorkManagerHelper
 import com.xingheyuzhuan.shiguangschedule.widget.updateAllWidgets
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 
-class TodayScheduleWidgetReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = TodayScheduleWidget()
+class TinyNativeProvider : AppWidgetProvider() {
     private val scope = MainScope()
+
+    override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        scope.launch {
+            updateAllWidgets(context)
+        }
+    }
 
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
-        // 开启定时更新任务
         WorkManagerHelper.schedulePeriodicWork(context)
-
-        scope.launch {
-            try {
-                updateAllWidgets(context)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        scope.launch { updateAllWidgets(context) }
     }
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        // 清理后台任务
         WorkManagerHelper.cancelAllWork(context)
     }
 }
