@@ -133,14 +133,31 @@ object ModerateNativeRenderer {
 
     private fun showStatus(rv: RemoteViews, title: String, msg: String?, isFullCover: Boolean) {
         if (isFullCover) {
+            // --- 全屏模式 (用于假期) ---
+            // 1. 隐藏主卡片，显示全屏容器
             rv.setViewVisibility(R.id.inner_content_card, View.GONE)
             rv.setViewVisibility(R.id.container_full_status, View.VISIBLE)
+
+            // 2. 给全屏 ID 赋值
+            rv.setTextViewText(R.id.tv_full_status_title, title)
+            if (msg != null) {
+                rv.setTextViewText(R.id.tv_full_status_msg, msg)
+                rv.setViewVisibility(R.id.tv_full_status_msg, View.VISIBLE)
+            } else {
+                rv.setViewVisibility(R.id.tv_full_status_msg, View.GONE)
+            }
         } else {
+            // --- 局部模式 (用于今日课完/无课) ---
+            // 1. 确保主卡片可见，且全屏容器必须隐藏（防止遮挡）
             rv.setViewVisibility(R.id.inner_content_card, View.VISIBLE)
+            rv.setViewVisibility(R.id.container_full_status, View.GONE)
+
+            // 2. 隐藏列表和页脚，显示卡片内部的状态页
             rv.setViewVisibility(R.id.container_course_content, View.GONE)
             rv.setViewVisibility(R.id.tv_footer, View.GONE)
             rv.setViewVisibility(R.id.container_status, View.VISIBLE)
 
+            // 3. 给局部 ID 赋值
             rv.setTextViewText(R.id.tv_status_title, title)
             if (msg != null) {
                 rv.setTextViewText(R.id.tv_status_msg, msg)

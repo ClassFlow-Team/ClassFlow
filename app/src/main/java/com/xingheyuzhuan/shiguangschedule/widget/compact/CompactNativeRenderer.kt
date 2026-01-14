@@ -125,18 +125,30 @@ object CompactNativeRenderer {
         return rv
     }
 
-    private fun showStatus(rv: RemoteViews, title: String, msg: String, isFullCover: Boolean) {
+    private fun showStatus(rv: RemoteViews, title: String, msg: String?, isFullCover: Boolean) {
         if (isFullCover) {
             rv.setViewVisibility(R.id.inner_content_card, View.GONE)
             rv.setViewVisibility(R.id.container_full_status, View.VISIBLE)
+            rv.setTextViewText(R.id.tv_full_status_title, title)
+            if (!msg.isNullOrBlank()) {
+                rv.setTextViewText(R.id.tv_full_status_msg, msg)
+                rv.setViewVisibility(R.id.tv_full_status_msg, View.VISIBLE)
+            } else {
+                rv.setViewVisibility(R.id.tv_full_status_msg, View.GONE)
+            }
         } else {
+            rv.setViewVisibility(R.id.container_full_status, View.GONE)
             rv.setViewVisibility(R.id.inner_content_card, View.VISIBLE)
             rv.setViewVisibility(R.id.container_courses, View.GONE)
             rv.setViewVisibility(R.id.tv_footer, View.GONE)
             rv.setViewVisibility(R.id.container_status, View.VISIBLE)
-
             rv.setTextViewText(R.id.tv_status_title, title)
-            rv.setTextViewText(R.id.tv_status_msg, msg)
+            if (!msg.isNullOrBlank()) {
+                rv.setTextViewText(R.id.tv_status_msg, msg)
+                rv.setViewVisibility(R.id.tv_status_msg, View.VISIBLE)
+            } else {
+                rv.setViewVisibility(R.id.tv_status_msg, View.GONE)
+            }
         }
     }
 }

@@ -147,12 +147,21 @@ object LargeNativeRenderer {
         if (isFullCover) {
             rv.setViewVisibility(R.id.inner_content_card, View.GONE)
             rv.setViewVisibility(R.id.container_full_status, View.VISIBLE)
+            rv.setTextViewText(R.id.tv_full_status_title, title)
+            if (msg != null) {
+                rv.setTextViewText(R.id.tv_full_status_msg, msg)
+                rv.setViewVisibility(R.id.tv_full_status_msg, View.VISIBLE)
+            } else {
+                rv.setViewVisibility(R.id.tv_full_status_msg, View.GONE)
+            }
         } else {
+            // 3. 局部状态显示（如今日课完）
             rv.setViewVisibility(R.id.inner_content_card, View.VISIBLE)
             rv.setViewVisibility(R.id.container_course_content, View.GONE)
             rv.setViewVisibility(R.id.tv_footer, View.GONE)
-            rv.setViewVisibility(R.id.container_status, View.VISIBLE)
+            rv.setViewVisibility(R.id.container_full_status, View.GONE)
 
+            rv.setViewVisibility(R.id.container_status, View.VISIBLE)
             rv.setTextViewText(R.id.tv_status_title, title)
             if (msg != null) {
                 rv.setTextViewText(R.id.tv_status_msg, msg)
