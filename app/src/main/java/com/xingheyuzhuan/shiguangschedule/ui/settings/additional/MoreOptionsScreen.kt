@@ -259,7 +259,6 @@ private fun UpdateResultDialog(
             text = stringResource(R.string.label_error_message, updateStatus.message)
             confirmButton = null
         }
-        else -> return
     }
 
     AlertDialog(

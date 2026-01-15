@@ -50,7 +50,6 @@ class AppSettingsRepository(
         firstDayOfWeek = DayOfWeek.MONDAY.value
     )
 
-
     /**
      * 获取应用设置（全局设置），返回一个数据流。
      */
@@ -82,36 +81,70 @@ class AppSettingsRepository(
      * * @param courseTableId 关联的课表 ID
      */
     fun getCourseTableConfigFlow(courseTableId: String): Flow<CourseTableConfig?> {
-        // 假设 CourseTableConfigDao 中返回 Flow 的方法名为 getConfigById
         return courseTableConfigDao.getConfigById(courseTableId)
     }
 
     /**
-     * 实时获取当前周的计算结果，它是一个单次执行的函数。
-     * 逻辑：根据 AppSettings 中的 currentCourseTableId 查询 CourseTableConfig 进行计算。
+     * 通用的周次计算函数
+     * 物理坐标系的核心：将任意日期映射为相对于开学日的“逻辑周次”。
+     *
+     * @param targetDate 想要计算的物理日期（例如 Pager 滑动到的某天）
+     * @param startDateStr 开学日期的字符串 (yyyy-MM-dd)
+     * @param firstDayOfWeekInt 一周起始日 (1=周一, 7=周日)
+     * @return 如果未设置开学日期返回 null，代表数据不可信；否则返回物理偏移周次（从1开始）。
+     */
+    fun getWeekIndexAtDate(
+        targetDate: LocalDate,
+        startDateStr: String?,
+        firstDayOfWeekInt: Int
+    ): Int? {
+        // 如果开学日期为空，视为不可信，不进行偏移计算
+        if (startDateStr.isNullOrEmpty()) return null
+
+        return try {
+            val firstDayOfWeek = DayOfWeek.of(firstDayOfWeekInt)
+
+            // 1. 将开学日期对齐到该周的起始日（锚点）
+            val alignedStartDate = LocalDate.parse(startDateStr, DATE_FORMATTER)
+                .with(TemporalAdjusters.previousOrSame(firstDayOfWeek))
+
+            // 2. 将目标日期也对齐到该周的起始日
+            val alignedTargetDate = targetDate.with(TemporalAdjusters.previousOrSame(firstDayOfWeek))
+
+            // 3. 计算周数差。这里允许负数（开学前）和超出范围的数（放假后）
+            val diffWeeks = ChronoUnit.WEEKS.between(alignedStartDate, alignedTargetDate).toInt()
+            diffWeeks + 1
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    /**
+     * 实时获取当前周的计算结果。
      */
     suspend fun calculateCurrentWeekFromDb(): Int? {
         val appSettings = appSettingsDao.getAppSettings().first() ?: return null
         val currentCourseId = appSettings.currentCourseTableId ?: return null
-
-        // 1. 从新的配置表中获取当前课表的设置
         val config = courseTableConfigDao.getConfigOnce(currentCourseId) ?: return null
 
-        return calculateCurrentWeek(
-            config.semesterStartDate,
-            config.semesterTotalWeeks,
-            config.firstDayOfWeek
-        )
+        val rawWeek = getWeekIndexAtDate(
+            targetDate = LocalDate.now(),
+            startDateStr = config.semesterStartDate,
+            firstDayOfWeekInt = config.firstDayOfWeek
+        ) ?: return null
+
+        // 在“设置页面”显示当前周时，通常只在有效学期内显示
+        return if (rawWeek in 1..config.semesterTotalWeeks) rawWeek else null
     }
 
     /**
-     * 根据周数反向推算开学日期，并将新日期写入 CourseTableConfig 数据库。
+     * 根据周数反向推算开学日期。
      */
     suspend fun setSemesterStartDateFromWeek(week: Int?) {
         val appSettings = appSettingsDao.getAppSettings().first() ?: return
         val currentCourseId = appSettings.currentCourseTableId ?: return
 
-        // 1. 获取当前课表的配置
         val currentConfig = courseTableConfigDao.getConfigOnce(currentCourseId)
             ?: DEFAULT_COURSE_CONFIG.copy(courseTableId = currentCourseId)
 
@@ -121,84 +154,27 @@ class AppSettingsRepository(
             null
         }
 
-        // 2. 更新 CourseTableConfig
         val updatedConfig = currentConfig.copy(semesterStartDate = newStartDate)
         courseTableConfigDao.insertOrUpdate(updatedConfig)
     }
 
-    /**
-     * 插入或更新应用设置（仅限全局设置）。
-     * 【重要：该函数不再处理周数相关的字段】
-     */
     suspend fun insertOrUpdateAppSettings(newSettings: AppSettings) {
-        // AppSettings 现在只包含全局设置，直接更新即可
         appSettingsDao.insertOrUpdate(newSettings)
     }
 
-    /**
-     * 插入或更新课表配置。
-     */
     suspend fun insertOrUpdateCourseConfig(newConfig: CourseTableConfig) {
         courseTableConfigDao.insertOrUpdate(newConfig)
     }
 
     /**
-     * 根据学期开始日期和总周数，计算当前周数。
-     * @param firstDayOfWeekInt 一周起始日 (1=MONDAY, 7=SUNDAY)
-     */
-    private fun calculateCurrentWeek(startDate: String?, totalWeeks: Int, firstDayOfWeekInt: Int): Int? {
-        if (startDate.isNullOrEmpty()) return null
-
-        return try {
-            // 1. 将开学日期对齐到设置的一周起始日
-            val alignedStartDateString = getStartDayOfWeek(startDate, firstDayOfWeekInt)
-            val alignedStartDate = LocalDate.parse(alignedStartDateString, DATE_FORMATTER)
-
-            // 2. 将当前日期也对齐到设置的一周起始日
-            val alignedTodayDateString = getStartDayOfWeek(LocalDate.now().format(DATE_FORMATTER), firstDayOfWeekInt)
-            val alignedToday = LocalDate.parse(alignedTodayDateString, DATE_FORMATTER)
-
-            if (alignedToday.isBefore(alignedStartDate)) return null
-
-            // 使用 ChronoUnit 直接计算周数差
-            val diffWeeks = ChronoUnit.WEEKS.between(alignedStartDate, alignedToday).toInt()
-            val calculatedWeek = diffWeeks + 1
-
-            if (calculatedWeek in 1..totalWeeks) calculatedWeek else null
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
-
-    /**
-     * 根据日期和设置的一周起始日，反向推算出该日期所在周的起始日。
-     * 使用 TemporalAdjusters.previousOrSame 完美封装旧逻辑。
-     */
-    private fun getStartDayOfWeek(dateString: String, firstDayOfWeekInt: Int): String {
-        val date = LocalDate.parse(dateString, DATE_FORMATTER)
-        val firstDayOfWeek = DayOfWeek.of(firstDayOfWeekInt)
-        // 核心代码：调整到最近的、设置的周起始日（包括自身）
-        val adjustedDate = date.with(TemporalAdjusters.previousOrSame(firstDayOfWeek))
-        return adjustedDate.format(DATE_FORMATTER)
-    }
-
-    /**
-     * 根据当前周数，反向推算出学期开始日期。
+     * 辅助函数：根据目标周数反推开学日期。
      */
     private fun calculateSemesterStartDate(week: Int, firstDayOfWeekInt: Int): String {
         val today = LocalDate.now()
         val firstDayOfWeek = DayOfWeek.of(firstDayOfWeekInt)
-
-        // 1. 确定当前日期所在周的起始日
         val startOfThisWeek = today.with(TemporalAdjusters.previousOrSame(firstDayOfWeek))
-
-        // 2. 需要倒退的周数：当前是第 W 周，要回到第 1 周，减去 W-1 周。
         val weeksToSubtract = (week - 1).toLong()
-
-        // 核心代码：直接减去周数
         val semesterStartDate = startOfThisWeek.minusWeeks(weeksToSubtract)
-
         return semesterStartDate.format(DATE_FORMATTER)
     }
 }

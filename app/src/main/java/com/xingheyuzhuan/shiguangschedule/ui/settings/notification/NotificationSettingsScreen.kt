@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -376,9 +377,10 @@ fun NotificationSettingsScreen(
                             if (uiState.isLoading) {
                                 CircularProgressIndicator(
                                     modifier = Modifier
-                                        .height(20.dp)
-                                        .padding(end = 8.dp),
-                                    strokeWidth = 5.dp
+                                        .size(26.dp),
+                                    strokeWidth = 4.dp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
                             }
                         }

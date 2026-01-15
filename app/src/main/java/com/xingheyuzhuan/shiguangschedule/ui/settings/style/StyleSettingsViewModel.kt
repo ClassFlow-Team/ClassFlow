@@ -56,7 +56,7 @@ class StyleSettingsViewModel(
             combine(configFlow, styleRepository.styleFlow) { config, currentStyle ->
                 WeeklyScheduleUiState(
                     style = currentStyle,
-                    allCourses = createDemoCourses().flatMap { it.courses },
+                    currentMergedCourses = createDemoCourses(),
                     timeSlots = createDemoTimeSlots(),
                     showWeekends = config?.showWeekends ?: true,
                     totalWeeks = 20,

@@ -1,35 +1,39 @@
 package com.xingheyuzhuan.shiguangschedule.data
 
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import kotlinx.coroutines.flow.first
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import java.io.IOException
 
 /**
- * 这是一个数据类，用于表示 API 返回的 JSON 数据。
  * 对应于 API 返回的外部 JSON 结构。
  */
+@Serializable
 data class ApiResponse(
-    @SerializedName("holiday")
+    @SerialName("holiday")
     val holidays: Map<String, HolidayInfo>
 )
 
 /**
- * 这是一个数据类，用于表示 JSON 中每个日期的假期信息。
+ * 表示 JSON 中每个日期的假期信息。
  */
+@Serializable // 必须添加
 data class HolidayInfo(
-    @SerializedName("date")
+    @SerialName("date")
     val date: String,
-    @SerializedName("holiday")
+    @SerialName("holiday")
     val isHoliday: Boolean
 )
 
 /**
- * 这是 Retrofit 的 API 接口，用于定义网络请求。
+ * Retrofit 的 API 接口。
  */
 interface SkippedDatesApiService {
     @GET("year")
@@ -37,10 +41,16 @@ interface SkippedDatesApiService {
 }
 
 /**
- * 这是一个单例对象，包含所有与 API 相关的逻辑。
+ * 单例对象，包含所有与 API 相关的逻辑。
  */
 object ApiDateImporter {
     private const val BASE_URL = "https://timor.tech/api/holiday/"
+
+    // 3. 配置 Json 引擎
+    private val jsonConfig = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+    }
 
     private fun createOkHttpClient(): OkHttpClient {
         val builder = OkHttpClient.Builder()
@@ -61,7 +71,7 @@ object ApiDateImporter {
 
     private val retrofit = Retrofit.Builder()
         .baseUrl(BASE_URL)
-        .addConverterFactory(GsonConverterFactory.create())
+        .addConverterFactory(jsonConfig.asConverterFactory("application/json".toMediaType()))
         .client(createOkHttpClient())
         .build()
 
@@ -70,8 +80,6 @@ object ApiDateImporter {
 
     /**
      * 从 API 获取跳过的日期（假期），并保存到 AppSettingsRepository 中。
-     *
-     * @param appSettingsRepository AppSettingsRepository 实例
      */
     suspend fun importAndSaveSkippedDates(appSettingsRepository: AppSettingsRepository) {
         try {
@@ -91,7 +99,7 @@ object ApiDateImporter {
             println("网络请求失败：${e.message}")
             e.printStackTrace()
         } catch (e: Exception) {
-            println("导入跳过的日期时出错：${e.message}")
+            println("导入或解析跳过的日期时出错：${e.message}")
             e.printStackTrace()
         }
     }

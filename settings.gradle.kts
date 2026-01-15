@@ -11,7 +11,7 @@ pluginManagement {
         gradlePluginPortal()
     }
     plugins {
-        id("com.google.protobuf") version "0.9.5"
+        id("com.google.protobuf") version "0.9.6"
     }
 }
 dependencyResolutionManagement {

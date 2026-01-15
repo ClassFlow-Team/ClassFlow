@@ -55,9 +55,11 @@ fun BottomNavigationBar(
                 onClick = {
                     if (currentRoute != route) {
                         navController.navigate(route) {
-                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                            popUpTo(navController.graph.startDestinationId) {
+                                saveState = true
+                            }
                             launchSingleTop = true
-                            restoreState = true
+                            restoreState = false // 保持 false，确保课表页干净重载
                         }
                     }
                 },

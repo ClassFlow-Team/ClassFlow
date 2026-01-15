@@ -54,7 +54,7 @@ class WidgetDataSynchronizer(
     @OptIn(ExperimentalCoroutinesApi::class)
     val syncFlow: Flow<Unit> = appSettingsRepository.getAppSettings()
         .flatMapLatest { appSettings ->
-            val tableId = appSettings?.currentCourseTableId
+            val tableId = appSettings.currentCourseTableId
 
             if (tableId != null) {
                 // 1. 课程列表 Flow
@@ -75,7 +75,7 @@ class WidgetDataSynchronizer(
                 flowOf(Quadruple(appSettings, emptyList(), emptyList(), null))
             }
         }.combine(flowOf(Unit)) { (appSettings, coursesWithWeeks, timeSlots, config), _ ->
-            if (appSettings != null && config != null) {
+            if (config != null) {
                 performSync(appSettings, config, coursesWithWeeks, timeSlots)
             } else {
                 widgetRepository.deleteAll()
@@ -92,7 +92,7 @@ class WidgetDataSynchronizer(
      */
     suspend fun syncNow() {
         val appSettings = appSettingsRepository.getAppSettings().first()
-        val tableId = appSettings?.currentCourseTableId
+        val tableId = appSettings.currentCourseTableId
 
         // 1. 获取 Courses 和 TimeSlots
         val coursesWithWeeks = if (tableId != null) courseTableRepository.getCoursesWithWeeksByTableId(tableId).first() else emptyList()
@@ -101,7 +101,7 @@ class WidgetDataSynchronizer(
         // 2. 获取 CourseTableConfig
         val courseConfig = if (tableId != null) appSettingsRepository.getCourseConfigOnce(tableId) else null
 
-        if (appSettings != null && courseConfig != null) {
+        if (courseConfig != null) {
             performSync(appSettings, courseConfig, coursesWithWeeks, timeSlots)
         } else {
             widgetRepository.deleteAll()
@@ -179,7 +179,7 @@ class WidgetDataSynchronizer(
 
             val dayOfWeek = date.dayOfWeek.value // 1=Monday, 7=Sunday
 
-            if (weekNumber < 1 || weekNumber > semesterTotalWeeks) {
+            if (weekNumber !in 1..semesterTotalWeeks) {
                 continue
             }
 

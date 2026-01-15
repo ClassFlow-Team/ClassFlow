@@ -325,7 +325,7 @@ private fun ScheduleGridContent(
             style = style,
             dates = dummyDates,
             timeSlots = demoUiState.timeSlots,
-            mergedCourses = mergeCourses(demoUiState.allCourses, demoUiState.timeSlots),
+            mergedCourses = demoUiState.currentMergedCourses,
             showWeekends = demoUiState.showWeekends,
             todayIndex = dynamicTodayIndex,
             firstDayOfWeek = demoUiState.firstDayOfWeek,

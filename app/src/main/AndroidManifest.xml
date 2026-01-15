@@ -30,14 +30,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
         <receiver
             android:name=".service.CourseAlarmReceiver"
             android:enabled="true"
             android:exported="false" />
+
         <receiver
-            android:name=".widget.tiny.TinyScheduleWidgetReceiver"
+            android:name=".widget.tiny.TinyNativeProvider"
             android:label="@string/widget_name_tiny"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -47,9 +49,9 @@
         </receiver>
 
         <receiver
-            android:name=".widget.compact.TodayScheduleWidgetReceiver"
+            android:name=".widget.compact.CompactNativeProvider"
             android:label="@string/widget_name_compact"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -59,9 +61,9 @@
         </receiver>
 
         <receiver
-            android:name=".widget.moderate.ModerateScheduleWidgetReceiver"
+            android:name=".widget.moderate.ModerateNativeProvider"
             android:label="@string/widget_name_moderate"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -69,10 +71,11 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/shiguangschedule_moderate_widget" />
         </receiver>
+
         <receiver
-            android:name=".widget.double_days.DoubleDaysScheduleWidgetReceiver"
+            android:name=".widget.double_days.DoubleDaysNativeProvider"
             android:label="@string/widget_name_double_days"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -80,10 +83,11 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/shiguangschedule_double_days_widget" />
         </receiver>
+
         <receiver
-            android:name=".widget.large.LargeScheduleWidgetReceiver"
+            android:name=".widget.large.LargeNativeProvider"
             android:label="@string/widget_name_large"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>

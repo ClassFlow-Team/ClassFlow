@@ -113,9 +113,9 @@ class TweakScheduleViewModel(
 
         // 6. 查询课程
         if (isSemesterSet && selectedTable != null) {
-            val fromWeekNumber = ChronoUnit.WEEKS.between(semesterStartDate!!, currentFromDate).toInt() + 1
+            val fromWeekNumber = ChronoUnit.WEEKS.between(semesterStartDate, currentFromDate).toInt() + 1
             val fromDay = currentFromDate.dayOfWeek.value
-            val toWeekNumber = ChronoUnit.WEEKS.between(semesterStartDate!!, currentToDate).toInt() + 1
+            val toWeekNumber = ChronoUnit.WEEKS.between(semesterStartDate, currentToDate).toInt() + 1
             val toDay = currentToDate.dayOfWeek.value
 
             // 显式获取课程数据快照

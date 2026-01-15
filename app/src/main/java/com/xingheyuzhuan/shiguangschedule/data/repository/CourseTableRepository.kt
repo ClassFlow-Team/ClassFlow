@@ -12,6 +12,7 @@ import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import java.time.LocalDate
 import java.util.UUID
 
 /**
@@ -220,6 +221,30 @@ class CourseTableRepository(
             day = day,
             weekNumber = weekNumber
         )
+    }
+
+    /**
+     * 根据物理日期和配置，获取该周的所有课程。
+     * 此函数是重构“真日历”模式的关键，它实现了从“日期”到“课程数据”的直接映射。
+     */
+    fun getCoursesWithWeeksByDate(
+        courseTableId: String,
+        targetDate: LocalDate,
+        config: CourseTableConfig
+    ): Flow<List<CourseWithWeeks>> {
+        val weekNumber = appSettingsRepository.getWeekIndexAtDate(
+            targetDate = targetDate,
+            startDateStr = config.semesterStartDate,
+            firstDayOfWeekInt = config.firstDayOfWeek
+        )
+
+        // 如果周次为 null（说明没设开学日期）
+        if (weekNumber == null) {
+            return kotlinx.coroutines.flow.flowOf(emptyList())
+        }
+
+        // 3. 调用 DAO 层的精准查询方法（按周次过滤）
+        return courseDao.getCoursesWithWeeksByTableAndWeek(courseTableId, weekNumber)
     }
 }
 

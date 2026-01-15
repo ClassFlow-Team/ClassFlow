@@ -1,22 +1,23 @@
 package com.xingheyuzhuan.shiguangschedule.data.db.main
 
 import androidx.room.TypeConverter
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import kotlinx.serialization.json.Json
 
-// 使用 Gson 库处理更复杂的类型转换
 class Converters {
 
     @TypeConverter
     fun fromStringSet(setOfStrings: Set<String>?): String? {
-        // 将 Set<String> 转换为 JSON 字符串
-        return Gson().toJson(setOfStrings)
+        if (setOfStrings == null) return null
+        return Json.encodeToString(setOfStrings)
     }
 
     @TypeConverter
     fun toStringSet(data: String?): Set<String>? {
-        // 将 JSON 字符串转换回 Set<String>
-        val listType = object : TypeToken<Set<String>>() {}.type
-        return Gson().fromJson(data, listType)
+        if (data == null) return null
+        return try {
+            Json.decodeFromString<Set<String>>(data)
+        } catch (e: Exception) {
+            null
+        }
     }
 }

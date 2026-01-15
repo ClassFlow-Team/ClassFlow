@@ -14,18 +14,15 @@ kotlinSerialization = "1.9.0"
 navigationCompose = "2.9.6"
 work-runtime = "2.11.0"
 retrofit = "3.0.0"
-gson = "2.13.2"
 okhttp = "5.3.2"
-glance = "1.1.1"
 room = "2.8.4"
 ksp = "2.3.3"
 gradle-license-plugin = "0.9.8"
 jgit = "5.13.3.202401111512-r"
-slf4j = "1.7.30"
-desugar-jdk-libs = "2.1.5"
+slf4j = "1.7.36"
 compose-animation = "1.10.0"
 coil = "2.7.0"
-protobuf = "4.33.2"
+protobuf = "4.33.3"
 protobufPlugin = "0.9.6"
 javax-inject = "1"
 
@@ -52,28 +49,20 @@ androidx-compose-foundation = { module = "androidx.compose.foundation:foundation
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinSerialization" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work-runtime" }
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
-retrofit-converter-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "retrofit" }
+retrofit-converter-kotlinx-serialization = { group = "com.squareup.retrofit2", name = "converter-kotlinx-serialization", version.ref = "retrofit" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
-gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
-androidx-glance = { group = "androidx.glance", name = "glance", version.ref = "glance" }
-androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
-androidx-glance-material3 = { group = "androidx.glance", name = "glance-material3", version.ref = "glance" }
-androidx-glance-preview = { group = "androidx.glance", name = "glance-preview", version.ref = "glance" }
-androidx-glance-appwidget-preview = { group = "androidx.glance", name = "glance-appwidget-preview", version.ref = "glance" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 jgit = { module = "org.eclipse.jgit:org.eclipse.jgit", version.ref = "jgit" }
 slf4j-api = { group = "org.slf4j", name = "slf4j-api", version.ref = "slf4j" }
-slf4j-simple = { group = "org.slf4j", name = "slf4j-simple", version.ref = "slf4j" }
-desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugar-jdk-libs" }
+slf4j-android = { group = "org.slf4j", name = "slf4j-android", version.ref = "slf4j" }
 androidx-compose-animation = { group = "androidx.compose.animation", name = "animation", version.ref = "compose-animation" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 protobuf-kotlin-lite = { module = "com.google.protobuf:protobuf-kotlin-lite", version.ref = "protobuf" }
 protobuf-java-lite = { module = "com.google.protobuf:protobuf-javalite", version.ref = "protobuf" }
 javax-inject = { group = "javax.inject", name = "javax.inject", version.ref = "javax-inject" }
-
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

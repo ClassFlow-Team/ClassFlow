@@ -33,19 +33,13 @@ fun AddEditCourseScreen(
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // 弹窗状态管理
     var showWeekSelectorDialog by remember { mutableStateOf(false) }
     var showColorSelectorDialog by remember { mutableStateOf(false) }
-    // 节次模式的底部弹窗 (Section Mode only)
     var showSectionTimeDialog by remember { mutableStateOf(false) }
-    // 自定义时间模式的独立弹窗 (Custom Time Mode only)
     var showDayDialog by remember { mutableStateOf(false) }
-    var showStartTimeDialog by remember { mutableStateOf(false) }
-    var showEndTimeDialog by remember { mutableStateOf(false) }
-
+    var showCustomTimeDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
-
     val saveSuccessText = stringResource(R.string.toast_save_success)
     val deleteSuccessText = stringResource(R.string.toast_delete_success)
     val nameEmptyText = stringResource(R.string.toast_name_empty)
@@ -65,9 +59,7 @@ fun AddEditCourseScreen(
                     Toast.makeText(context, deleteSuccessText, Toast.LENGTH_SHORT).show()
                     onNavigateBack()
                 }
-                UiEvent.Cancel -> {
-                    onNavigateBack()
-                }
+                UiEvent.Cancel -> onNavigateBack()
             }
         }
     }
@@ -99,6 +91,10 @@ fun AddEditCourseScreen(
                                 if (uiState.isCustomTime) {
                                     if (uiState.customStartTime.isBlank() || uiState.customEndTime.isBlank()) {
                                         Toast.makeText(context, toastCustomTimeEmpty, Toast.LENGTH_SHORT).show()
+                                        isValid = false
+                                    }
+                                    else if (uiState.customStartTime >= uiState.customEndTime) {
+                                        Toast.makeText(context, toastTimeInvalid, Toast.LENGTH_SHORT).show()
                                         isValid = false
                                     }
                                 } else if (uiState.startSection > uiState.endSection) {
@@ -153,7 +149,6 @@ fun AddEditCourseScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // 导入 TimeSelectors.kt 中的组件
             TimeAreaSelector(
                 day = uiState.day,
                 startSection = uiState.startSection,
@@ -163,24 +158,27 @@ fun AddEditCourseScreen(
                 customStartTime = uiState.customStartTime,
                 customEndTime = uiState.customEndTime,
                 onIsCustomTimeChange = viewModel::onIsCustomTimeChange,
-                onSectionButtonClick = { showSectionTimeDialog = true },
                 onDayClick = { showDayDialog = true },
-                onStartTimeClick = { showStartTimeDialog = true },
-                onEndTimeClick = { showEndTimeDialog = true }
+                onTimeRangeClick = { showCustomTimeDialog = true },
+                onSectionButtonClick = { showSectionTimeDialog = true }
             )
 
             WeekSelector(
                 selectedWeeks = uiState.weeks,
                 onWeekClick = { showWeekSelectorDialog = true }
             )
+
             ColorPicker(
                 selectedColor = uiState.courseColorMaps.getOrNull(uiState.colorIndex)?.let { dualColor ->
                     if (isDarkTheme) dualColor.dark else dualColor.light
                 } ?: Color.Unspecified,
                 onColorClick = { showColorSelectorDialog = true }
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
+
 
     if (showWeekSelectorDialog) {
         WeekSelectorBottomSheet(
@@ -206,7 +204,6 @@ fun AddEditCourseScreen(
         )
     }
 
-    // 节次选择器底部弹窗 (Section Mode Only)
     if (showSectionTimeDialog && !uiState.isCustomTime) {
         CourseTimePickerBottomSheet(
             selectedDay = uiState.day,
@@ -220,7 +217,6 @@ fun AddEditCourseScreen(
         )
     }
 
-    // 自定义时间模式的 Day Picker Dialog
     if (showDayDialog) {
         DayPickerDialog(
             selectedDay = uiState.day,
@@ -231,27 +227,14 @@ fun AddEditCourseScreen(
             }
         )
     }
-
-    // 自定义时间模式的 Start Time Picker Dialog
-    if (showStartTimeDialog) {
-        TimePickerDialog(
-            initialTime = uiState.customStartTime,
-            onDismissRequest = { showStartTimeDialog = false },
-            onTimeSelected = { newTime ->
-                viewModel.onCustomStartTimeChange(newTime)
-                showStartTimeDialog = false
-            }
-        )
-    }
-
-    // 自定义时间模式的 End Time Picker Dialog
-    if (showEndTimeDialog) {
-        TimePickerDialog(
-            initialTime = uiState.customEndTime,
-            onDismissRequest = { showEndTimeDialog = false },
-            onTimeSelected = { newTime ->
-                viewModel.onCustomEndTimeChange(newTime)
-                showEndTimeDialog = false
+    if (showCustomTimeDialog && uiState.isCustomTime) {
+        CustomTimeRangePickerBottomSheet(
+            initialStartTime = uiState.customStartTime.ifBlank { "08:00" },
+            initialEndTime = uiState.customEndTime.ifBlank { "09:45" },
+            onDismissRequest = { showCustomTimeDialog = false },
+            onTimeRangeSelected = { start, end ->
+                viewModel.onCustomTimeChange(start, end)
+                showCustomTimeDialog = false
             }
         )
     }

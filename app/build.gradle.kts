@@ -16,8 +16,8 @@ android {
         applicationId = "com.xingheyuzhuan.shiguangschedule"
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
-        versionName = "1.1.12-beta"
+        versionCode = 13
+        versionName = "1.1.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -78,8 +78,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
-
-        isCoreLibraryDesugaringEnabled = true
     }
     kotlin {
         jvmToolchain(21)
@@ -88,9 +86,9 @@ android {
         // 启用对 ABI (CPU 架构) 的分包
         abi {
             isEnable = true
-            exclude("mips", "mips64", "armeabi", "riscv64")
+            exclude("mips", "mips64", "armeabi", "riscv64", "x86")
             isUniversalApk = false
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            include("armeabi-v7a", "arm64-v8a", "x86_64")
         }
     }
     sourceSets {
@@ -134,20 +132,14 @@ dependencies {
     implementation(libs.androidx.datastore.core)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.retrofit)
-    implementation(libs.retrofit.converter.gson)
     implementation(libs.okhttp)
+    implementation(libs.retrofit.converter.kotlinx.serialization)
     debugImplementation(libs.okhttp.logging.interceptor)
-    implementation(libs.gson)
-    implementation(libs.androidx.glance)
-    implementation(libs.androidx.glance.appwidget)
-    implementation(libs.androidx.glance.material3)
-    implementation(libs.androidx.glance.preview)
-    implementation(libs.androidx.glance.appwidget.preview)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     implementation(libs.jgit)
     implementation(libs.slf4j.api)
-    implementation(libs.slf4j.simple)
+    implementation(libs.slf4j.android)
     implementation(libs.androidx.compose.animation)
     implementation(libs.coil.compose)
     implementation(libs.protobuf.kotlin.lite)
@@ -162,7 +154,6 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-    coreLibraryDesugaring(libs.desugar.jdk.libs)
 }
 
 protobuf {
