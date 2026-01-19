@@ -45,7 +45,6 @@ import com.xingheyuzhuan.shiguangschedule.ui.components.ColorPickerConfig
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.WeeklyScheduleUiState
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGrid
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGridStyleComposed
-import com.xingheyuzhuan.shiguangschedule.ui.schedule.mergeCourses
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
