@@ -133,16 +133,27 @@ private fun DayHeader(style: ScheduleGridStyleComposed, displayDays: List<String
             }
         })
         displayDays.forEachIndexed { index, day ->
-            Box(Modifier.width(cellWidth).fillMaxHeight().background(if (index == todayIndex) MaterialTheme.colorScheme.primaryContainer.copy(0.4f) else Color.Transparent).drawBehind {
-                // 天与天之间的垂直分割线
-                if (!style.hideGridLines) {
-                    drawLine(lineColor, Offset(size.width, 0f), Offset(size.width, size.height), 1f)
-                }
-            }, contentAlignment = Alignment.Center) {
+            Box(Modifier.width(cellWidth).fillMaxHeight()
+                .background(if (index == todayIndex) MaterialTheme.colorScheme.primaryContainer.copy(0.4f) else Color.Transparent)
+                .drawBehind {
+                    if (!style.hideGridLines) {
+                        drawLine(lineColor, Offset(size.width, 0f), Offset(size.width, size.height), 1f)
+                    }
+                }, contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(day, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    // 统一使用 onSurface，不加高亮判断
+                    Text(
+                        text = day,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                     if (!style.hideDateUnderDay && dates.size > index) {
-                        Text(dates[index], fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            text = dates[index],
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -153,22 +164,33 @@ private fun DayHeader(style: ScheduleGridStyleComposed, displayDays: List<String
 @Composable
 private fun TimeColumn(style: ScheduleGridStyleComposed, timeSlots: List<TimeSlot>, onTimeSlotClicked: () -> Unit, modifier: Modifier, lineColor: Color) {
     Column(modifier.width(style.timeColumnWidth).drawBehind {
-        // 时间轴主体右侧垂直线
         if (!style.hideGridLines) {
             drawLine(lineColor, Offset(size.width, 0f), Offset(size.width, size.height), 1f)
         }
     }) {
         timeSlots.forEach { slot ->
             Column(Modifier.fillMaxWidth().height(style.sectionHeight).clickable { onTimeSlotClicked() }.drawBehind {
-                // 节次之间的水平分割线 (统一粗细为 1f)
                 if (!style.hideGridLines) {
                     drawLine(lineColor, Offset(0f, size.height), Offset(size.width, size.height), 1f)
                 }
             }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Text(slot.number.toString(), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = slot.number.toString(),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
                 if (!style.hideSectionTime) {
-                    Text(slot.startTime, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(slot.endTime, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        text = slot.startTime,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = slot.endTime,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
