@@ -167,6 +167,11 @@ class StyleSettingsViewModel(
 
     // --- UI 渲染开关 API ---
 
+    /** 更新是否隐藏网格线 */
+    fun updateHideGridLines(hide: Boolean) = viewModelScope.launch {
+        styleRepository.setHideGridLines(hide)
+    }
+
     /** 更新是否隐藏左侧时间列的具体时间 */
     fun updateHideSectionTime(hide: Boolean) = viewModelScope.launch {
         styleRepository.setHideSectionTime(hide)
