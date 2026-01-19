@@ -38,6 +38,7 @@ data class WeeklyScheduleUiState(
     val showWeekends: Boolean = false,
     val totalWeeks: Int = 20,
     val timeSlots: List<TimeSlot> = emptyList(),
+    val courseCache: Map<String, List<MergedCourseBlock>> = emptyMap(),
     val currentMergedCourses: List<MergedCourseBlock> = emptyList(),
     val isSemesterSet: Boolean = false,
     val semesterStartDate: LocalDate? = null,
@@ -78,17 +79,30 @@ class WeeklyScheduleViewModel(
         } ?: flowOf(emptyList())
     }
 
+    /**
+     * 实现三周滑动窗口预加载
+     * 监听当前页日期，同时拉取 [前一周, 本周, 后一周] 的数据并转为 Map 缓存
+     */
     private val currentCoursesFlow = combine(
-        _pagerMondayDate, appSettingsFlow, courseTableConfigFlow
-    ) { date, settings, config ->
-        Triple(date, settings.currentCourseTableId, config)
-    }.flatMapLatest { (date, tableId, config) ->
+        _pagerMondayDate,
+        appSettingsFlow,
+        courseTableConfigFlow,
+        timeSlotsFlow
+    ) { date, settings, config, slots ->
+        val tableId = settings.currentCourseTableId
         if (tableId != null && config != null) {
-            courseTableRepository.getCoursesWithWeeksByDate(tableId, date, config)
+            // 定义窗口日期列表
+            val window = listOf(date.minusWeeks(1), date, date.plusWeeks(1))
+
+            // 为窗口内的每一周开启数据监听并合并成 Map
+            combine(window.map { day ->
+                courseTableRepository.getCoursesWithWeeksByDate(tableId, day, config)
+                    .map { courses -> day.toString() to mergeCourses(courses, slots) }
+            }) { results -> results.toMap() }
         } else {
-            flowOf(emptyList())
+            flowOf(emptyMap())
         }
-    }
+    }.flatMapLatest { it }
 
     private var stringProvider: ((Int, Array<out Any>) -> String)? = null
 
@@ -104,7 +118,7 @@ class WeeklyScheduleViewModel(
                 ScheduleConfigPackage(settings, config, style, mondayDate)
             }
 
-            combine(configAndTimeFlow, currentCoursesFlow, timeSlotsFlow) { configPkg, courses, timeSlots ->
+            combine(configAndTimeFlow, currentCoursesFlow, timeSlotsFlow) { configPkg, cache, timeSlots ->
                 val config = configPkg.config
                 val startDate = config?.semesterStartDate?.let { LocalDate.parse(it) }
                 val firstDayOfWeekInt = config?.firstDayOfWeek ?: DayOfWeek.MONDAY.value
@@ -122,13 +136,16 @@ class WeeklyScheduleViewModel(
                     firstDayOfWeekInt = firstDayOfWeekInt
                 )
 
-                fixInvalidCourseColors(courses, configPkg.style)
+                // 修正颜色（仅针对本周课程做检查以减小负担）
+                val currentWeekCourses = cache[configPkg.mondayDate.toString()] ?: emptyList()
+                fixInvalidCourseColors(currentWeekCourses.flatMap { it.courses }, configPkg.style)
 
                 WeeklyScheduleUiState(
                     style = configPkg.style,
                     showWeekends = config?.showWeekends ?: false,
                     totalWeeks = totalWeeks,
-                    currentMergedCourses = mergeCourses(courses, timeSlots),
+                    courseCache = cache, // 注入全量缓存
+                    currentMergedCourses = cache[configPkg.mondayDate.toString()] ?: emptyList(),
                     timeSlots = timeSlots,
                     isSemesterSet = startDate != null,
                     semesterStartDate = startDate,
@@ -177,11 +194,9 @@ class WeeklyScheduleViewModel(
         val firstSlotEnd = LocalTime.parse(sortedSlots.first().endTime, formatter)
         val lastSlotStart = LocalTime.parse(sortedSlots.last().startTime, formatter)
 
-        // 范围外吸附：早于第一节结束归为第一节，晚于最后一节开始归为最后一节
         if (!time.isAfter(firstSlotEnd)) return 1.0f
         if (!time.isBefore(lastSlotStart)) return sortedSlots.last().number.toFloat()
 
-        // 节次内比例计算
         val currentSlot = sortedSlots.find {
             val s = LocalTime.parse(it.startTime, formatter)
             val e = LocalTime.parse(it.endTime, formatter)
@@ -195,14 +210,13 @@ class WeeklyScheduleViewModel(
             return currentSlot.number.toFloat() + (ChronoUnit.MINUTES.between(sTime, time).toFloat() / duration)
         }
 
-        // 课间吸附：吸附到临近节次边缘
         val nextSlot = sortedSlots.find { LocalTime.parse(it.startTime, formatter).isAfter(time) }
         val prevSlot = sortedSlots.lastOrNull { LocalTime.parse(it.endTime, formatter).isBefore(time) }
         return nextSlot?.number?.toFloat() ?: (prevSlot?.number?.toFloat()?.plus(1.0f) ?: 1.0f)
     }
 
     /**
-     * 合并并处理课程块，包含冲突检测及最小高度保护
+     * 合并并处理课程块
      */
     fun mergeCourses(courses: List<CourseWithWeeks>, timeSlots: List<TimeSlot>): List<MergedCourseBlock> {
         if (timeSlots.isEmpty()) return emptyList()
@@ -221,7 +235,6 @@ class WeeklyScheduleViewModel(
                     s to (e + 1f)
                 }
 
-                // 最小高度保护：确保课程块可见
                 if (endScale - startScale < 0.5f) endScale = startScale + 0.5f
                 Triple(cw, startScale, endScale)
             } catch (e: Exception) { null }
@@ -242,7 +255,6 @@ class WeeklyScheduleViewModel(
 
                 result.add(MergedCourseBlock(
                     day = day,
-                    // 坐标保护：防止超出 UI 边界
                     startSection = (minS - 1f).coerceIn(0f, timeSlots.size.toFloat() - 0.5f),
                     endSection = (maxE - 1f).coerceIn(0.5f, timeSlots.size.toFloat()),
                     courses = overlaps.map { it.first }.distinct(),
