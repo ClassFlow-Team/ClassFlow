@@ -206,6 +206,30 @@ class CourseTableRepository(
             courseWeekDao.insertAll(newCourseWeeksToInsert)
         }
     }
+
+    /**
+     * 快速删除：仅移除特定周次的记录，不物理删除课程定义。
+     * * @param tableId 课表唯一 ID
+     * @param weekDayPairs 周次与星期的组合列表 (Pair<周次, 星期>)
+     */
+    @Transaction
+    suspend fun deleteCoursesOnDates(
+        tableId: String,
+        weekDayPairs: List<Pair<Int, Int>>
+    ) {
+        weekDayPairs.forEach { (week, day) ->
+            // 查找在该课表、该周、该天下的所有课程记录
+            val coursesToDelete = getCoursesForDay(tableId, week, day).first()
+
+            if (coursesToDelete.isNotEmpty()) {
+                val ids = coursesToDelete.map { it.course.id }
+
+                // 仅仅从 course_weeks 表中移除对应周次的关联，不触动 course 表
+                courseWeekDao.deleteCourseWeeksForCourseAndWeek(ids, week)
+            }
+        }
+    }
+
     /**
      * 获取指定课表、周次和星期下的课程，并以数据流形式返回。
      * 这个方法专为 UI 层提供实时更新的数据。

@@ -1,4 +1,4 @@
-package com.xingheyuzhuan.shiguangschedule.ui.settings.tweaks
+package com.xingheyuzhuan.shiguangschedule.ui.settings.quickactions.tweaks
 
 import android.app.Application
 import androidx.lifecycle.ViewModel

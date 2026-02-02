@@ -1,5 +1,5 @@
 // TweakScheduleScreen.kt
-package com.xingheyuzhuan.shiguangschedule.ui.settings.tweaks
+package com.xingheyuzhuan.shiguangschedule.ui.settings.quickactions.tweaks
 
 import android.content.res.Configuration
 import android.text.format.DateFormat
@@ -48,7 +48,9 @@ import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.ui.components.CourseTablePickerDialog
 import com.xingheyuzhuan.shiguangschedule.ui.components.DatePickerModal
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -361,7 +363,7 @@ private fun DateButton(label: String, date: LocalDate, onClick: () -> Unit) {
  * 辅助函数：将 Long 毫秒转换为 LocalDate
  */
 private fun Long.toLocalDate(): LocalDate =
-    java.time.Instant.ofEpochMilli(this).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+    Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDate()
 
 /**
  * 辅助 Composable 函数：将数字星期转换为本地化的字符串资源。
