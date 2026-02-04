@@ -305,6 +305,8 @@
     <string name="label_version_prefix">版本: %1$s</string>
     <string name="default_app_name">未知应用</string>
     <string name="item_check_software_update">检查软件更新</string>
+    <string name="item_language_settings">语言设置</string>
+    <string name="language_follow_system">跟随系统</string>
 
     <string name="dialog_checking_update">正在检查更新...</string>
     <string name="tip_please_wait">正在连接服务器，请稍候。</string>

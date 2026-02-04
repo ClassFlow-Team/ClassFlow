@@ -1,5 +1,6 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.additional
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.compose.foundation.clickable
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PeopleAlt
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.AlertDialog
@@ -64,9 +66,82 @@ import com.xingheyuzhuan.shiguangschedule.Screen
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateChecker
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateStatus
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateChecker.Companion.UPDATE_CHANNELS
+import com.xingheyuzhuan.shiguangschedule.util.LocaleHelper
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 private const val GITHUB_REPO_URL = "https://github.com/XingHeYuZhuan/shiguangschedule"
+
+/**
+ * 语言选择对话框 (Android 13 以下)
+ */
+@Composable
+private fun LanguageSelectionDialog(
+    showDialog: Boolean,
+    onDismiss: () -> Unit,
+    context: Context
+) {
+    if (!showDialog) return
+
+    val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+    var selectedLocale by remember {
+        mutableStateOf(prefs.getString("app_locale", "system") ?: "system")
+    }
+
+    // 支持的语言列表
+    val supportedLocales = remember {
+        listOf(
+            "system" to context.getString(R.string.language_follow_system),
+            "zh_cn" to "简体中文",
+            "zh_tw" to "繁體中文",
+            "en" to "English"
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.item_language_settings)) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                supportedLocales.forEach { (tag, name) ->
+                    val isSelected = selectedLocale == tag
+
+                    ListItem(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedLocale = tag },
+                        headlineContent = { Text(text = name) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        leadingContent = {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { selectedLocale = tag }
+                            )
+                        }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    // 保存语言设置
+                    prefs.edit().putString("app_locale", selectedLocale).apply()
+                    onDismiss()
+                    // 重启 Activity 使语言生效
+                    LocaleHelper.refreshActivity(context)
+                }
+            ) {
+                Text(stringResource(R.string.action_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
 
 @Composable
 private fun SettingListItem(
@@ -306,6 +381,7 @@ fun MoreOptionsScreen(navController: NavController) {
     var updateStatus by remember { mutableStateOf<UpdateStatus>(UpdateStatus.Idle) }
     var showUpdateDialog by remember { mutableStateOf(false) }
     var showChannelSelectionDialog by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
 
     var selectedChannelUrl by remember {
         mutableStateOf(UpdateChecker.DEFAULT_PLATFORM_URL)
@@ -451,6 +527,22 @@ fun MoreOptionsScreen(navController: NavController) {
                         showDivider = true
                     )
 
+                    // 语言选择
+                    SettingListItem(
+                        icon = Icons.Default.Language,
+                        title = stringResource(R.string.item_language_settings),
+                        onClick = {
+                            if (LocaleHelper.useSystemLanguageSettings) {
+                                // Android 13+ 跳转到系统设置
+                                LocaleHelper.launchSystemLanguageSettings(context)
+                            } else {
+                                // Android 13 以下显示对话框
+                                showLanguageDialog = true
+                            }
+                        },
+                        showDivider = true
+                    )
+
                     // GitHub 仓库
                     SettingListItem(
                         icon = Icons.Default.Code,
@@ -512,4 +604,13 @@ fun MoreOptionsScreen(navController: NavController) {
         currentSelectedUrl = selectedChannelUrl,
         onChannelSelected = { url -> selectedChannelUrl = url }
     )
+
+    // 语言选择对话框 (仅 Android 13 以下)
+    if (!LocaleHelper.useSystemLanguageSettings) {
+        LanguageSelectionDialog(
+            showDialog = showLanguageDialog,
+            onDismiss = { showLanguageDialog = false },
+            context = context
+        )
+    }
 }

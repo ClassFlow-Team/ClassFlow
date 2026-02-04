@@ -305,6 +305,8 @@
     <string name="label_version_prefix">版本: %1$s</string>
     <string name="default_app_name">未知應用程式</string>
     <string name="item_check_software_update">檢查軟體更新</string>
+    <string name="item_language_settings">語言設定</string>
+    <string name="language_follow_system">跟隨系統</string>
 
     <string name="dialog_checking_update">正在檢查更新...</string>
     <string name="tip_please_wait">正在連線伺服器，請稍候。</string>
@@ -423,8 +425,8 @@
     <string name="color_picker_label_alpha">透明度</string>
     <string name="a11y_switch_color_mode">切換輸入方式</string>
 
-    <!-- 個性化配置 -->
-    <string name="item_personalization">個性化配置</string>
+    <!-- 客製化配置 -->
+    <string name="item_personalization">客製化配置</string>
     <string name="desc_personalization">調整課表格子高度、圓角、間距及透明度</string>
     <string name="style_category_interface">介面顯示</string>
     <string name="style_category_grid_size">網格尺寸</string>

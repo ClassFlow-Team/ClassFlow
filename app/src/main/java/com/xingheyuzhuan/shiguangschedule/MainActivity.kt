@@ -1,5 +1,6 @@
 package com.xingheyuzhuan.shiguangschedule
 
+import android.content.Context
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -39,8 +40,14 @@ import com.xingheyuzhuan.shiguangschedule.ui.settings.quickactions.tweaks.TweakS
 import com.xingheyuzhuan.shiguangschedule.ui.settings.update.UpdateRepoScreen
 import com.xingheyuzhuan.shiguangschedule.ui.theme.ShiguangScheduleTheme
 import com.xingheyuzhuan.shiguangschedule.ui.today.TodayScheduleScreen
+import com.xingheyuzhuan.shiguangschedule.util.LocaleHelper
 
 class MainActivity : ComponentActivity() {
+    
+    override fun attachBaseContext(newBase: Context?) {
+        super.attachBaseContext(newBase?.let { LocaleHelper.applyLanguage(it) })
+    }
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
