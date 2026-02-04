@@ -78,6 +78,15 @@
     <string name="status_week_calc_error">Week calculation error</string>
     
     <!-- Time and Day Formats -->
+    <string-array name="week_days_short_names">
+        <item>MON</item>
+        <item>TUE</item>
+        <item>WED</item>
+        <item>THU</item>
+        <item>FRI</item>
+        <item>SAT</item>
+        <item>SUN</item>
+    </string-array>
     <string-array name="week_days_full_names">
         <item>Monday</item>
         <item>Tuesday</item>
