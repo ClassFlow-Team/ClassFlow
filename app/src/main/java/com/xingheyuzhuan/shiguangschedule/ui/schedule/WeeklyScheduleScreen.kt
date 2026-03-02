@@ -112,6 +112,7 @@ fun WeeklyScheduleScreen(
             modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
             containerColor = Color.Transparent,
             topBar = {
+                val isTransparent = composedStyle.backgroundImagePath.isNotEmpty()
                 CenterAlignedTopAppBar(
                     title = {
                         Text(
@@ -126,8 +127,8 @@ fun WeeklyScheduleScreen(
                         )
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = if (composedStyle.backgroundImagePath.isNotEmpty()) Color.Transparent else MaterialTheme.colorScheme.surface,
-                        scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+                        containerColor = if (isTransparent) Color.Transparent else MaterialTheme.colorScheme.surface,
+                        scrolledContainerColor = if (isTransparent) Color.Transparent else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
                     ),
                     scrollBehavior = scrollBehavior
                 )
