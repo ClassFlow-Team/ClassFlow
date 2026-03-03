@@ -57,9 +57,9 @@ fun ShiguangScheduleTheme(
             window.setBackgroundDrawable(backgroundColor.toDrawable())
 
             @Suppress("DEPRECATION")
-            window.statusBarColor = backgroundColor
+            window.statusBarColor = Color.Transparent.toArgb()
             @Suppress("DEPRECATION")
-            window.navigationBarColor = backgroundColor
+            window.navigationBarColor = Color.Transparent.toArgb()
             val insetsController = WindowCompat.getInsetsController(window, view)
             insetsController.isAppearanceLightStatusBars = !darkTheme
             insetsController.isAppearanceLightNavigationBars = !darkTheme
