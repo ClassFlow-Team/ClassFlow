@@ -78,6 +78,15 @@
     <string name="status_week_calc_error">Week calculation error</string>
     
     <!-- Time and Day Formats -->
+    <string-array name="week_days_short_names">
+        <item>MON</item>
+        <item>TUE</item>
+        <item>WED</item>
+        <item>THU</item>
+        <item>FRI</item>
+        <item>SAT</item>
+        <item>SUN</item>
+    </string-array>
     <string-array name="week_days_full_names">
         <item>Monday</item>
         <item>Tuesday</item>
@@ -305,6 +314,8 @@
     <string name="label_version_prefix">Version: %1$s</string>
     <string name="default_app_name">Unknown app</string>
     <string name="item_check_software_update">Check for Software Updates</string>
+    <string name="item_language_settings">Language Settings</string>
+    <string name="language_follow_system">Follow System</string>
 
     <string name="dialog_checking_update">Checking for update...</string>
     <string name="tip_please_wait">Connecting to server, please wait.</string>

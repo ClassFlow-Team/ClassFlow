@@ -104,6 +104,10 @@ android {
         compose = true
         buildConfig = true
     }
+    androidResources {
+        generateLocaleConfig = true
+        localeFilters += listOf("zh", "zh-rCN", "zh-rTW", "en")
+    }
 }
 
 afterEvaluate {
@@ -145,6 +149,7 @@ dependencies {
     implementation(libs.protobuf.kotlin.lite)
     implementation(libs.protobuf.java.lite)
     implementation(libs.javax.inject)
+    implementation(libs.androidx.appcompat)
     ksp(libs.androidx.room.compiler)
 
     testImplementation(libs.junit)

@@ -52,7 +52,7 @@ fun ScheduleGrid(
         val screenWidth = maxWidth
 
         // 1. 处理日期与星期排序
-        val weekDays = stringArrayResource(R.array.week_days_full_names).toList()
+        val weekDays = stringArrayResource(R.array.week_days_short_names).toList()
         val reorderedWeekDays = rearrangeDays(weekDays, firstDayOfWeek)
         val displayDays = if (showWeekends) reorderedWeekDays else reorderedWeekDays.take(5)
 

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PeopleAlt
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.AlertDialog
@@ -306,6 +307,7 @@ fun MoreOptionsScreen(navController: NavController) {
     var updateStatus by remember { mutableStateOf<UpdateStatus>(UpdateStatus.Idle) }
     var showUpdateDialog by remember { mutableStateOf(false) }
     var showChannelSelectionDialog by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
 
     var selectedChannelUrl by remember {
         mutableStateOf(UpdateChecker.DEFAULT_PLATFORM_URL)
@@ -451,6 +453,18 @@ fun MoreOptionsScreen(navController: NavController) {
                         showDivider = true
                     )
 
+                    // 语言切换
+                    SettingListItem(
+                        icon = Icons.Default.Language,
+                        title = stringResource(R.string.item_language_settings),
+                        onClick = {
+                            handleLanguageSettingClick(context) {
+                                showLanguageDialog = true
+                            }
+                        },
+                        showDivider = true
+                    )
+
                     // GitHub 仓库
                     SettingListItem(
                         icon = Icons.Default.Code,
@@ -511,5 +525,11 @@ fun MoreOptionsScreen(navController: NavController) {
         onConfirm = startUpdateCheck,
         currentSelectedUrl = selectedChannelUrl,
         onChannelSelected = { url -> selectedChannelUrl = url }
+    )
+
+    // 语言选择对话框
+    LanguageSelectionDialog(
+        showDialog = showLanguageDialog,
+        onDismiss = { showLanguageDialog = false }
     )
 }
