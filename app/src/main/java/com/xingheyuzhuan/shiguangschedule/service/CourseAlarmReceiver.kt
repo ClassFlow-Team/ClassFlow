@@ -52,7 +52,7 @@ class CourseAlarmReceiver : BroadcastReceiver() {
             when (modeType) {
                 MODE_DND -> {
                     notificationManager.setInterruptionFilter(
-                        if (enableMode) NotificationManager.INTERRUPTION_FILTER_NONE
+                        if (enableMode) NotificationManager.INTERRUPTION_FILTER_PRIORITY
                         else NotificationManager.INTERRUPTION_FILTER_ALL
                     )
                 }

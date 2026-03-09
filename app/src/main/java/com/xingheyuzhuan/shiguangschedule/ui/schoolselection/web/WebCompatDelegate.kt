@@ -5,6 +5,9 @@ import android.webkit.*
 
 class WebCompatDelegate(private val webView: WebView) {
 
+    /**
+     * 增强 WebView 基础配置
+     */
     fun enhanceSettings(isDesktopMode: Boolean): WebCompatDelegate {
         webView.settings.apply {
             javaScriptEnabled = true
@@ -18,11 +21,12 @@ class WebCompatDelegate(private val webView: WebView) {
 
             if (isDesktopMode) {
                 useWideViewPort = true
-                loadWithOverviewMode = false
-                layoutAlgorithm = WebSettings.LayoutAlgorithm.NORMAL
+                loadWithOverviewMode = true // 设为 true 以确保初始加载时能自动缩放预览网页全貌
+                layoutAlgorithm = WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
             } else {
                 useWideViewPort = false
                 loadWithOverviewMode = true
+                layoutAlgorithm = WebSettings.LayoutAlgorithm.NORMAL
             }
 
             setSupportZoom(true)
@@ -36,6 +40,9 @@ class WebCompatDelegate(private val webView: WebView) {
         return this
     }
 
+    /**
+     * 包装 WebViewClient，统一控制 JS 注入流程
+     */
     fun wrapWebViewClient(original: WebViewClient, isDesktopMode: Boolean): WebViewClient {
         return object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -45,30 +52,51 @@ class WebCompatDelegate(private val webView: WebView) {
             override fun onPageFinished(view: WebView?, url: String?) {
                 original.onPageFinished(view, url)
 
-                if (isDesktopMode) {
-                    view?.evaluateJavascript("""
-                        (function() {
-                            var metas = document.getElementsByTagName('meta');
-                            for (var i = metas.length - 1; i >= 0; i--) {
-                                if (metas[i].getAttribute('name') === 'viewport') metas[i].parentNode.removeChild(metas[i]);
-                            }
-                            var meta = document.createElement('meta');
-                            meta.name = "viewport";
-                            meta.content = "width=1920, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0, user-scalable=yes";
-                            document.head.appendChild(meta);
-                            var css = 'html, body { width: 1920px !important; min-width: 1920px !important; overflow-x: auto !important; position: static !important; }';
-                            var style = document.createElement('style');
-                            style.type = 'text/css';
-                            style.appendChild(document.createTextNode(css));
-                            document.head.appendChild(style);
-                        })();
-                    """.trimIndent(), null)
+                view?.let { wv ->
+                    if (isDesktopMode) {
+                        injectDesktopCompatLayer(wv)
+                    }
+                    wv.injectAllJavaScript(isDesktopMode)
                 }
             }
 
-            override fun onReceivedSslError(v: WebView, h: SslErrorHandler, e: android.net.http.SslError) = original.onReceivedSslError(v, h, e)
-            override fun onReceivedError(v: WebView, q: WebResourceRequest, e: WebResourceError) = original.onReceivedError(v, q, e)
+            override fun onReceivedSslError(v: WebView, h: SslErrorHandler, e: android.net.http.SslError) =
+                original.onReceivedSslError(v, h, e)
+
+            override fun onReceivedError(v: WebView, q: WebResourceRequest, e: WebResourceError) =
+                original.onReceivedError(v, q, e)
         }
+    }
+
+    /**
+     * 注入桌面模式特定的 CSS 和 Viewport 修复
+     */
+    private fun injectDesktopCompatLayer(view: WebView) {
+        val desktopWidth = 1920
+        view.evaluateJavascript("""
+            (function() {
+                var metas = document.getElementsByTagName('meta');
+                for (var i = metas.length - 1; i >= 0; i--) {
+                    if (metas[i].getAttribute('name') === 'viewport') metas[i].parentNode.removeChild(metas[i]);
+                }
+                var meta = document.createElement('meta');
+                meta.name = "viewport";
+                meta.content = "width=$desktopWidth, initial-scale=1.0, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes";
+                document.head.appendChild(meta);
+                var css = 'html, body { ' +
+                          'width: ${desktopWidth}px !important; ' + 
+                          'min-width: ${desktopWidth}px !important; ' + 
+                          'overflow-x: auto !important; ' + 
+                          'position: relative !important; ' + 
+                          'display: block !important; ' +
+                          '-webkit-overflow-scrolling: touch !important;' +
+                          '}';
+                var style = document.createElement('style');
+                style.type = 'text/css';
+                style.appendChild(document.createTextNode(css));
+                document.head.appendChild(style);
+            })();
+        """.trimIndent(), null)
     }
 
     fun wrapWebChromeClient(original: WebChromeClient, onProgress: (Int) -> Unit): WebChromeClient {

@@ -168,7 +168,6 @@ fun WebViewScreen(
 
     LaunchedEffect(isDesktopMode) {
         val compatDelegate = WebCompatDelegate(webView)
-
         compatDelegate.enhanceSettings(isDesktopMode)
 
         webView.settings.userAgentString = if (isDesktopMode) DESKTOP_USER_AGENT else defaultUserAgent
@@ -180,11 +179,6 @@ fun WebViewScreen(
             @SuppressLint("WebViewClientOnReceivedSslError")
             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
                 sslErrorHandleState = Pair(handler, error)
-            }
-
-            override fun onPageFinished(view: WebView?, url: String?) {
-                super.onPageFinished(view, url)
-                view?.injectAllJavaScript(isDesktopMode)
             }
 
             override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
@@ -205,10 +199,8 @@ fun WebViewScreen(
                 if (title != null) pageTitle = title
             }
         }
-
-        // 应用代理包装
         webView.webViewClient = compatDelegate.wrapWebViewClient(businessClient, isDesktopMode)
-        webView.webChromeClient = compatDelegate.wrapWebChromeClient(businessChrome) { /* 进度在 internal 处理 */ }
+        webView.webChromeClient = compatDelegate.wrapWebChromeClient(businessChrome) { /* 进度已在 businessChrome 处理 */ }
     }
 
     // 状态改变时加载 URL
