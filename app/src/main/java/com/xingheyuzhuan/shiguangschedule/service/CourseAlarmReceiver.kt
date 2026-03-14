@@ -15,10 +15,10 @@ import androidx.core.content.edit
 import androidx.core.content.getSystemService
 import com.xingheyuzhuan.shiguangschedule.MainActivity
 import com.xingheyuzhuan.shiguangschedule.R
+import com.xingheyuzhuan.shiguangschedule.data.model.AutoControlMode
 import com.xingheyuzhuan.shiguangschedule.widget.updateAllWidgets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -46,22 +46,23 @@ class CourseAlarmReceiver : BroadcastReceiver() {
         private const val ALARM_IDS_PREFS = "alarm_ids_prefs"
         private const val KEY_ACTIVE_ALARM_IDS = "active_alarm_ids"
         private const val TAG = "CourseAlarmReceiver"
-        const val MODE_DND = "DND"
-        const val MODE_SILENT = "SILENT"
 
-        fun toggleMode(context: Context, enableMode: Boolean, modeType: String) {
+        fun toggleMode(context: Context, enableMode: Boolean, modeType: AutoControlMode) {
             val audioManager = context.getSystemService<AudioManager>()
             val notificationManager = context.getSystemService<NotificationManager>()
             if (audioManager == null || notificationManager == null) return
+
+            // 检查是否有免打扰权限
             if (!notificationManager.isNotificationPolicyAccessGranted) return
+
             when (modeType) {
-                MODE_DND -> {
+                AutoControlMode.DND -> {
                     notificationManager.setInterruptionFilter(
                         if (enableMode) NotificationManager.INTERRUPTION_FILTER_PRIORITY
                         else NotificationManager.INTERRUPTION_FILTER_ALL
                     )
                 }
-                MODE_SILENT -> {
+                AutoControlMode.SILENT -> {
                     audioManager.ringerMode = if (enableMode) AudioManager.RINGER_MODE_SILENT
                     else AudioManager.RINGER_MODE_NORMAL
                 }
@@ -75,14 +76,15 @@ class CourseAlarmReceiver : BroadcastReceiver() {
             val pendingResult = goAsync()
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    val appSettings = appSettingsRepository.getAppSettings().first()
-                    val modeToUse = appSettings.autoControlMode // 这里现在能找到了
+                    // 使用 Repository 提供的单次读取方法获取配置
+                    val appSettings = appSettingsRepository.getAppSettingsOnce() ?: return@launch
+                    val modeToUse = appSettings.autoControlMode
                     val dndAction = intent?.getStringExtra(EXTRA_DND_ACTION)
 
                     if (!dndAction.isNullOrEmpty()) {
                         when (dndAction) {
                             DND_ACTION_START -> {
-                                Log.i(TAG, "执行上课模式开启 (DND/静音)")
+                                Log.i(TAG, "执行上课模式开启 ($modeToUse)")
                                 toggleMode(ctx, true, modeToUse)
                             }
                             DND_ACTION_END -> {
@@ -172,6 +174,7 @@ class CourseAlarmReceiver : BroadcastReceiver() {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
             )
+
 
         if (Build.VERSION.SDK_INT >= 36) {
             builder.setRequestPromotedOngoing(true)

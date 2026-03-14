@@ -1,50 +1,46 @@
 package com.xingheyuzhuan.shiguangschedule.data.repository
 
-import com.xingheyuzhuan.shiguangschedule.data.db.main.AppSettings
-import com.xingheyuzhuan.shiguangschedule.data.db.main.AppSettingsDao
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfigDao
+import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableDao
+import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
+import com.xingheyuzhuan.shiguangschedule.data.model.AutoControlMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
-import java.time.format.DateTimeFormatter
-import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 应用设置数据仓库，负责处理与应用设置相关的业务逻辑。
+ * 应用配置领域仓库
+ *
+ * 核心职责：
+ * 1. 采用 SSOT 原则，将底层存储从 Room 迁移至 DataStore，同时对外部调用方保持接口兼容。
+ * 2. 协调全局偏好设置 (DataStore) 与课表物理配置 (Room) 之间的数据流。
+ * 3. 提供时间维度计算算法（周次偏移、日期回溯）。
  */
 @Singleton
 class AppSettingsRepository @Inject constructor(
-    private val appSettingsDao: AppSettingsDao,
+    private val dataStore: DataStore<Preferences>,
+    private val courseTableDao: CourseTableDao,
     private val courseTableConfigDao: CourseTableConfigDao
 ) {
-    // 使用线程安全的 java.time.DateTimeFormatter
     private val DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
     /**
-     * 默认的应用设置
+     * 课表配置模板
+     * 当 DataStore 选中的课表在数据库中尚未初始化配置时，以此模板为基础进行创建。
      */
-    private val DEFAULT_SETTINGS = AppSettings(
-        id = 1,
-        currentCourseTableId = null,
-        reminderEnabled = false,
-        remindBeforeMinutes = 15,
-        skippedDates = null,
-        autoModeEnabled = false,
-        autoControlMode = "DND",
-    )
-
-    /**
-     * 默认的课表配置，用于初始化或找不到配置时的回退
-     */
-    private val DEFAULT_COURSE_CONFIG = CourseTableConfig(
-        courseTableId = UUID.randomUUID().toString(),
+    private val COURSE_CONFIG_TEMPLATE = CourseTableConfig(
+        courseTableId = "",
         showWeekends = false,
         semesterStartDate = null,
         semesterTotalWeeks = 20,
@@ -53,68 +49,90 @@ class AppSettingsRepository @Inject constructor(
         firstDayOfWeek = DayOfWeek.MONDAY.value
     )
 
+    // 应用全局设置 (原实现：AppSettingsDao -> 现实现：DataStore)
+
     /**
-     * 获取应用设置（全局设置），返回一个数据流。
+     * 获取应用设置数据流。
+     * 内部实现了 DataStore 到业务模型的映射，并包含“保底课表 ID”获取逻辑。
      */
-    fun getAppSettings(): Flow<AppSettings> {
-        return appSettingsDao.getAppSettings().map { settings ->
-            settings ?: DEFAULT_SETTINGS
+    fun getAppSettings(): Flow<AppSettingsModel> = dataStore.data.map { prefs ->
+        val tableId = prefs[AppSettingsModel.KEY_CURRENT_COURSE_TABLE_ID]
+            ?: courseTableDao.getFirstTableOnce()?.id
+            ?: ""
+
+        AppSettingsModel(
+            currentCourseTableId = tableId,
+            reminderEnabled = prefs[AppSettingsModel.KEY_REMINDER_ENABLED] ?: false,
+            remindBeforeMinutes = prefs[AppSettingsModel.KEY_REMIND_BEFORE_MINUTES] ?: 15,
+            skippedDates = prefs[AppSettingsModel.KEY_SKIPPED_DATES] ?: emptySet(),
+            autoModeEnabled = prefs[AppSettingsModel.KEY_AUTO_MODE_ENABLED] ?: false,
+            autoControlMode = AutoControlMode.fromString(
+                prefs[AppSettingsModel.KEY_AUTO_CONTROL_MODE]
+            )
+        )
+    }
+
+    /**
+     * 获取一次性的应用设置快照。
+     */
+    suspend fun getAppSettingsOnce(): AppSettingsModel? {
+        return getAppSettings().first()
+    }
+
+    /**
+     * 更新应用设置。
+     * 将对象解构并原子化地写入 DataStore。
+     */
+    suspend fun insertOrUpdateAppSettings(newSettings: AppSettingsModel) {
+        dataStore.edit { prefs ->
+            prefs[AppSettingsModel.KEY_CURRENT_COURSE_TABLE_ID] = newSettings.currentCourseTableId
+            prefs[AppSettingsModel.KEY_REMINDER_ENABLED] = newSettings.reminderEnabled
+            prefs[AppSettingsModel.KEY_REMIND_BEFORE_MINUTES] = newSettings.remindBeforeMinutes
+            prefs[AppSettingsModel.KEY_SKIPPED_DATES] = newSettings.skippedDates
+            prefs[AppSettingsModel.KEY_AUTO_MODE_ENABLED] = newSettings.autoModeEnabled
+            prefs[AppSettingsModel.KEY_AUTO_CONTROL_MODE] = newSettings.autoControlMode.value
         }
     }
 
-    /**
-     * 获取一次性的应用设置，用于不需要监听变化的场景。
-     * @return 返回 AppSettings 对象，如果找不到则返回 null。
-     */
-    suspend fun getAppSettingsOnce(): AppSettings? {
-        return appSettingsDao.getAppSettings().first()
-    }
+    // 课表具体物理配置 (由 Room 驱动)
 
     /**
-     * 根据课表ID，获取该课表的配置信息（一次性）。
-     * 此函数用于不需要监听配置变化，只需要获取当前快照的场景。
+     * 根据课表ID获取一次性配置快照。
      */
     suspend fun getCourseConfigOnce(tableId: String): CourseTableConfig? {
         return courseTableConfigDao.getConfigOnce(tableId)
     }
 
     /**
-     * 根据课表 ID，实时获取该课表的配置信息，返回一个数据流。
-     * 此函数专为需要监听配置变化（如 ViewModel 中的 combine 和 flatMapLatest）的场景设计。
-     * * @param courseTableId 关联的课表 ID
+     * 根据课表ID实时获取配置数据流。
      */
     fun getCourseTableConfigFlow(courseTableId: String): Flow<CourseTableConfig?> {
         return courseTableConfigDao.getConfigById(courseTableId)
     }
 
     /**
-     * 通用的周次计算函数
-     * 物理坐标系的核心：将任意日期映射为相对于开学日的“逻辑周次”。
-     *
-     * @param targetDate 想要计算的物理日期（例如 Pager 滑动到的某天）
-     * @param startDateStr 开学日期的字符串 (yyyy-MM-dd)
-     * @param firstDayOfWeekInt 一周起始日 (1=周一, 7=周日)
-     * @return 如果未设置开学日期返回 null，代表数据不可信；否则返回物理偏移周次（从1开始）。
+     * 更新或插入特定课表的物理配置。
+     */
+    suspend fun insertOrUpdateCourseConfig(newConfig: CourseTableConfig) {
+        courseTableConfigDao.insertOrUpdate(newConfig)
+    }
+
+    // 业务算法 (时间、周次计算)
+
+    /**
+     * 核心周次偏移算法。
      */
     fun getWeekIndexAtDate(
         targetDate: LocalDate,
         startDateStr: String?,
         firstDayOfWeekInt: Int
     ): Int? {
-        // 如果开学日期为空，视为不可信，不进行偏移计算
         if (startDateStr.isNullOrEmpty()) return null
-
         return try {
             val firstDayOfWeek = DayOfWeek.of(firstDayOfWeekInt)
-
-            // 1. 将开学日期对齐到该周的起始日（锚点）
             val alignedStartDate = LocalDate.parse(startDateStr, DATE_FORMATTER)
                 .with(TemporalAdjusters.previousOrSame(firstDayOfWeek))
-
-            // 2. 将目标日期也对齐到该周的起始日
             val alignedTargetDate = targetDate.with(TemporalAdjusters.previousOrSame(firstDayOfWeek))
-
-            // 3. 计算周数差。这里允许负数（开学前）和超出范围的数（放假后）
             val diffWeeks = ChronoUnit.WEEKS.between(alignedStartDate, alignedTargetDate).toInt()
             diffWeeks + 1
         } catch (e: Exception) {
@@ -124,11 +142,11 @@ class AppSettingsRepository @Inject constructor(
     }
 
     /**
-     * 实时获取当前周的计算结果。
+     * 基于当前数据库/DataStore状态计算当前自然周次。
      */
     suspend fun calculateCurrentWeekFromDb(): Int? {
-        val appSettings = appSettingsDao.getAppSettings().first() ?: return null
-        val currentCourseId = appSettings.currentCourseTableId ?: return null
+        val appSettings = getAppSettingsOnce() ?: return null
+        val currentCourseId = appSettings.currentCourseTableId.ifEmpty { return null }
         val config = courseTableConfigDao.getConfigOnce(currentCourseId) ?: return null
 
         val rawWeek = getWeekIndexAtDate(
@@ -137,19 +155,18 @@ class AppSettingsRepository @Inject constructor(
             firstDayOfWeekInt = config.firstDayOfWeek
         ) ?: return null
 
-        // 在“设置页面”显示当前周时，通常只在有效学期内显示
         return if (rawWeek in 1..config.semesterTotalWeeks) rawWeek else null
     }
 
     /**
-     * 根据周数反向推算开学日期。
+     * 根据目标周数反推开学日期。
      */
     suspend fun setSemesterStartDateFromWeek(week: Int?) {
-        val appSettings = appSettingsDao.getAppSettings().first() ?: return
-        val currentCourseId = appSettings.currentCourseTableId ?: return
+        val appSettings = getAppSettingsOnce() ?: return
+        val currentCourseId = appSettings.currentCourseTableId.ifEmpty { return }
 
         val currentConfig = courseTableConfigDao.getConfigOnce(currentCourseId)
-            ?: DEFAULT_COURSE_CONFIG.copy(courseTableId = currentCourseId)
+            ?: COURSE_CONFIG_TEMPLATE.copy(courseTableId = currentCourseId)
 
         val newStartDate = if (week != null) {
             calculateSemesterStartDate(week, currentConfig.firstDayOfWeek)
@@ -159,14 +176,6 @@ class AppSettingsRepository @Inject constructor(
 
         val updatedConfig = currentConfig.copy(semesterStartDate = newStartDate)
         courseTableConfigDao.insertOrUpdate(updatedConfig)
-    }
-
-    suspend fun insertOrUpdateAppSettings(newSettings: AppSettings) {
-        appSettingsDao.insertOrUpdate(newSettings)
-    }
-
-    suspend fun insertOrUpdateCourseConfig(newConfig: CourseTableConfig) {
-        courseTableConfigDao.insertOrUpdate(newConfig)
     }
 
     /**

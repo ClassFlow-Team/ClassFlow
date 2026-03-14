@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
         Course::class,
         CourseWeek::class,
         TimeSlot::class,
-        AppSettings::class,
+        AppSettings::class, // 暂存用于迁移，版本 4 将物理移除
         CourseTableConfig::class
     ],
     version = 3,
@@ -28,13 +28,14 @@ import kotlinx.coroutines.launch
 @TypeConverters(Converters::class)
 abstract class MainAppDatabase : RoomDatabase() {
 
-    // DAOs
     abstract fun courseTableDao(): CourseTableDao
     abstract fun courseDao(): CourseDao
     abstract fun courseWeekDao(): CourseWeekDao
     abstract fun timeSlotDao(): TimeSlotDao
-    abstract fun appSettingsDao(): AppSettingsDao
     abstract fun courseTableConfigDao(): CourseTableConfigDao
+
+    @Deprecated("设置已迁移至 DataStore，此 Dao 仅用于迁移逻辑。")
+    abstract fun appSettingsDao(): AppSettingsDao
 
     companion object {
         @Volatile
@@ -51,23 +52,23 @@ abstract class MainAppDatabase : RoomDatabase() {
                     "main_app_database"
                 )
                     .addMigrations(*ALL_MIGRATIONS)
-
                     .addCallback(object : RoomDatabase.Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             super.onCreate(db)
-                            // 在 IO 线程中执行初始化数据
                             CoroutineScope(Dispatchers.IO).launch {
                                 INSTANCE?.let { database ->
-                                    // 1. 初始化默认课表
+                                    // 1. 初始化默认课表物理数据
+                                    val tableId = java.util.UUID.randomUUID().toString()
                                     val defaultCourseTable = CourseTable(
-                                        id = java.util.UUID.randomUUID().toString(),
+                                        id = tableId,
                                         name = "我的课表",
                                         createdAt = System.currentTimeMillis()
                                     )
                                     database.courseTableDao().insert(defaultCourseTable)
 
+                                    // 2. 初始化该课表的物理配置模板
                                     val defaultConfig = CourseTableConfig(
-                                        courseTableId = defaultCourseTable.id,
+                                        courseTableId = tableId,
                                         showWeekends = false,
                                         semesterTotalWeeks = 20,
                                         defaultClassDuration = 45,
@@ -76,27 +77,23 @@ abstract class MainAppDatabase : RoomDatabase() {
                                     )
                                     database.courseTableConfigDao().insertOrUpdate(defaultConfig)
 
-                                    // 2. 初始化应用设置 (使用精简后的 AppSettings)
-                                    val defaultSettings = AppSettings(
-                                        currentCourseTableId = defaultCourseTable.id
-                                    )
-                                    database.appSettingsDao().insertOrUpdate(defaultSettings)
+                                    // 注意：不再向 AppSettings 表写入数据，偏好设置初始化交由 DataStore 处理
 
-                                    // 3. 为默认课表插入默认时间段
+                                    // 3. 初始化默认时间段
                                     val defaultTimeSlots = listOf(
-                                        TimeSlot(number = 1, startTime = "08:00", endTime = "08:45", courseTableId = defaultCourseTable.id),
-                                        TimeSlot(number = 2, startTime = "08:50", endTime = "09:35", courseTableId = defaultCourseTable.id),
-                                        TimeSlot(number = 3, startTime = "09:50", endTime = "10:35", courseTableId = defaultCourseTable.id),
-                                        TimeSlot(number = 4, startTime = "10:40", endTime = "11:25", courseTableId = defaultCourseTable.id),
-                                        TimeSlot(number = 5, startTime = "11:30", endTime = "12:15", courseTableId = defaultCourseTable.id),
-                                        TimeSlot(number = 6, startTime = "14:00", endTime = "14:45", courseTableId = defaultCourseTable.id),
-                                        TimeSlot(number = 7, startTime = "14:50", endTime = "15:35", courseTableId = defaultCourseTable.id),
-                                        TimeSlot(number = 8, startTime = "15:45", endTime = "16:30", courseTableId = defaultCourseTable.id),
-                                        TimeSlot(number = 9, startTime = "16:35", endTime = "17:20", courseTableId = defaultCourseTable.id),
-                                        TimeSlot(number = 10, startTime = "18:30", endTime = "19:15", courseTableId = defaultCourseTable.id),
-                                        TimeSlot(number = 11, startTime = "19:20", endTime = "20:05", courseTableId = defaultCourseTable.id),
-                                        TimeSlot(number = 12, startTime = "20:10", endTime = "20:55", courseTableId = defaultCourseTable.id),
-                                        TimeSlot(number = 13, startTime = "21:10", endTime = "21:55", courseTableId = defaultCourseTable.id)
+                                        TimeSlot(number = 1, startTime = "08:00", endTime = "08:45", courseTableId = tableId),
+                                        TimeSlot(number = 2, startTime = "08:50", endTime = "09:35", courseTableId = tableId),
+                                        TimeSlot(number = 3, startTime = "09:50", endTime = "10:35", courseTableId = tableId),
+                                        TimeSlot(number = 4, startTime = "10:40", endTime = "11:25", courseTableId = tableId),
+                                        TimeSlot(number = 5, startTime = "11:30", endTime = "12:15", courseTableId = tableId),
+                                        TimeSlot(number = 6, startTime = "14:00", endTime = "14:45", courseTableId = tableId),
+                                        TimeSlot(number = 7, startTime = "14:50", endTime = "15:35", courseTableId = tableId),
+                                        TimeSlot(number = 8, startTime = "15:45", endTime = "16:30", courseTableId = tableId),
+                                        TimeSlot(number = 9, startTime = "16:35", endTime = "17:20", courseTableId = tableId),
+                                        TimeSlot(number = 10, startTime = "18:30", endTime = "19:15", courseTableId = tableId),
+                                        TimeSlot(number = 11, startTime = "19:20", endTime = "20:05", courseTableId = tableId),
+                                        TimeSlot(number = 12, startTime = "20:10", endTime = "20:55", courseTableId = tableId),
+                                        TimeSlot(number = 13, startTime = "21:10", endTime = "21:55", courseTableId = tableId)
                                     )
                                     database.timeSlotDao().insertAll(defaultTimeSlots)
 

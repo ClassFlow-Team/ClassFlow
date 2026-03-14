@@ -73,7 +73,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.service.CourseAlarmReceiver
+import com.xingheyuzhuan.shiguangschedule.data.model.AutoControlMode
 import com.xingheyuzhuan.shiguangschedule.service.CourseNotificationWorker
 import com.xingheyuzhuan.shiguangschedule.service.DndSchedulerWorker
 
@@ -181,10 +181,10 @@ fun NotificationSettingsScreen(
     var showAutoModeSelectionDialog by remember { mutableStateOf(false) }
 
     // 模式选项
-    val modeOptions = mapOf(
+    val modeOptions: Map<Any, String> = mapOf(
         "OFF" to stringResource(R.string.auto_mode_off),
-        CourseAlarmReceiver.MODE_DND to stringResource(R.string.auto_mode_dnd),
-        CourseAlarmReceiver.MODE_SILENT to stringResource(R.string.auto_mode_silent)
+        AutoControlMode.DND to stringResource(R.string.auto_mode_dnd),
+        AutoControlMode.SILENT to stringResource(R.string.auto_mode_silent)
     )
 
     // 根据当前状态获取显示文本
@@ -301,7 +301,6 @@ fun NotificationSettingsScreen(
                             )
                         }
                         HorizontalDivider()
-
 
                         SettingItemRow(
                             title = stringResource(R.string.item_remind_time_before),
@@ -438,27 +437,30 @@ fun NotificationSettingsScreen(
             currentAutoControlMode = uiState.autoControlMode,
             hasDndPermission = uiState.dndPermissionStatus,
             onModeSelected = { selectedKey ->
-                val isEnabled = selectedKey != "OFF"
-                val controlMode = if (isEnabled) selectedKey else uiState.autoControlMode
-
-                if (isEnabled && !uiState.dndPermissionStatus) {
-                    showDndPermissionDialog = true
-                    return@AutoModeSelectionDialog
+                if (selectedKey == "OFF") {
+                    viewModel.onAutoModeStateChange(
+                        isEnabled = false,
+                        newControlMode = uiState.autoControlMode,
+                        triggerDndWorker = ::triggerDndSchedulerWorker,
+                        context = context
+                    )
+                } else if (selectedKey is AutoControlMode) {
+                    if (!uiState.dndPermissionStatus) {
+                        showDndPermissionDialog = true
+                        return@AutoModeSelectionDialog
+                    }
+                    viewModel.onAutoModeStateChange(
+                        isEnabled = true,
+                        newControlMode = selectedKey,
+                        triggerDndWorker = ::triggerDndSchedulerWorker,
+                        context = context
+                    )
                 }
-
-                viewModel.onAutoModeStateChange(
-                    isEnabled = isEnabled,
-                    newControlMode = controlMode,
-                    triggerDndWorker = ::triggerDndSchedulerWorker,
-                    context = context
-                )
-
                 showAutoModeSelectionDialog = false
             },
             onDismiss = { showAutoModeSelectionDialog = false }
         )
     }
-
 
     if (showEditRemindMinutesDialog) {
         EditRemindMinutesDialog(
@@ -549,19 +551,18 @@ fun NotificationSettingsScreen(
 }
 @Composable
 fun AutoModeSelectionDialog(
-    modeOptions: Map<String, String>,
+    modeOptions: Map<Any, String>,
     currentAutoModeEnabled: Boolean,
-    currentAutoControlMode: String,
+    currentAutoControlMode: AutoControlMode,
     hasDndPermission: Boolean,
-    onModeSelected: (String) -> Unit,
+    onModeSelected: (Any) -> Unit,
     onDismiss: () -> Unit
 ) {
     var selectedKey by remember {
-        mutableStateOf(if (currentAutoModeEnabled) currentAutoControlMode else "OFF")
+        mutableStateOf<Any>(if (currentAutoModeEnabled) currentAutoControlMode else "OFF")
     }
 
-    // 权限提示文本
-    val permissionText = if (!hasDndPermission) stringResource(R.string.auto_mode_dnd_permission_warning) else ""
+    val permissionText = if (!hasDndPermission) "\n" + stringResource(R.string.auto_mode_dnd_permission_warning) else ""
 
     AlertDialog(
         onDismissRequest = onDismiss,

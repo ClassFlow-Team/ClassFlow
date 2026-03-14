@@ -3,8 +3,10 @@ package com.xingheyuzhuan.shiguangschedule.ui.schedule
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xingheyuzhuan.shiguangschedule.R
+import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
+import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
 import com.xingheyuzhuan.shiguangschedule.data.model.ScheduleGridStyle
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseTableRepository
@@ -77,15 +79,21 @@ class WeeklyScheduleViewModel @Inject constructor(
     private val styleFlow = styleSettingsRepository.styleFlow
 
     private val courseTableConfigFlow = appSettingsFlow.flatMapLatest { settings ->
-        settings.currentCourseTableId?.let { tableId ->
+        val tableId = settings.currentCourseTableId
+        if (tableId.isNotEmpty()) {
             appSettingsRepository.getCourseTableConfigFlow(tableId)
-        } ?: flowOf(null)
+        } else {
+            flowOf(null)
+        }
     }
 
     private val timeSlotsFlow = appSettingsFlow.flatMapLatest { settings ->
-        settings.currentCourseTableId?.let { tableId ->
+        val tableId = settings.currentCourseTableId
+        if (tableId.isNotEmpty()) {
             timeSlotRepository.getTimeSlotsByCourseTableId(tableId)
-        } ?: flowOf(emptyList())
+        } else {
+            flowOf(emptyList())
+        }
     }
 
     /**
@@ -99,7 +107,7 @@ class WeeklyScheduleViewModel @Inject constructor(
         timeSlotsFlow
     ) { date, settings, config, slots ->
         val tableId = settings.currentCourseTableId
-        if (tableId != null && config != null) {
+        if (config != null) {
             // 定义窗口日期列表
             val window = listOf(date.minusWeeks(1), date, date.plusWeeks(1))
 
@@ -278,8 +286,8 @@ class WeeklyScheduleViewModel @Inject constructor(
 }
 
 private data class ScheduleConfigPackage(
-    val settings: com.xingheyuzhuan.shiguangschedule.data.db.main.AppSettings,
-    val config: com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig?,
+    val settings: AppSettingsModel,
+    val config: CourseTableConfig?,
     val style: ScheduleGridStyle,
     val mondayDate: LocalDate
 )

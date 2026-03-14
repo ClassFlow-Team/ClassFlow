@@ -2,8 +2,8 @@ package com.xingheyuzhuan.shiguangschedule.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.xingheyuzhuan.shiguangschedule.data.db.main.AppSettings
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
+import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -24,19 +24,19 @@ class SettingsViewModel @Inject constructor(
     private val appSettingsRepository: AppSettingsRepository
 ) : ViewModel() {
 
-    // 直接从 Repository 获取 AppSettings 的数据流，并暴露给 UI
-    val appSettingsState: StateFlow<AppSettings> = appSettingsRepository.getAppSettings()
+    // 直接从 Repository 获取 AppSettingsModel 的数据流，并暴露给 UI
+    val appSettingsState: StateFlow<AppSettingsModel> = appSettingsRepository.getAppSettings()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = AppSettings()
+            initialValue = AppSettingsModel()
         )
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val courseTableConfigState: StateFlow<CourseTableConfig?> = appSettingsState
         .flatMapLatest { appSettings ->
             val id = appSettings.currentCourseTableId
-            if (id != null) {
+            if (id.isNotEmpty()) {
                 appSettingsRepository.getCourseTableConfigFlow(id)
             } else {
                 flowOf(null)
@@ -70,7 +70,9 @@ class SettingsViewModel @Inject constructor(
      */
     fun onShowWeekendsChanged(show: Boolean) {
         viewModelScope.launch {
-            val currentId = appSettingsState.value.currentCourseTableId ?: return@launch
+            val currentId = appSettingsState.value.currentCourseTableId
+            if (currentId.isEmpty()) return@launch
+
             // 从 DB 获取最新快照以进行更新
             val currentConfig = appSettingsRepository.getCourseConfigOnce(currentId) ?: return@launch
 
@@ -86,7 +88,9 @@ class SettingsViewModel @Inject constructor(
     fun onSemesterStartDateSelected(selectedDateMillis: Long?) {
         viewModelScope.launch {
             if (selectedDateMillis != null) {
-                val currentId = appSettingsState.value.currentCourseTableId ?: return@launch
+                val currentId = appSettingsState.value.currentCourseTableId
+                if (currentId.isEmpty()) return@launch
+
                 // 从 DB 获取最新快照以进行更新
                 val currentConfig = appSettingsRepository.getCourseConfigOnce(currentId) ?: return@launch
 
@@ -108,7 +112,9 @@ class SettingsViewModel @Inject constructor(
      */
     fun onSemesterTotalWeeksSelected(totalWeeks: Int) {
         viewModelScope.launch {
-            val currentId = appSettingsState.value.currentCourseTableId ?: return@launch
+            val currentId = appSettingsState.value.currentCourseTableId
+            if (currentId.isEmpty()) return@launch
+
             val currentConfig = appSettingsRepository.getCourseConfigOnce(currentId) ?: return@launch
 
             val newConfig = currentConfig.copy(semesterTotalWeeks = totalWeeks)
@@ -135,7 +141,9 @@ class SettingsViewModel @Inject constructor(
      */
     fun onFirstDayOfWeekSelected(dayOfWeekInt: Int) {
         viewModelScope.launch {
-            val currentId = appSettingsState.value.currentCourseTableId ?: return@launch
+            val currentId = appSettingsState.value.currentCourseTableId
+            if (currentId.isEmpty()) return@launch
+
             // 从 DB 获取最新快照以进行更新
             val currentConfig = appSettingsRepository.getCourseConfigOnce(currentId) ?: return@launch
 
