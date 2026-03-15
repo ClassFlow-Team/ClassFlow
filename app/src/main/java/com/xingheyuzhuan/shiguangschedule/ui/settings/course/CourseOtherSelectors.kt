@@ -20,43 +20,87 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.model.DualColor
 import kotlinx.coroutines.launch
 
-@Composable
-fun WeekSelector(
-    selectedWeeks: Set<Int>,
-    onWeekClick: () -> Unit
-) {
-    val labelCourseWeeks = stringResource(R.string.label_course_weeks)
-    val buttonSelectWeeks = stringResource(R.string.button_select_weeks)
-    val textWeeksSelected = stringResource(R.string.text_weeks_selected)
 
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
+@Composable
+fun WeekSection(
+    selectedWeeks: Set<Int>,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val label = stringResource(R.string.label_course_weeks)
+    val noneSelected = stringResource(R.string.label_none)
+
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f),
+        shape = RoundedCornerShape(12.dp)
     ) {
-        Text(text = labelCourseWeeks, style = MaterialTheme.typography.titleMedium)
-        Spacer(modifier = Modifier.height(8.dp))
-        Button(
-            onClick = onWeekClick,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer
-            )
-        ) {
-            val weeksText = if (selectedWeeks.isEmpty()) {
-                buttonSelectWeeks
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(4.dp))
+            if (selectedWeeks.isEmpty()) {
+                Text(text = noneSelected, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
             } else {
-                String.format(textWeeksSelected, selectedWeeks.sorted().joinToString(", "))
+                Text(
+                    text = stringResource(R.string.text_weeks_selected, selectedWeeks.sorted().joinToString(", ")),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 16.sp
+                )
             }
-            Text(text = weeksText, color = MaterialTheme.colorScheme.onSecondaryContainer)
         }
     }
 }
+
+@Composable
+fun TimeSection(
+    dayName: String,
+    timeDesc: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(text = dayName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = timeDesc, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun ColorIndicatorSection(
+    colorIndex: Int,
+    colorMaps: List<DualColor>,
+    onClick: () -> Unit
+) {
+    val isDark = isSystemInDarkTheme()
+    val displayColor = colorMaps.getOrNull(colorIndex)?.let {
+        if (isDark) it.dark else it.light
+    } ?: MaterialTheme.colorScheme.outlineVariant
+
+    Box(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(16.dp)
+            .background(displayColor)
+            .clickable(onClick = onClick)
+    )
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -69,7 +113,6 @@ fun WeekSelectorBottomSheet(
     val coroutineScope = rememberCoroutineScope()
     val modalBottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var tempSelectedWeeks by remember { mutableStateOf(selectedWeeks) }
-
     val titleSelectWeeks = stringResource(R.string.title_select_weeks)
     val actionSelectAll = stringResource(R.string.action_select_all)
     val actionSingleWeek = stringResource(R.string.action_single_week)
@@ -93,6 +136,7 @@ fun WeekSelectorBottomSheet(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
+
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 48.dp),
                 modifier = Modifier
@@ -102,8 +146,8 @@ fun WeekSelectorBottomSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(totalWeeks) { week ->
-                    val weekNumber = week + 1
+                items(totalWeeks) { index ->
+                    val weekNumber = index + 1
                     val isSelected = tempSelectedWeeks.contains(weekNumber)
                     Box(
                         modifier = Modifier
@@ -131,6 +175,7 @@ fun WeekSelectorBottomSheet(
                     }
                 }
             }
+
             FlowRow(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -160,14 +205,12 @@ fun WeekSelectorBottomSheet(
                     label = { Text(actionDoubleWeek) }
                 )
             }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedButton(
-                    onClick = onDismissRequest,
-                    modifier = Modifier.weight(1f)
-                ) {
+                OutlinedButton(onClick = onDismissRequest, modifier = Modifier.weight(1f)) {
                     Text(actionCancel)
                 }
                 Button(
@@ -186,33 +229,6 @@ fun WeekSelectorBottomSheet(
     }
 }
 
-@Composable
-fun ColorPicker(
-    selectedColor: Color,
-    onColorClick: () -> Unit
-) {
-    val labelCourseColor = stringResource(R.string.label_course_color)
-    val buttonSelectColor = stringResource(R.string.button_select_color)
-
-    // 自动计算对比度高的文字颜色
-    val textColor = if (selectedColor.luminance() > 0.5f) Color.Black else Color.White
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(text = labelCourseColor, style = MaterialTheme.typography.titleMedium)
-        Spacer(modifier = Modifier.height(8.dp))
-        Button(
-            onClick = onColorClick,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = selectedColor)
-        ) {
-            Text(buttonSelectColor, color = textColor)
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ColorPickerBottomSheet(
@@ -223,20 +239,11 @@ fun ColorPickerBottomSheet(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val modalBottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var tempSelectedIndex by remember { mutableIntStateOf(selectedIndex) }
 
-    // 内部临时保存选中的索引，直到点击“确认”
-    var tempSelectedIndex by remember(selectedIndex) { mutableStateOf(selectedIndex) }
-
-    val titleSelectColor = stringResource(R.string.title_select_color)
+    val isDark = isSystemInDarkTheme()
     val actionCancel = stringResource(R.string.action_cancel)
     val actionConfirm = stringResource(R.string.action_confirm)
-
-    val isDarkTheme = isSystemInDarkTheme()
-
-    // 动态映射颜色列表，根据当前主题显示对应的 light 或 dark 颜色
-    val displayColors = remember(isDarkTheme, colorMaps) {
-        colorMaps.map { if (isDarkTheme) it.dark else it.light }
-    }
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -250,50 +257,42 @@ fun ColorPickerBottomSheet(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = titleSelectColor,
+                text = stringResource(R.string.title_select_color),
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(bottom = 24.dp)
             )
 
-            if (displayColors.isEmpty()) {
-                // 防御性处理：如果没有颜色数据时的占位
-                Text(text = "No colors available", modifier = Modifier.padding(32.dp))
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(6),
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    itemsIndexed(displayColors) { index, color ->
-                        val isSelected = tempSelectedIndex == index
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(6),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                itemsIndexed(colorMaps) { index, dualColor ->
+                    val color = if (isDark) dualColor.dark else dualColor.light
+                    val isSelected = tempSelectedIndex == index
 
-                        Box(
-                            modifier = Modifier
-                                .aspectRatio(1f) // 确保是正圆
-                                .clip(CircleShape)
-                                .clickable { tempSelectedIndex = index }
-                                .then(
-                                    if (isSelected) Modifier.border(
-                                        width = 3.dp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        shape = CircleShape
-                                    ) else Modifier
-                                )
-                                .padding(4.dp) // 描边和内部圆圈的间距
-                                .clip(CircleShape)
-                                .background(color),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (isSelected) {
-                                Icon(
-                                    imageVector = Icons.Default.Done,
-                                    contentDescription = null,
-                                    tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
+                    Box(
+                        modifier = Modifier
+                            .aspectRatio(1f)
+                            .clip(CircleShape)
+                            .clickable { tempSelectedIndex = index }
+                            .then(
+                                if (isSelected) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                else Modifier
+                            )
+                            .padding(4.dp)
+                            .clip(CircleShape)
+                            .background(color),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isSelected) {
+                            Icon(
+                                imageVector = Icons.Default.Done,
+                                contentDescription = null,
+                                tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
                 }
@@ -301,14 +300,8 @@ fun ColorPickerBottomSheet(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedButton(
-                    onClick = onDismissRequest,
-                    modifier = Modifier.weight(1f)
-                ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(onClick = onDismissRequest, modifier = Modifier.weight(1f)) {
                     Text(actionCancel)
                 }
                 Button(

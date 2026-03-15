@@ -15,20 +15,25 @@ import com.xingheyuzhuan.shiguangschedule.navigation.PresetCourseData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
+
+data class CourseScheme(
+    val id: String = UUID.randomUUID().toString(),
+    val dbId: String? = null,
+    val teacher: String = "",
+    val position: String = "",
+    val day: Int = 1,
+    val startSection: Int = 1,
+    val endSection: Int = 1,
+    val isCustomTime: Boolean = false,
+    val customStartTime: String = "08:00",
+    val customEndTime: String = "09:35",
+    val weeks: Set<Int> = emptySet(),
+    val colorIndex: Int = 0
+)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -48,40 +53,25 @@ class AddEditCourseViewModel @Inject constructor(
     private val _uiEvent = Channel<UiEvent>(Channel.BUFFERED)
     val uiEvent = _uiEvent.receiveAsFlow()
 
+    private var originalDbIds = setOf<String>()
+
     init {
         viewModelScope.launch {
-
             val initialPresetData: PresetCourseData? = if (courseId == null) {
-                try {
-                    AddEditCourseChannel.presetDataFlow.first()
-                } catch (e: Exception) {
-                    null
-                }
-            } else {
-                null
-            }
+                try { AddEditCourseChannel.presetDataFlow.first() } catch (e: Exception) { null }
+            } else { null }
 
             val appSettingsFlow = appSettingsRepository.getAppSettings()
             val styleFlow = styleSettingsRepository.styleFlow
 
-            @OptIn(ExperimentalCoroutinesApi::class)
             val timeSlotsFlow = appSettingsFlow.flatMapLatest { settings ->
-                val courseTableId = settings.currentCourseTableId
-                if (courseTableId != null) {
-                    timeSlotRepository.getTimeSlotsByCourseTableId(courseTableId)
-                } else {
-                    flowOf(emptyList())
-                }
+                val tid = settings.currentCourseTableId
+                timeSlotRepository.getTimeSlotsByCourseTableId(tid)
             }
 
-            @OptIn(ExperimentalCoroutinesApi::class)
             val courseConfigFlow = appSettingsFlow.flatMapLatest { settings ->
-                val courseTableId = settings.currentCourseTableId
-                if (courseTableId != null) {
-                    appSettingsRepository.getCourseTableConfigFlow(courseTableId)
-                } else {
-                    flowOf(null)
-                }
+                val tid = settings.currentCourseTableId
+                appSettingsRepository.getCourseTableConfigFlow(tid)
             }
 
             combine(
@@ -91,163 +81,215 @@ class AddEditCourseViewModel @Inject constructor(
                 styleFlow,
                 if (courseId != null) {
                     appSettingsFlow.flatMapLatest { settings ->
-                        courseTableRepository.getCoursesWithWeeksByTableId(settings.currentCourseTableId.orEmpty())
-                            .map { courses -> courses.find { it.course.id == courseId } }
+                        courseTableRepository.getCoursesWithWeeksByTableId(settings.currentCourseTableId)
+                            .flatMapLatest { all ->
+                                val current = all.find { it.course.id == courseId }
+                                if (current != null) {
+                                    flowOf(all.filter { it.course.name == current.course.name })
+                                } else {
+                                    flowOf(emptyList())
+                                }
+                            }
                     }
                 } else {
-                    flowOf(null)
+                    flowOf(emptyList())
                 }
-            ) { timeSlots, appSettings, courseConfig, currentStyle, courseWithWeeks ->
+            ) { timeSlots, appSettings, courseConfig, currentStyle, relatedCourseWithWeeks ->
                 _uiState.update { currentState ->
-
                     val totalWeeks = courseConfig?.semesterTotalWeeks ?: 20
                     val currentColorMaps = currentStyle.courseColorMaps
-                    val maxColorIndex = currentColorMaps.size - 1
 
-                    val (course: Course?, initialColorIndex: Int) = if (currentState.course != null) {
-                        Pair(currentState.course, currentState.colorIndex)
-                    } else if (courseId == null) {
-                        // 使用当前样式的随机逻辑
-                        val newColorIndex = currentStyle.generateRandomColorIndex()
-                        val newCourse = Course(
-                            id = UUID.randomUUID().toString(),
-                            courseTableId = appSettings.currentCourseTableId.orEmpty(),
-                            name = "", teacher = "", position = "",
-                            day = 1,
-                            startSection = 1,
-                            endSection = 1,
-                            isCustomTime = false,
-                            customStartTime = null,
-                            customEndTime = null,
-                            colorInt = newColorIndex
-                        )
-                        Pair(newCourse, newColorIndex)
-                    } else {
-                        val existingCourse = courseWithWeeks?.course
-                        val existingColorIndex = existingCourse?.colorInt
-
-                        // 校验索引是否在当前样式的有效范围内
-                        val validatedIndex = if (existingColorIndex != null && existingColorIndex >= 0 && existingColorIndex <= maxColorIndex) {
-                            existingColorIndex
+                    if (currentState.schemes.isEmpty() && !currentState.isDataLoaded) {
+                        // 仅在初次加载数据时进行排序，确保进入页面时列表是整齐的
+                        val schemes = if (courseId == null) {
+                            val newColor = currentStyle.generateRandomColorIndex()
+                            listOf(
+                                CourseScheme(
+                                    teacher = initialPresetData?.teacher.orEmpty(),
+                                    position = initialPresetData?.position.orEmpty(),
+                                    day = initialPresetData?.day ?: 1,
+                                    startSection = initialPresetData?.startSection ?: 1,
+                                    endSection = initialPresetData?.endSection ?: 1,
+                                    weeks = (1..totalWeeks).toSet(),
+                                    colorIndex = newColor
+                                )
+                            )
                         } else {
-                            currentStyle.generateRandomColorIndex()
+                            originalDbIds = relatedCourseWithWeeks.map { it.course.id }.toSet()
+                            relatedCourseWithWeeks.map { cw ->
+                                CourseScheme(
+                                    id = cw.course.id,
+                                    dbId = cw.course.id,
+                                    teacher = cw.course.teacher,
+                                    position = cw.course.position,
+                                    day = cw.course.day,
+                                    startSection = cw.course.startSection ?: 1,
+                                    endSection = cw.course.endSection ?: 1,
+                                    isCustomTime = cw.course.isCustomTime,
+                                    customStartTime = cw.course.customStartTime.orEmpty(),
+                                    customEndTime = cw.course.customEndTime.orEmpty(),
+                                    weeks = cw.weeks.map { it.weekNumber }.toSet(),
+                                    colorIndex = cw.course.colorInt.coerceIn(0, currentColorMaps.size - 1)
+                                )
+                            }.sortedWith(schemeComparator())
                         }
 
-                        Pair(existingCourse, validatedIndex)
-                    }
-
-                    val weeks = currentState.weeks.takeIf { it.isNotEmpty() } ?: if(courseId == null) {
-                        (1..totalWeeks).toSet()
+                        currentState.copy(
+                            isEditing = courseId != null,
+                            isDataLoaded = true,
+                            name = initialPresetData?.name ?: relatedCourseWithWeeks.firstOrNull()?.course?.name.orEmpty(),
+                            schemes = schemes,
+                            timeSlots = timeSlots,
+                            currentCourseTableId = appSettings.currentCourseTableId,
+                            semesterTotalWeeks = totalWeeks,
+                            courseColorMaps = currentColorMaps
+                        )
                     } else {
-                        courseWithWeeks?.weeks?.map { it.weekNumber }?.toSet() ?: emptySet()
+                        currentState.copy(
+                            timeSlots = timeSlots,
+                            semesterTotalWeeks = totalWeeks,
+                            courseColorMaps = currentColorMaps
+                        )
                     }
-
-                    val finalDay = initialPresetData?.day ?: course?.day ?: 1
-                    val finalStartSection = initialPresetData?.startSection ?: course?.startSection ?: 1
-                    val finalEndSection = initialPresetData?.endSection ?: course?.endSection ?: 1
-
-                    currentState.copy(
-                        isEditing = courseId != null,
-                        course = course,
-                        name = initialPresetData?.name ?: course?.name.orEmpty(),
-                        teacher = initialPresetData?.teacher ?: course?.teacher.orEmpty(),
-                        position = initialPresetData?.position ?: course?.position.orEmpty(),
-                        day = finalDay,
-                        startSection = finalStartSection,
-                        endSection = finalEndSection,
-                        isCustomTime = course?.isCustomTime ?: false,
-                        customStartTime = course?.customStartTime.orEmpty(),
-                        customEndTime = course?.customEndTime.orEmpty(),
-                        colorIndex = initialColorIndex,
-                        weeks = weeks,
-                        timeSlots = timeSlots,
-                        currentCourseTableId = appSettings.currentCourseTableId,
-                        semesterTotalWeeks = totalWeeks,
-                        courseColorMaps = currentColorMaps
-                    )
                 }
             }.collect()
         }
     }
 
     fun onNameChange(name: String) { _uiState.update { it.copy(name = name) } }
-    fun onTeacherChange(teacher: String) { _uiState.update { it.copy(teacher = teacher) } }
-    fun onPositionChange(position: String) { _uiState.update { it.copy(position = position) } }
-    fun onDayChange(day: Int) { _uiState.update { it.copy(day = day) } }
-    fun onStartSectionChange(startSection: Int) { _uiState.update { it.copy(startSection = startSection) } }
-    fun onEndSectionChange(endSection: Int) { _uiState.update { it.copy(endSection = endSection) } }
-    fun onWeeksChange(newWeeks: Set<Int>) { _uiState.update { it.copy(weeks = newWeeks) } }
-    fun onColorChange(colorIndex: Int) { _uiState.update { it.copy(colorIndex = colorIndex) } }
-    fun onIsCustomTimeChange(isCustom: Boolean) { _uiState.update { it.copy(isCustomTime = isCustom) } }
 
-    fun onCustomTimeChange(startTime: String, endTime: String) {
-        _uiState.update {
-            it.copy(
-                customStartTime = startTime,
-                customEndTime = endTime
+    /**
+     * 直接追加到末尾，不触发自动重排，方便用户立即编辑
+     */
+    fun addScheme() {
+        _uiState.update { state ->
+            val lastScheme = state.schemes.lastOrNull()
+            val newScheme = CourseScheme(
+                teacher = lastScheme?.teacher.orEmpty(),
+                position = lastScheme?.position.orEmpty(),
+                colorIndex = lastScheme?.colorIndex ?: 0,
+                weeks = (1..state.semesterTotalWeeks).toSet()
             )
+            state.copy(schemes = state.schemes + newScheme)
+        }
+    }
+
+    fun removeScheme(schemeId: String) {
+        _uiState.update { state ->
+            if (state.schemes.size <= 1) return@update state
+            state.copy(schemes = state.schemes.filter { it.id != schemeId })
+        }
+    }
+
+    fun updateScheme(schemeId: String, transform: (CourseScheme) -> CourseScheme) {
+        _uiState.update { state ->
+            state.copy(schemes = state.schemes.map {
+                if (it.id == schemeId) transform(it) else it
+            })
+        }
+    }
+
+    /**
+     * 切换自定义时间
+     */
+    fun toggleCustomTime(schemeId: String, isCustom: Boolean) {
+        updateScheme(schemeId) { scheme ->
+            scheme.copy(
+                isCustomTime = isCustom,
+                customStartTime = if (isCustom && scheme.customStartTime.isBlank()) "08:00" else scheme.customStartTime,
+                customEndTime = if (isCustom && scheme.customEndTime.isBlank()) "09:35" else scheme.customEndTime
+            )
+        }
+    }
+
+    /**
+     * 主动排序
+     */
+    fun requestSort() {
+        _uiState.update { state ->
+            state.copy(schemes = state.schemes.sortedWith(schemeComparator()))
         }
     }
 
     fun onSave() {
         viewModelScope.launch {
             val state = uiState.value
-            val courseToSave = state.course?.copy(
-                name = state.name,
-                teacher = state.teacher,
-                position = state.position,
-                day = state.day,
-                startSection = state.startSection.takeUnless { state.isCustomTime },
-                endSection = state.endSection.takeUnless { state.isCustomTime },
-                isCustomTime = state.isCustomTime,
-                customStartTime = state.customStartTime.takeIf { state.isCustomTime && it.isNotEmpty() },
-                customEndTime = state.customEndTime.takeIf { state.isCustomTime && it.isNotEmpty() },
-                colorInt = state.colorIndex,
-                courseTableId = state.currentCourseTableId.orEmpty()
-            )
-            if (courseToSave != null) {
-                courseTableRepository.upsertCourse(courseToSave, state.weeks.toList())
-                _uiEvent.send(UiEvent.SaveSuccess)
+            if (state.name.isBlank()) return@launch
+
+            val tableId = state.currentCourseTableId.orEmpty()
+            val currentSchemeDbIds = state.schemes.mapNotNull { it.dbId }.toSet()
+
+            (originalDbIds - currentSchemeDbIds).forEach { idToRemove ->
+                courseTableRepository.deleteCourse(createEmptyCourseForDelete(idToRemove, tableId))
             }
+
+            state.schemes.forEach { scheme ->
+                val course = Course(
+                    id = scheme.dbId ?: UUID.randomUUID().toString(),
+                    courseTableId = tableId,
+                    name = state.name,
+                    teacher = scheme.teacher,
+                    position = scheme.position,
+                    day = scheme.day,
+                    startSection = if (scheme.isCustomTime) null else scheme.startSection,
+                    endSection = if (scheme.isCustomTime) null else scheme.endSection,
+                    isCustomTime = scheme.isCustomTime,
+                    customStartTime = if (scheme.isCustomTime) scheme.customStartTime else null,
+                    customEndTime = if (scheme.isCustomTime) scheme.customEndTime else null,
+                    colorInt = scheme.colorIndex
+                )
+                courseTableRepository.upsertCourse(course, scheme.weeks.toList())
+            }
+            _uiEvent.send(UiEvent.SaveSuccess)
         }
     }
 
     fun onDelete() {
         viewModelScope.launch {
-            uiState.value.course?.let { course ->
-                courseTableRepository.deleteCourse(course)
-                _uiEvent.send(UiEvent.DeleteSuccess)
+            val tableId = uiState.value.currentCourseTableId.orEmpty()
+            originalDbIds.forEach { id ->
+                courseTableRepository.deleteCourse(createEmptyCourseForDelete(id, tableId))
             }
+            _uiEvent.send(UiEvent.DeleteSuccess)
         }
     }
 
     fun onCancel() {
-        viewModelScope.launch {
-            _uiEvent.send(UiEvent.Cancel)
-        }
+        viewModelScope.launch { _uiEvent.send(UiEvent.Cancel) }
     }
+
+    private fun createEmptyCourseForDelete(id: String, tableId: String) = Course(
+        id = id,
+        courseTableId = tableId,
+        name = "",
+        teacher = "",
+        position = "",
+        day = 1,
+        startSection = null,
+        endSection = null,
+        isCustomTime = false,
+        customStartTime = null,
+        customEndTime = null,
+        colorInt = 0
+    )
+
+    private fun schemeComparator() = compareBy<CourseScheme>(
+        { it.day },
+        { if (it.isCustomTime) it.customStartTime else it.startSection.toString().padStart(2, '0') }
+    )
 }
 
 sealed interface UiEvent {
-    object SaveSuccess : UiEvent
-    object DeleteSuccess : UiEvent
-    object Cancel : UiEvent
+    data object SaveSuccess : UiEvent
+    data object DeleteSuccess : UiEvent
+    data object Cancel : UiEvent
 }
 
 data class AddEditCourseUiState(
     val isEditing: Boolean = false,
-    val course: Course? = null,
+    val isDataLoaded: Boolean = false,
     val name: String = "",
-    val teacher: String = "",
-    val position: String = "",
-    val day: Int = 1,
-    val startSection: Int = 1,
-    val endSection: Int = 2,
-    val isCustomTime: Boolean = false,
-    val customStartTime: String = "",
-    val customEndTime: String = "",
-    val colorIndex: Int = 0,
-    val weeks: Set<Int> = emptySet(),
+    val schemes: List<CourseScheme> = emptyList(),
     val timeSlots: List<TimeSlot> = emptyList(),
     val currentCourseTableId: String? = null,
     val semesterTotalWeeks: Int = 20,
