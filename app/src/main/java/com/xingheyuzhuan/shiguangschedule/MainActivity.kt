@@ -5,8 +5,10 @@ import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -53,71 +55,110 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
+
+    // Define slide transitions
+    val slideIn = { scope: AnimatedContentTransitionScope<*> ->
+        scope.slideIntoContainer(
+            towards = AnimatedContentTransitionScope.SlideDirection.Left,
+            animationSpec = tween(300)
+        )
+    }
+    
+    val slideOut = { scope: AnimatedContentTransitionScope<*> ->
+        scope.slideOutOfContainer(
+            towards = AnimatedContentTransitionScope.SlideDirection.Left,
+            animationSpec = tween(300)
+        )
+    }
+    
+    val popSlideIn = { scope: AnimatedContentTransitionScope<*> ->
+        scope.slideIntoContainer(
+            towards = AnimatedContentTransitionScope.SlideDirection.Right,
+            animationSpec = tween(300)
+        )
+    }
+    
+    val popSlideOut = { scope: AnimatedContentTransitionScope<*> ->
+        scope.slideOutOfContainer(
+            towards = AnimatedContentTransitionScope.SlideDirection.Right,
+            animationSpec = tween(300)
+        )
+    }
+
+    // Identify main screens that shouldn't have animations between each other
+    val mainScreens = listOf(
+        Screen.CourseSchedule.route,
+        Screen.Settings.route,
+        Screen.TodaySchedule.route
+    )
 
     NavHost(
         navController = navController,
         startDestination = Screen.CourseSchedule.route,
         modifier = Modifier.fillMaxSize()
     ){
-        // 这些顶级页面的转场是瞬间完成的
+        // 主界面之间不需要动画
         composable(
             Screen.CourseSchedule.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { if (initialState.destination.route in mainScreens) EnterTransition.None else slideIn(this) },
+            exitTransition = { if (targetState.destination.route in mainScreens) ExitTransition.None else slideOut(this) },
+            popEnterTransition = { if (initialState.destination.route in mainScreens) EnterTransition.None else popSlideIn(this) },
+            popExitTransition = { if (targetState.destination.route in mainScreens) ExitTransition.None else popSlideOut(this) }
         ) {
             WeeklyScheduleScreen(navController = navController)
         }
+        
         composable(
             Screen.Settings.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { if (initialState.destination.route in mainScreens) EnterTransition.None else slideIn(this) },
+            exitTransition = { if (targetState.destination.route in mainScreens) ExitTransition.None else slideOut(this) },
+            popEnterTransition = { if (initialState.destination.route in mainScreens) EnterTransition.None else popSlideIn(this) },
+            popExitTransition = { if (targetState.destination.route in mainScreens) ExitTransition.None else popSlideOut(this) }
         ) {
             SettingsScreen(navController = navController)
         }
+        
         composable(
             Screen.TodaySchedule.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { if (initialState.destination.route in mainScreens) EnterTransition.None else slideIn(this) },
+            exitTransition = { if (targetState.destination.route in mainScreens) ExitTransition.None else slideOut(this) },
+            popEnterTransition = { if (initialState.destination.route in mainScreens) EnterTransition.None else popSlideIn(this) },
+            popExitTransition = { if (targetState.destination.route in mainScreens) ExitTransition.None else popSlideOut(this) }
         ) {
             TodayScheduleScreen(navController = navController)
         }
 
-        // 所有子页面的转场也都是瞬间完成的
+        // 其他所有子页面加上平移动画
         composable(
             Screen.TimeSlotSettings.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) {
             TimeSlotManagementScreen(onBackClick = { navController.popBackStack() })
         }
+        
         composable(
             Screen.ManageCourseTables.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) {
             ManageCourseTablesScreen(navController = navController)
         }
+        
         // 学校选择
         composable(
             Screen.SchoolSelectionListScreen.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) {
             SchoolSelectionListScreen(navController = navController)
         }
@@ -130,10 +171,10 @@ fun AppNavigation() {
                 navArgument("categoryNumber") { type = NavType.IntType },
                 navArgument("resourceFolder") { type = NavType.StringType }
             ),
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) { backStackEntry ->
             val schoolId = backStackEntry.arguments?.getString("schoolId") ?: ""
             val schoolName = backStackEntry.arguments?.getString("schoolName") ?: "未知学校"
@@ -148,16 +189,17 @@ fun AppNavigation() {
                 resourceFolder = resourceFolder
             )
         }
+        
         composable(
             route = Screen.WebView.route,
             arguments = listOf(
                 navArgument("initialUrl") { type = NavType.StringType },
                 navArgument("assetJsPath") { type = NavType.StringType }
             ),
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) { backStackEntry ->
             val initialUrl = backStackEntry.arguments?.getString("initialUrl")
             val assetJsPath = backStackEntry.arguments?.getString("assetJsPath")
@@ -169,15 +211,17 @@ fun AppNavigation() {
                 courseScheduleRoute = Screen.CourseSchedule.route,
             )
         }
+        
         composable(
             Screen.NotificationSettings.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) {
             NotificationSettingsScreen(onNavigateBack = { navController.popBackStack() })
         }
+        
         composable(
             route = Screen.AddEditCourse.route,
             arguments = listOf(
@@ -186,83 +230,91 @@ fun AppNavigation() {
                     nullable = true
                 }
             ),
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) {
             AddEditCourseScreen(onNavigateBack = { navController.popBackStack() })
         }
+        
         composable(
             Screen.CourseTableConversion.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) {
             CourseTableConversionScreen(navController = navController)
         }
+        
         composable(
             Screen.MoreOptions.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) {
             MoreOptionsScreen(navController = navController)
         }
+        
         composable(
             Screen.OpenSourceLicenses.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) {
             OpenSourceLicensesScreen (navController = navController)
         }
+        
         composable(
             Screen.UpdateRepo.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) {
             UpdateRepoScreen(navController = navController)
         }
+        
         composable(
             Screen.QuickActions.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) {
             QuickActionsScreen(navController = navController)
         }
+        
         composable(
             Screen.TweakSchedule.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) {
             TweakScheduleScreen(navController = navController)
         }
+        
         composable(
             Screen.ContributionList.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) {
             ContributionScreen(navController = navController)
         }
+        
         // 课程管理 - 一级页面：课程名称列表
         composable(
             Screen.CourseManagementList.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) {
             // CourseNameListScreen 负责显示不重复的课程名称
             CourseNameListScreen(navController = navController)
@@ -274,10 +326,10 @@ fun AppNavigation() {
             arguments = listOf(
                 navArgument(COURSE_NAME_ARG) { type = NavType.StringType }
             ),
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) { backStackEntry ->
             val courseName = Uri.decode(backStackEntry.arguments?.getString(COURSE_NAME_ARG) ?: "")
             CourseInstanceListScreen(
@@ -286,23 +338,25 @@ fun AppNavigation() {
                 navController = navController
             )
         }
+        
         // 外观定制页面
         composable(
             Screen.StyleSettings.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) {
             StyleSettingsScreen(navController = navController)
         }
+        
         // 快速删除课程页面
         composable(
             Screen.QuickDelete.route,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            enterTransition = { slideIn(this) },
+            exitTransition = { slideOut(this) },
+            popEnterTransition = { popSlideIn(this) },
+            popExitTransition = { popSlideOut(this) }
         ) {
             QuickDeleteScreen(navController = navController)
         }
