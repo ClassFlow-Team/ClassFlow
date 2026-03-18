@@ -35,9 +35,15 @@ class CourseAlarmReceiver : BroadcastReceiver() {
         const val EXTRA_COURSE_POSITION = "course_position"
         const val EXTRA_COURSE_TEACHER = "extra_course_teacher"
         const val EXTRA_COURSE_ID = "course_id"
+
         const val EXTRA_DND_ACTION = "extra_dnd_action"
         const val DND_ACTION_START = "dnd_action_start"
         const val DND_ACTION_END = "dnd_action_end"
+
+        const val EXTRA_ALARM_SLOT_ID = "EXTRA_ALARM_SLOT_ID"
+        // 覆盖 50001 (DND) 到 50110 (Course Reminders)
+        private const val SLOT_START = 50001
+        private const val SLOT_END = 50110
 
         const val ACTION_DISMISS_NOTIFICATION = "com.xingheyuzhuan.shiguangschedule.ACTION_DISMISS_NOTIFICATION"
 
@@ -76,12 +82,19 @@ class CourseAlarmReceiver : BroadcastReceiver() {
                 return
             }
 
+            val slotId = intent?.getIntExtra(EXTRA_ALARM_SLOT_ID, -1) ?: -1
+            val dndAction = intent?.getStringExtra(EXTRA_DND_ACTION)
+
+            if (intent?.data != null || (slotId !in SLOT_START..SLOT_END && dndAction.isNullOrEmpty())) {
+                Log.d(TAG, "已拦截非法或旧版闹钟。")
+                return
+            }
+
             val pendingResult = goAsync()
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val appSettings = appSettingsRepository.getAppSettingsOnce() ?: return@launch
                     val modeToUse = appSettings.autoControlMode
-                    val dndAction = intent?.getStringExtra(EXTRA_DND_ACTION)
 
                     if (!dndAction.isNullOrEmpty()) {
                         when (dndAction) {
@@ -101,8 +114,7 @@ class CourseAlarmReceiver : BroadcastReceiver() {
                         val courseIdString = intent?.getStringExtra(EXTRA_COURSE_ID)
 
                         if (!courseIdString.isNullOrEmpty()) {
-                            val notificationId = courseIdString.hashCode() and 0x7fffffff
-                            showNotification(ctx, notificationId, courseName, position, teacher)
+                            showNotification(ctx, slotId, courseName, position, teacher)
                             removeAlarmIdFromPrefs(ctx, courseIdString)
                             updateAllWidgets(ctx)
                         }
@@ -143,6 +155,9 @@ class CourseAlarmReceiver : BroadcastReceiver() {
         val dismissIntent = Intent(context, CourseAlarmReceiver::class.java).apply {
             action = ACTION_DISMISS_NOTIFICATION
             putExtra("target_notification_id", notificationId)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                identifier = notificationId.toString()
+            }
         }
         val dismissPI = PendingIntent.getBroadcast(
             context, notificationId, dismissIntent,

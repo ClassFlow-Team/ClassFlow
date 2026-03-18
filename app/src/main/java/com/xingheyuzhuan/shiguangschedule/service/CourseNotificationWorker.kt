@@ -4,7 +4,6 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.work.CoroutineWorker
@@ -17,12 +16,14 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import kotlin.math.abs
-import androidx.core.content.edit
 import androidx.hilt.work.HiltWorker
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
+/**
+ * 课程提醒同步服务：采用固定槽位管理，确保切换课表时闹钟同步清理
+ * 号段与 DndSchedulerWorker 物理隔离，起始位 50010
+ */
 @HiltWorker
 class CourseNotificationWorker @AssistedInject constructor(
     @Assisted appContext: Context,
@@ -34,48 +35,43 @@ class CourseNotificationWorker @AssistedInject constructor(
     private val alarmManager = appContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
     companion object {
-        private const val WIDGET_SYNC_DAYS = 7L
         private const val TAG = "CourseNotificationWorker"
-        private const val ALARM_IDS_PREFS = "alarm_ids_prefs"
-        private const val KEY_ACTIVE_ALARM_IDS = "active_alarm_ids"
+        private const val WIDGET_SYNC_DAYS = 7L
+
+        private const val ALARM_SLOT_START_ID = 50010
+        private const val ALARM_SLOT_COUNT = 101
     }
 
     override suspend fun doWork(): Result {
-        Log.i(TAG, "Worker 开始同步课程闹钟...")
         return try {
             val appSettings = appSettingsRepository.getAppSettings().first()
 
-            if (!appSettings.reminderEnabled) {
-                Log.i(TAG, "提醒功能关闭，清空所有闹钟。")
-                cancelAllAlarms()
-                return Result.success()
-            }
-
-            val remindBeforeMinutes = appSettings.remindBeforeMinutes
-            val today = LocalDate.now()
-            val startDate = today.format(DateTimeFormatter.ISO_LOCAL_DATE)
-            val endDate = today.plusDays(WIDGET_SYNC_DAYS).format(DateTimeFormatter.ISO_LOCAL_DATE)
-
-            val coursesToRemind = widgetRepository.getWidgetCoursesByDateRange(startDate, endDate).first()
-
-            // 1. 设置前先清理旧闹钟
+            // 论开关状态，先清空 50010 - 50110 范围内的所有旧闹钟槽位
             cancelAllAlarms()
 
-            val zoneId = ZoneId.systemDefault()
+            // 如果开关没开，清理完直接结束
+            if (!appSettings.reminderEnabled) return Result.success()
+
+            val remindBeforeMinutes = appSettings.remindBeforeMinutes
             val now = LocalDateTime.now()
+            val startDate = now.toLocalDate().format(DateTimeFormatter.ISO_LOCAL_DATE)
+            val endDate = now.toLocalDate().plusDays(WIDGET_SYNC_DAYS).format(DateTimeFormatter.ISO_LOCAL_DATE)
 
-            for (course in coursesToRemind) {
-                if (course.isSkipped) continue
+            // 获取未来课程
+            val coursesToRemind = widgetRepository.getWidgetCoursesByDateRange(startDate, endDate).first()
+                .filter { !it.isSkipped }
 
+            val zoneId = ZoneId.systemDefault()
+
+            // 按顺序为未来课程分配槽位并设置闹钟
+            coursesToRemind.take(ALARM_SLOT_COUNT).forEachIndexed { index, course ->
                 val courseDate = LocalDate.parse(course.date)
                 val startDT = LocalDateTime.of(courseDate, LocalTime.parse(course.startTime))
-
-                // 计算触发时间点
                 val remindTime = startDT.minusMinutes(remindBeforeMinutes.toLong())
 
-                // 2. 只为未来的提醒点设置闹钟
                 if (remindTime.isAfter(now)) {
                     setAlarmInternal(
+                        requestCode = ALARM_SLOT_START_ID + index,
                         courseId = course.id,
                         triggerTime = remindTime.atZone(zoneId).toInstant().toEpochMilli(),
                         name = course.name,
@@ -87,35 +83,32 @@ class CourseNotificationWorker @AssistedInject constructor(
 
             Result.success()
         } catch (e: Exception) {
-            Log.e(TAG, "闹钟同步失败", e)
+            Log.e(TAG, "同步课程提醒失败", e)
             Result.failure()
         }
     }
 
     private fun setAlarmInternal(
+        requestCode: Int,
         courseId: String,
         triggerTime: Long,
         name: String,
         position: String,
         teacher: String
     ) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (!alarmManager.canScheduleExactAlarms()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+            Log.w(TAG, "缺少精确闹钟权限，无法设置提醒")
+            return
         }
 
         val intent = Intent(applicationContext, CourseAlarmReceiver::class.java).apply {
-            action = "com.xingheyuzhuan.shiguangschedule.ACTION_COURSE_REMIND"
-
+            this.action = "com.xingheyuzhuan.shiguangschedule.ACTION_COURSE_REMIND"
+            putExtra(CourseAlarmReceiver.EXTRA_ALARM_SLOT_ID, requestCode)
             putExtra(CourseAlarmReceiver.EXTRA_COURSE_ID, courseId)
             putExtra(CourseAlarmReceiver.EXTRA_COURSE_NAME, name)
             putExtra(CourseAlarmReceiver.EXTRA_COURSE_POSITION, position)
             putExtra(CourseAlarmReceiver.EXTRA_COURSE_TEACHER, teacher)
-
-            // 关键：data 唯一确保闹钟不被覆盖
-            data = Uri.parse("course_remind://$courseId")
         }
-
-        val requestCode = abs(courseId.hashCode())
 
         val pendingIntent = PendingIntent.getBroadcast(
             applicationContext,
@@ -125,34 +118,30 @@ class CourseNotificationWorker @AssistedInject constructor(
         )
 
         alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-
-        val sp = applicationContext.getSharedPreferences(ALARM_IDS_PREFS, Context.MODE_PRIVATE)
-        val currentIds = sp.getStringSet(KEY_ACTIVE_ALARM_IDS, null)?.toMutableSet() ?: mutableSetOf()
-        currentIds.add(courseId)
-        sp.edit { putStringSet(KEY_ACTIVE_ALARM_IDS, currentIds) }
     }
 
+    /**
+     * 清理 50010 - 50110 范围内的所有槽位，确保无残留
+     */
     private fun cancelAllAlarms() {
-        val sp = applicationContext.getSharedPreferences(ALARM_IDS_PREFS, Context.MODE_PRIVATE)
-        val activeIds = sp.getStringSet(KEY_ACTIVE_ALARM_IDS, null)
-
-        activeIds?.forEach { courseId ->
+        for (i in 0 until ALARM_SLOT_COUNT) {
+            val requestCode = ALARM_SLOT_START_ID + i
             val intent = Intent(applicationContext, CourseAlarmReceiver::class.java).apply {
-                data = Uri.parse("course_remind://$courseId")
+                this.action = "com.xingheyuzhuan.shiguangschedule.ACTION_COURSE_REMIND"
             }
-            val requestCode = abs(courseId.hashCode())
+
             val pendingIntent = PendingIntent.getBroadcast(
                 applicationContext,
                 requestCode,
                 intent,
                 PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
             )
+
             pendingIntent?.let {
                 alarmManager.cancel(it)
                 it.cancel()
             }
         }
-        sp.edit { remove(KEY_ACTIVE_ALARM_IDS) }
-        Log.i(TAG, "所有旧闹钟已清理。")
+        Log.d(TAG, "已清理课程提醒所有历史槽位 (50010-50110)")
     }
 }

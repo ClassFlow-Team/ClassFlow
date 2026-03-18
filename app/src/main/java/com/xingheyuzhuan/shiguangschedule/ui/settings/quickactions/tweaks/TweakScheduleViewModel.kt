@@ -74,11 +74,7 @@ class TweakScheduleViewModel @Inject constructor(
         val allTables = courseTableRepository.getAllCourseTables().first()
 
         val selectedTable = if (isInitialLoad) {
-            val defaultSelectedTable = if (settings.currentCourseTableId != null) {
-                allTables.find { it.id == settings.currentCourseTableId }
-            } else {
-                allTables.firstOrNull()
-            }
+            val defaultSelectedTable = allTables.find { it.id == settings.currentCourseTableId }
             _selectedCourseTableByUser.value = defaultSelectedTable
             defaultSelectedTable
         } else {
