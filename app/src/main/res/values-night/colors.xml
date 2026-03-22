@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="loading_text_color">#FFFFFFFF</color>
-    <color name="widget_bg">#1C1C1E</color> # 深色背景：使用深灰色，避免纯黑拖影
+    <color name="widget_bg">#141218</color> # 深色背景：使用深灰色，避免纯黑拖影
     <color name="widget_text_primary">#F2F2F7</color> # 主文字：在深色背景下改为接近纯白的亮灰色
     <color name="widget_text_secondary">#AEA9AF</color> # 次要文字：中灰色，保持视觉层级
     <color name="widget_text_hint">#8E8E93</color> # 提示文字：深灰色，起到弱化作用

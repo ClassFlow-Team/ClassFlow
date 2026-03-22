@@ -25,7 +25,6 @@ class CompactNativeProvider : AppWidgetProvider() {
         super.onEnabled(context)
         // 启动定时任务（15分钟 UI 刷新 + 24小时数据同步）
         WorkManagerHelper.schedulePeriodicWork(context)
-        scope.launch { updateAllWidgets(context) }
     }
 
     override fun onDisabled(context: Context) {

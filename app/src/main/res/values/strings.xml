@@ -112,9 +112,8 @@
     <!-- 小组件相关 -->
     <string name="widget_name_tiny">超小课程2x1</string>
     <string name="widget_name_compact">紧凑课程2x2</string>
-    <string name="widget_name_moderate">今日课程4x2</string>
     <string name="widget_name_double_days">近日课程4x2</string>
-    <string name="widget_name_large">今日课程4x3</string>
+    <string name="widget_name_list_vertical">垂直列表课表4xN</string>
     <string name="widget_tomorrow_course_preview">明日预告</string>
     <string name="widget_no_courses_tomorrow">明天没有课程</string>
     <string name="widget_today_courses_finished">今日课程已结束</string>

@@ -24,10 +24,6 @@ class DoubleDaysNativeProvider : AppWidgetProvider() {
         // 启用更新计划任务表
         WorkManagerHelper.schedulePeriodicWork(context)
 
-        // 初始化
-        scope.launch {
-            updateAllWidgets(context)
-        }
     }
 
     // 移除最后一个小组件时清除任务表
