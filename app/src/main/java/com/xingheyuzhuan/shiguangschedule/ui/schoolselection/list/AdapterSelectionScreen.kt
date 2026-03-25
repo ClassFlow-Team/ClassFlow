@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.xingheyuzhuan.shiguangschedule.R
+import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import school_index.Adapter
 import school_index.AdapterCategory
 
@@ -159,7 +160,7 @@ fun AdapterSelectionScreen(
                                         "$resourceFolder/${selectedAdapter.adapterId}.js"
                                     }
                                     // 导航到 WebView，传递 URL 和正确构建的 JS 路径
-                                    navController.navigate(
+                                    navController.navigateSafe(
                                         WebViewNavigationHelper.createRoute(
                                             initialUrl = initialUrl,
                                             assetJsPath = assetJsPath

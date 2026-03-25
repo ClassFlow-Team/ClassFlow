@@ -47,6 +47,7 @@ import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Screen
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.model.DualColor
+import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import com.xingheyuzhuan.shiguangschedule.navigation.AddEditCourseChannel
 import com.xingheyuzhuan.shiguangschedule.navigation.PresetCourseData
 import kotlinx.coroutines.launch
@@ -87,7 +88,7 @@ fun CourseInstanceListScreen(
 
             // 3. 执行导航到新增课程页面
             val route = Screen.AddEditCourse.createRouteForNewCourse()
-            navController.navigate(route)
+            navController.navigateSafe(route)
         }
     }
 
@@ -96,7 +97,7 @@ fun CourseInstanceListScreen(
      */
     val onNavigateToEditCourse: (courseId: String) -> Unit = { courseId ->
         val route = Screen.AddEditCourse.createRouteWithCourseId(courseId)
-        navController.navigate(route)
+        navController.navigateSafe(route)
     }
 
     Scaffold(

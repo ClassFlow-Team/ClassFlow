@@ -49,6 +49,9 @@ import com.xingheyuzhuan.shiguangschedule.ui.settings.update.UpdateRepoScreen
 import com.xingheyuzhuan.shiguangschedule.ui.theme.ShiguangScheduleTheme
 import com.xingheyuzhuan.shiguangschedule.ui.today.TodayScheduleScreen
 import dagger.hilt.android.AndroidEntryPoint
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.navigation.NavController
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
@@ -68,35 +71,42 @@ fun AppNavigation() {
     val navController = rememberNavController()
 
     val emphasizedEasing = CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f)
-    val animSpec = tween<IntOffset>(durationMillis = 500, easing = emphasizedEasing)
-    val fadeSpec = tween<Float>(durationMillis = 500, easing = emphasizedEasing)
+    val animSpec = tween<IntOffset>(durationMillis = 300, easing = emphasizedEasing)
+    val fadeSpec = tween<Float>(durationMillis = 300, easing = emphasizedEasing)
 
-    // 进入新页面：从左侧滑入 + 放大（从 0.96f 到 1.0f）
+    // 进入新页面：从右侧 50% 位置滑入
     val slideInLeft = { scope: AnimatedContentTransitionScope<*> ->
-        scope.slideIntoContainer(towards = AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = animSpec) +
-                fadeIn(animationSpec = fadeSpec) +
-                androidx.compose.animation.scaleIn(initialScale = 0.96f, animationSpec = fadeSpec)
+        scope.slideIntoContainer(
+            towards = AnimatedContentTransitionScope.SlideDirection.Left,
+            animationSpec = animSpec,
+            initialOffset = { it / 2 }
+        ) + fadeIn(animationSpec = fadeSpec) + scaleIn(initialScale = 0.98f, animationSpec = fadeSpec)
     }
 
-    // 退出当前页面：向左侧滑出 + 缩小（从 1.0f 到 0.96f）
+    // 退出当前页面：向左侧滑出 50% 距离
     val slideOutLeft = { scope: AnimatedContentTransitionScope<*> ->
-        scope.slideOutOfContainer(towards = AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = animSpec) +
-                fadeOut(animationSpec = fadeSpec) +
-                androidx.compose.animation.scaleOut(targetScale = 0.96f, animationSpec = fadeSpec)
+        scope.slideOutOfContainer(
+            towards = AnimatedContentTransitionScope.SlideDirection.Left,
+            animationSpec = animSpec,
+            targetOffset = { it / 2 }
+        ) + fadeOut(animationSpec = fadeSpec) + scaleOut(targetScale = 0.98f, animationSpec = fadeSpec)
     }
 
-    // 返回旧页面：从右侧滑入 + 放大
+    // 返回旧页面：从左侧 50% 位置滑入
     val slideInRight = { scope: AnimatedContentTransitionScope<*> ->
-        scope.slideIntoContainer(towards = AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = animSpec) +
-                fadeIn(animationSpec = fadeSpec) +
-                androidx.compose.animation.scaleIn(initialScale = 0.96f, animationSpec = fadeSpec)
+        scope.slideIntoContainer(
+            towards = AnimatedContentTransitionScope.SlideDirection.Right,
+            animationSpec = animSpec,
+            initialOffset = { it / 2 }
+        ) + fadeIn(animationSpec = fadeSpec) + scaleIn(initialScale = 0.98f, animationSpec = fadeSpec)
     }
 
-    // 弹回上一级：向右侧滑出 + 缩小
     val slideOutRight = { scope: AnimatedContentTransitionScope<*> ->
-        scope.slideOutOfContainer(towards = AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = animSpec) +
-                fadeOut(animationSpec = fadeSpec) +
-                androidx.compose.animation.scaleOut(targetScale = 0.96f, animationSpec = fadeSpec)
+        scope.slideOutOfContainer(
+            towards = AnimatedContentTransitionScope.SlideDirection.Right,
+            animationSpec = animSpec,
+            targetOffset = { it / 2 }
+        ) + fadeOut(animationSpec = fadeSpec) + scaleOut(targetScale = 0.98f, animationSpec = fadeSpec)
     }
 
     val mainScreens = listOf(
@@ -222,5 +232,21 @@ fun AppNavigation() {
 
         standardComposable(Screen.StyleSettings.route) { StyleSettingsScreen(navController = navController) }
         standardComposable(Screen.QuickDelete.route) { QuickDeleteScreen(navController = navController) }
+    }
+}
+
+/**
+ * 导航扩展函数：解决快速点击导致的重复跳转
+ */
+fun NavController.navigateSafe(
+    route: String,
+    builder: androidx.navigation.NavOptionsBuilder.() -> Unit = {}
+) {
+    val currentRoute = currentBackStackEntry?.destination?.route
+    if (currentRoute == route) return
+
+    navigate(route) {
+        builder()
+        launchSingleTop = true
     }
 }

@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.navigateSafe
 
 /**
  * 快捷操作二级页面
@@ -85,14 +86,14 @@ fun QuickActionsScreen(
                         QuickActionItem(
                             title = stringResource(R.string.item_schedule_tweak),
                             subtitle = stringResource(R.string.desc_schedule_tweak),
-                            onClick = { navController.navigate(Screen.TweakSchedule.route) }
+                            onClick = { navController.navigateSafe(Screen.TweakSchedule.route) }
                         )
 
                         // 2. 快速删除功能项
                         QuickActionItem(
                             title = stringResource(R.string.item_quick_delete),
                             subtitle = stringResource(R.string.quick_delete_subtitle),
-                            onClick = { navController.navigate(Screen.QuickDelete.route) }
+                            onClick = { navController.navigateSafe(Screen.QuickDelete.route) }
                         )
                     }
                 }

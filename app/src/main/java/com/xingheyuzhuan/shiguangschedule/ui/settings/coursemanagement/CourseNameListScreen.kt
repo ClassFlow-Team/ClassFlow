@@ -53,6 +53,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import com.xingheyuzhuan.shiguangschedule.navigation.AddEditCourseChannel
 import com.xingheyuzhuan.shiguangschedule.navigation.PresetCourseData
 import kotlinx.coroutines.launch
@@ -204,7 +205,7 @@ fun CourseNameListScreen(
 
                             // 3. 执行导航
                             val route = Screen.AddEditCourse.createRouteForNewCourse()
-                            navController.navigate(route)
+                            navController.navigateSafe(route)
                         }
                     }
                 ) {
@@ -253,7 +254,7 @@ fun CourseNameListScreen(
                             } else {
                                 // 正常模式：点击导航到详情页
                                 val route = Screen.CourseManagementDetail.createRoute(clickedName)
-                                navController.navigate(route)
+                                navController.navigateSafe(route)
                             }
                         },
                         onCourseLongClick = { clickedName ->

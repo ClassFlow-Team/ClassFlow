@@ -45,6 +45,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import com.xingheyuzhuan.shiguangschedule.ui.components.BottomNavigationBar
 import com.xingheyuzhuan.shiguangschedule.ui.components.DatePickerModal
 import com.xingheyuzhuan.shiguangschedule.ui.components.NativeNumberPicker
@@ -134,7 +135,7 @@ fun SettingsScreen(
                         onSemesterTotalWeeksClick = { showTotalWeeksDialog = true },
                         onManualWeekClick = { showManualWeekDialog = true },
                         onFirstDayOfWeekClick = { showFirstDayOfWeekDialog = true },
-                        onQuickActionsClick = { navController.navigate(Screen.QuickActions.route) }
+                        onQuickActionsClick = { navController.navigateSafe(Screen.QuickActions.route) }
                     )
                 }
                 item {
@@ -337,47 +338,47 @@ private fun AdvancedSettingsSection(navController: NavHostController) {
             SettingItem(
                 title = stringResource(R.string.item_course_conversion),
                 subtitle = stringResource(R.string.desc_course_conversion),
-                onClick = { navController.navigate(Screen.CourseTableConversion.route) }
+                onClick = { navController.navigateSafe(Screen.CourseTableConversion.route) }
             )
             // 课程提醒设置项
             SettingItem(
                 title = stringResource(R.string.title_course_notification_settings),
                 subtitle = stringResource(R.string.desc_notification_settings),
-                onClick = { navController.navigate(Screen.NotificationSettings.route) }
+                onClick = { navController.navigateSafe(Screen.NotificationSettings.route) }
             )
 
             // 管理课表设置项
             SettingItem(
                 title = stringResource(R.string.title_manage_course_tables),
                 subtitle = stringResource(R.string.desc_manage_course_tables),
-                onClick = { navController.navigate(Screen.ManageCourseTables.route) }
+                onClick = { navController.navigateSafe(Screen.ManageCourseTables.route) }
             )
 
             // 课程管理设置项
             SettingItem(
                 title = stringResource(R.string.item_course_management),
                 subtitle = stringResource(R.string.desc_course_management),
-                onClick = { navController.navigate(Screen.CourseManagementList.route) }
+                onClick = { navController.navigateSafe(Screen.CourseManagementList.route) }
             )
 
             // 自定义时间段设置项
             SettingItem(
                 title = stringResource(R.string.item_time_slot_customization),
                 subtitle = stringResource(R.string.desc_time_slot_customization),
-                onClick = { navController.navigate(Screen.TimeSlotSettings.route) }
+                onClick = { navController.navigateSafe(Screen.TimeSlotSettings.route) }
             )
 
             // 个性化配置
             SettingItem(
                 title = stringResource(R.string.item_personalization),
                 subtitle = stringResource(R.string.desc_personalization),
-                onClick = { navController.navigate(Screen.StyleSettings.route) }
+                onClick = { navController.navigateSafe(Screen.StyleSettings.route) }
             )
             // 更多选项设置项
             SettingItem(
                 title = stringResource(R.string.item_more_options),
                 subtitle = stringResource(R.string.desc_more_options),
-                onClick = { navController.navigate(Screen.MoreOptions.route) },
+                onClick = { navController.navigateSafe(Screen.MoreOptions.route) },
                 icon = Icons.Default.MoreHoriz
             )
         }

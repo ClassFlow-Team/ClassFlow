@@ -58,6 +58,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import com.xingheyuzhuan.shiguangschedule.tool.shareFile
 import com.xingheyuzhuan.shiguangschedule.ui.components.CourseTablePickerDialog
 import com.xingheyuzhuan.shiguangschedule.ui.components.NativeNumberPicker
@@ -482,7 +483,7 @@ fun CourseTableConversionScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { navController.navigate(Screen.SchoolSelectionListScreen.route) }
+                            .clickable { navController.navigateSafe(Screen.SchoolSelectionListScreen.route) }
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween

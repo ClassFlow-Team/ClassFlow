@@ -30,6 +30,7 @@ import coil.compose.AsyncImage
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Screen
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
+import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import com.xingheyuzhuan.shiguangschedule.navigation.AddEditCourseChannel
 import com.xingheyuzhuan.shiguangschedule.navigation.PresetCourseData
 import com.xingheyuzhuan.shiguangschedule.ui.components.BottomNavigationBar
@@ -127,7 +128,7 @@ fun WeeklyScheduleScreen(
                             modifier = Modifier
                                 .clickable {
                                     if (!uiState.isSemesterSet || uiState.semesterStartDate == null) {
-                                        navController.navigate(Screen.Settings.route)
+                                        navController.navigateSafe(Screen.Settings.route)
                                     } else {
                                         showWeekSelector = true
                                     }
@@ -215,7 +216,7 @@ fun WeeklyScheduleScreen(
                         } else {
                             // 只有一门课时直接进入编辑
                             mergedBlock.courses.firstOrNull()?.course?.id?.let {
-                                navController.navigate(Screen.AddEditCourse.createRouteWithCourseId(it))
+                                navController.navigateSafe(Screen.AddEditCourse.createRouteWithCourseId(it))
                             }
                         }
                     },
@@ -223,7 +224,7 @@ fun WeeklyScheduleScreen(
                         if (uiState.semesterStartDate != null && !today.isBefore(uiState.semesterStartDate)) {
                             coroutineScope.launch {
                                 AddEditCourseChannel.sendEvent(PresetCourseData(day, section, section))
-                                navController.navigate(Screen.AddEditCourse.createRouteForNewCourse())
+                                navController.navigateSafe(Screen.AddEditCourse.createRouteForNewCourse())
                             }
                         } else {
                             coroutineScope.launch {
@@ -232,7 +233,7 @@ fun WeeklyScheduleScreen(
                         }
                     },
                     onTimeSlotClicked = {
-                        navController.navigate(Screen.TimeSlotSettings.route)
+                        navController.navigateSafe(Screen.TimeSlotSettings.route)
                     }
                 )
             }
@@ -266,7 +267,7 @@ fun WeeklyScheduleScreen(
             currentWeek = uiState.weekIndexInPager,
             onCourseClicked = { course ->
                 showOverlapBottomSheet = false
-                navController.navigate(Screen.AddEditCourse.createRouteWithCourseId(course.course.id))
+                navController.navigateSafe(Screen.AddEditCourse.createRouteWithCourseId(course.course.id))
             },
             onDismissRequest = { showOverlapBottomSheet = false }
         )

@@ -25,6 +25,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import school_index.AdapterCategory
@@ -73,7 +74,7 @@ fun SchoolSelectionListScreen(
                 titleText = titleText,
                 filteredSchools = filteredSchools,
             ) { selectedSchool ->
-                navController.navigate(
+                navController.navigateSafe(
                     Screen.AdapterSelection.createRoute(
                         selectedSchool.id,
                         selectedSchool.name,
@@ -111,7 +112,7 @@ fun SchoolSelectionListScreen(
                     coroutineScope = coroutineScope,
                     selectedCategoryNumber = selectedCategory.number,
                     onSchoolSelected = { school, categoryNumber ->
-                        navController.navigate(
+                        navController.navigateSafe(
                             Screen.AdapterSelection.createRoute(
                                 school.id,
                                 school.name,
