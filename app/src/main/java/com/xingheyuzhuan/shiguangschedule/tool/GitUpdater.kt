@@ -157,7 +157,7 @@ class GitUpdater(private val context: Context) {
                 onLog("正在拉取远程变更...")
                 val fetchCommand = openedGit.fetch()
                     .setProgressMonitor(progressMonitor)
-                    .setTimeout(120)
+                    .setTimeout(60)
                     .apply { credentialsProvider?.let { setCredentialsProvider(it) } }
                 fetchCommand.call()
 

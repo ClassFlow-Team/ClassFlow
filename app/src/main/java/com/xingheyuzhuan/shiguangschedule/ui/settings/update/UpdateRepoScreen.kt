@@ -1,5 +1,6 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.update
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +20,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.Scaffold
@@ -27,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -108,14 +111,12 @@ fun RepoSelectionCard(
     selectedRepo: RepositoryInfo?,
     currentUrl: String,
     currentBranch: String,
-    // 新增凭证状态参数
     currentUsername: String,
     currentPassword: String,
     isUpdating: Boolean,
     onRepoSelected: (RepositoryInfo) -> Unit,
     onUrlChanged: (String) -> Unit,
     onBranchChanged: (String) -> Unit,
-    // 新增凭证事件参数
     onUsernameChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
     onUpdateClicked: () -> Unit
@@ -135,7 +136,6 @@ fun RepoSelectionCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 仓库选择下拉菜单
             ExposedDropdownMenuBox(
                 expanded = expanded,
                 onExpandedChange = { expanded = !expanded }
@@ -144,11 +144,10 @@ fun RepoSelectionCard(
                     value = selectedRepo?.name ?: stringResource(R.string.text_select_repo_hint),
                     onValueChange = {},
                     readOnly = true,
-                    modifier = Modifier.menuAnchor(
-                       ExposedDropdownMenuAnchorType.PrimaryEditable,
-                        true
-                    ).fillMaxWidth(),
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)}
+                    modifier = Modifier
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, true)
+                        .fillMaxWidth(),
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }
                 )
                 ExposedDropdownMenu(
                     expanded = expanded,
@@ -162,7 +161,6 @@ fun RepoSelectionCard(
                         }
                     }
 
-                    // 遍历筛选后的列表
                     displayRepos.forEach { repo ->
                         DropdownMenuItem(
                             text = { Text(repo.name) },
@@ -175,7 +173,6 @@ fun RepoSelectionCard(
                 }
             }
 
-            // 仓库编辑选项
             RepoEditOptions(
                 selectedRepo = selectedRepo,
                 currentUrl = currentUrl,
@@ -188,7 +185,7 @@ fun RepoSelectionCard(
                 onPasswordChanged = onPasswordChanged
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = onUpdateClicked,
@@ -202,6 +199,16 @@ fun RepoSelectionCard(
                         stringResource(R.string.action_update)
                     }
                 )
+            }
+            AnimatedVisibility(visible = isUpdating) {
+                Column {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                }
             }
         }
     }
@@ -217,7 +224,6 @@ fun RepoEditOptions(
     currentBranch: String,
     onUrlChanged: (String) -> Unit,
     onBranchChanged: (String) -> Unit,
-    // 新增凭证状态和事件参数
     currentUsername: String,
     currentPassword: String,
     onUsernameChanged: (String) -> Unit,
@@ -279,6 +285,14 @@ fun RepoEditOptions(
 
 @Composable
 fun LogDisplayCard(logs: String) {
+    val scrollState = rememberScrollState()
+
+    LaunchedEffect(logs) {
+        if (logs.isNotEmpty()) {
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -305,7 +319,7 @@ fun LogDisplayCard(logs: String) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(8.dp)
-                            .verticalScroll(rememberScrollState()),
+                            .verticalScroll(scrollState),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp
                     )
