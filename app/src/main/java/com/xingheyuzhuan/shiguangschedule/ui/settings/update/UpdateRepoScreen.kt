@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -27,6 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,6 +38,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -122,8 +126,33 @@ fun RepoSelectionCard(
     onUpdateClicked: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+
+    // 统一定义普通 TextField 的颜色方案
+    val commonTextFieldColors = TextFieldDefaults.colors(
+        focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+        unfocusedContainerColor = Color.Transparent,
+        disabledContainerColor = Color.Transparent,
+        focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+        unfocusedIndicatorColor = Color.Transparent,
+        disabledIndicatorColor = Color.Transparent,
+        cursorColor = MaterialTheme.colorScheme.primary
+    )
+
+    // 统一定义下拉框 TextField 的颜色方案
+    val dropdownTextFieldColors = ExposedDropdownMenuDefaults.textFieldColors(
+        focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+        unfocusedContainerColor = Color.Transparent,
+        focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+        unfocusedIndicatorColor = Color.Transparent,
+    )
+
     Card(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
@@ -147,6 +176,7 @@ fun RepoSelectionCard(
                     modifier = Modifier
                         .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, true)
                         .fillMaxWidth(),
+                    colors = dropdownTextFieldColors,
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }
                 )
                 ExposedDropdownMenu(
@@ -182,7 +212,8 @@ fun RepoSelectionCard(
                 currentUsername = currentUsername,
                 currentPassword = currentPassword,
                 onUsernameChanged = onUsernameChanged,
-                onPasswordChanged = onPasswordChanged
+                onPasswordChanged = onPasswordChanged,
+                textFieldColors = commonTextFieldColors
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -206,7 +237,7 @@ fun RepoSelectionCard(
                     LinearProgressIndicator(
                         modifier = Modifier.fillMaxWidth(),
                         color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
                     )
                 }
             }
@@ -227,7 +258,8 @@ fun RepoEditOptions(
     currentUsername: String,
     currentPassword: String,
     onUsernameChanged: (String) -> Unit,
-    onPasswordChanged: (String) -> Unit
+    onPasswordChanged: (String) -> Unit,
+    textFieldColors: androidx.compose.material3.TextFieldColors
 ) {
     // 只有在仓库被选中且可编辑时才显示编辑框
     if (selectedRepo?.editable == true) {
@@ -239,7 +271,8 @@ fun RepoEditOptions(
             value = currentUrl,
             onValueChange = onUrlChanged,
             label = { Text(stringResource(R.string.label_repo_url)) },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = textFieldColors
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -249,7 +282,8 @@ fun RepoEditOptions(
             value = currentBranch,
             onValueChange = onBranchChanged,
             label = { Text(stringResource(R.string.label_repo_branch)) },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = textFieldColors
         )
 
         // 实现私有仓库的凭证输入
@@ -269,7 +303,8 @@ fun RepoEditOptions(
                 value = currentUsername,
                 onValueChange = onUsernameChanged,
                 label = { Text(stringResource(R.string.label_username_or_token_key)) },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = textFieldColors
             )
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -277,7 +312,8 @@ fun RepoEditOptions(
                 value = currentPassword,
                 onValueChange = onPasswordChanged,
                 label = { Text(stringResource(R.string.label_password_or_token_value)) },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = textFieldColors
             )
         }
     }
@@ -294,8 +330,13 @@ fun LogDisplayCard(logs: String) {
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ){
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
@@ -311,9 +352,10 @@ fun LogDisplayCard(logs: String) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(300.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
-                ) {
+                        .height(300.dp)
+                        .clip(MaterialTheme.shapes.small),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                ){
                     Text(
                         text = logs,
                         modifier = Modifier
