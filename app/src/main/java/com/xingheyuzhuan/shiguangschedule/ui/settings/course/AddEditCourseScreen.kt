@@ -1,6 +1,7 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.course
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,11 +63,28 @@ fun AddEditCourseScreen(
     var showTimePickerSelector by remember { mutableStateOf(false) }
     var showDayPickerDialog by remember { mutableStateOf(false) }
 
+    // 拦截退出弹窗状态
+    var showExitConfirmDialog by remember { mutableStateOf(false) }
+
     // 提示文本资源
     val saveSuccessText = stringResource(R.string.toast_save_success)
     val deleteSuccessText = stringResource(R.string.toast_delete_success)
     val nameEmptyText = stringResource(R.string.toast_name_empty)
     val toastTimeInvalid = stringResource(R.string.toast_time_invalid)
+
+    // 统一的退出拦截逻辑
+    val handleBackPress = {
+        if (viewModel.hasUnsavedChanges()) {
+            showExitConfirmDialog = true
+        } else {
+            onNavigateBack()
+        }
+    }
+
+    // 拦截物理返回键
+    BackHandler {
+        handleBackPress()
+    }
 
     // 处理 ViewModel 事件
     LaunchedEffect(Unit) {
@@ -93,7 +113,7 @@ fun AddEditCourseScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = viewModel::onCancel) {
+                    IconButton(onClick = handleBackPress) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.a11y_back)
@@ -279,5 +299,33 @@ fun AddEditCourseScreen(
                 }
             )
         }
+    }
+
+    // 退出确认弹窗
+    if (showExitConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitConfirmDialog = false },
+            title = {
+                Text(text = stringResource(R.string.common_dialog_title_abandon_changes))
+            },
+            text = {
+                Text(text = stringResource(R.string.common_dialog_msg_unsaved_changes))
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showExitConfirmDialog = false
+                        onNavigateBack()
+                    }
+                ) {
+                    Text(text = stringResource(R.string.common_action_exit_without_save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitConfirmDialog = false }) {
+                    Text(text = stringResource(R.string.common_action_continue_editing))
+                }
+            }
+        )
     }
 }

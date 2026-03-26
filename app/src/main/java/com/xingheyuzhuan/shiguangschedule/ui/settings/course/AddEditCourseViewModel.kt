@@ -55,6 +55,10 @@ class AddEditCourseViewModel @Inject constructor(
 
     private var originalDbIds = setOf<String>()
 
+    // 备份初始状态用于比对
+    private var initialName: String = ""
+    private var initialSchemes: List<CourseScheme> = emptyList()
+
     init {
         viewModelScope.launch {
             val initialPresetData: PresetCourseData? = if (courseId == null) {
@@ -134,10 +138,14 @@ class AddEditCourseViewModel @Inject constructor(
                             }.sortedWith(schemeComparator())
                         }
 
+                        // 保存备份
+                        initialName = initialPresetData?.name ?: relatedCourseWithWeeks.firstOrNull()?.course?.name.orEmpty()
+                        initialSchemes = schemes
+
                         currentState.copy(
                             isEditing = courseId != null,
                             isDataLoaded = true,
-                            name = initialPresetData?.name ?: relatedCourseWithWeeks.firstOrNull()?.course?.name.orEmpty(),
+                            name = initialName,
                             schemes = schemes,
                             timeSlots = timeSlots,
                             currentCourseTableId = appSettings.currentCourseTableId,
@@ -157,6 +165,18 @@ class AddEditCourseViewModel @Inject constructor(
     }
 
     fun onNameChange(name: String) { _uiState.update { it.copy(name = name) } }
+
+    /**
+     * 判断是否有未保存的内容变更
+     */
+    fun hasUnsavedChanges(): Boolean {
+        val state = uiState.value
+        // 如果数据还没加载好，认为没有变更
+        if (!state.isDataLoaded) return false
+
+        // 比较名称或方案列表是否发生变化（CourseScheme 是 data class，支持内容比较）
+        return state.name != initialName || state.schemes != initialSchemes
+    }
 
     /**
      * 直接追加到末尾，不触发自动重排，方便用户立即编辑

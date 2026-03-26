@@ -19,6 +19,10 @@
     <string name="a11y_state_selected">已选中</string>
     <string name="a11y_state_not_selected">未选中</string>
     <string name="confirm_delete">确认删除</string>
+    <string name="common_dialog_title_abandon_changes">放弃更改？</string>
+    <string name="common_dialog_msg_unsaved_changes">当前内容已修改，退出将丢失未保存的数据。</string>
+    <string name="common_action_exit_without_save">退出</string>
+    <string name="common_action_continue_editing">继续编辑</string>
 
     <!-- 主界面及今日课表 -->
     <string name="nav_today_schedule">今日课表</string>

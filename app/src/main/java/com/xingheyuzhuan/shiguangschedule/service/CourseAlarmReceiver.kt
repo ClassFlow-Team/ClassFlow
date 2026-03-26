@@ -93,7 +93,7 @@ class CourseAlarmReceiver : BroadcastReceiver() {
             val pendingResult = goAsync()
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    val appSettings = appSettingsRepository.getAppSettingsOnce() ?: return@launch
+                    val appSettings = appSettingsRepository.getAppSettingsOnce()
                     val modeToUse = appSettings.autoControlMode
                     val isCompatMode = appSettings.compatWearableSync
 
