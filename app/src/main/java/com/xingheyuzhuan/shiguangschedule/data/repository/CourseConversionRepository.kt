@@ -211,7 +211,7 @@ class CourseConversionRepository @Inject constructor(
      * @param tableId 要导出的课表的 ID。
      * @return 包含课程和时间段的完整 JSON 模型。
      */
-    suspend fun exportCourseTableToJson(tableId: String): CourseTableExportModel? {
+    suspend fun exportCourseTableToJson(tableId: String): CourseTableExportModel {
 
         val coursesWithWeeks = courseDao.getCoursesWithWeeksByTableId(tableId).first()
         val exportCourses = coursesWithWeeks.map { courseWithWeeks ->
@@ -281,7 +281,7 @@ class CourseConversionRepository @Inject constructor(
 
         // 1. 从 AppSettings 获取全局设置 (用于 skippedDates)
         val appSettings = appSettingsRepository.getAppSettingsOnce()
-        val skippedDates = appSettings?.skippedDates
+        val skippedDates = appSettings.skippedDates
 
         // 2. 从 CourseTableConfig 获取课表配置 (用于日期和总周数)
         val courseConfig = appSettingsRepository.getCourseConfigOnce(tableId)
@@ -297,6 +297,7 @@ class CourseConversionRepository @Inject constructor(
             timeSlots = timeSlots,
             semesterStartDate = semesterStartDate,
             semesterTotalWeeks = courseConfig.semesterTotalWeeks,
+            firstDayOfWeekInt = courseConfig.firstDayOfWeek,
             alarmMinutes = alarmMinutes,
             skippedDates = skippedDates
         )

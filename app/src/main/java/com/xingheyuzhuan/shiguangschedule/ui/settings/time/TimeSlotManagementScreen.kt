@@ -1,7 +1,7 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.time
 
-import android.util.Log
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,9 +22,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -36,6 +36,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -82,9 +83,10 @@ fun TimeSlotManagementScreen(
     val localTimeSlots = remember {
         mutableStateListOf<TimeSlot>().apply { addAll(uiState.timeSlots.sortedBy { it.number }) }
     }
-
     var localDefaultClassDuration by remember { mutableStateOf(uiState.defaultClassDuration) }
     var localDefaultBreakDuration by remember { mutableStateOf(uiState.defaultBreakDuration) }
+
+    var showExitConfirmDialog by remember { mutableStateOf(false) }
 
     val titleTimeSlotManagement = stringResource(R.string.title_time_slot_management)
     val a11yBack = stringResource(R.string.a11y_back)
@@ -96,25 +98,46 @@ fun TimeSlotManagementScreen(
     val toastSlotModifiedUnsaved = stringResource(R.string.toast_slot_modified_unsaved)
     val toastSlotAddedUnsaved = stringResource(R.string.toast_slot_added_unsaved)
 
-
+    // 数据加载同步逻辑
     LaunchedEffect(uiState) {
-        localTimeSlots.clear()
-        localTimeSlots.addAll(uiState.timeSlots.sortedBy { it.number })
-        localDefaultClassDuration = uiState.defaultClassDuration
-        localDefaultBreakDuration = uiState.defaultBreakDuration
+        if (uiState.isDataLoaded) {
+            localTimeSlots.clear()
+            localTimeSlots.addAll(uiState.timeSlots.sortedBy { it.number })
+            localDefaultClassDuration = uiState.defaultClassDuration
+            localDefaultBreakDuration = uiState.defaultBreakDuration
+        }
+    }
+
+    /**
+     * 核心拦截逻辑：判断是否有变更，决定直接返回还是弹窗
+     */
+    val handleBackPress = {
+        val hasChanged = timeSlotViewModel.hasUnsavedChanges(
+            currentTimeSlots = localTimeSlots.toList(),
+            currentClassDuration = localDefaultClassDuration,
+            currentBreakDuration = localDefaultBreakDuration
+        )
+        if (hasChanged) {
+            showExitConfirmDialog = true
+        } else {
+            onBackClick()
+        }
+    }
+
+    BackHandler {
+        handleBackPress()
     }
 
     var showEditBottomSheet by remember { mutableStateOf(false) }
     var editingTimeSlot by remember { mutableStateOf<TimeSlot?>(null) }
     var editingIndex by remember { mutableStateOf<Int?>(null) }
 
-
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = { Text(titleTimeSlotManagement) },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) {
+                    IconButton(onClick = handleBackPress) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = a11yBack)
                     }
                 },
@@ -135,9 +158,11 @@ fun TimeSlotManagementScreen(
                             timeSlotViewModel.onSaveAllSettings(
                                 timeSlots = sortedAndNumberedSlots,
                                 classDuration = localDefaultClassDuration,
-                                breakDuration = localDefaultBreakDuration
+                                breakDuration = localDefaultBreakDuration,
+                                onSuccess = {
+                                    Toast.makeText(context, toastSettingsSaved, Toast.LENGTH_SHORT).show()
+                                }
                             )
-                            Toast.makeText(context, toastSettingsSaved, Toast.LENGTH_SHORT).show()
                         }
                     }) {
                         Icon(Icons.Filled.Save, contentDescription = a11ySaveAllSettings)
@@ -157,22 +182,15 @@ fun TimeSlotManagementScreen(
                 HorizontalDivider()
                 DefaultDurationSettings(
                     defaultClassDuration = localDefaultClassDuration,
-                    onClassDurationChange = { newValue ->
-                        localDefaultClassDuration = newValue
-                    },
+                    onClassDurationChange = { newValue -> localDefaultClassDuration = newValue },
                     defaultBreakDuration = localDefaultBreakDuration,
-                    onBreakDurationChange = { newValue ->
-                        localDefaultBreakDuration = newValue
-                    }
+                    onBreakDurationChange = { newValue -> localDefaultBreakDuration = newValue }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(16.dp))
                 if (localTimeSlots.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Text(textNoTimeSlotsHint)
                     }
                 }
@@ -190,9 +208,7 @@ fun TimeSlotManagementScreen(
                         localTimeSlots.removeAt(index)
                         val renumberedList = localTimeSlots
                             .sortedBy { it.startTime.let { timeStr -> try { LocalTime.parse(timeStr) } catch (e: DateTimeParseException) { LocalTime.MAX } } }
-                            .mapIndexed { i, slot ->
-                                slot.copy(number = i + 1)
-                            }
+                            .mapIndexed { i, slot -> slot.copy(number = i + 1) }
                         localTimeSlots.clear()
                         localTimeSlots.addAll(renumberedList)
                         Toast.makeText(context, toastSlotRemovedUnsaved, Toast.LENGTH_SHORT).show()
@@ -204,38 +220,7 @@ fun TimeSlotManagementScreen(
         if (showEditBottomSheet) {
             val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             val isEditing = editingTimeSlot != null
-
-            val calculatedInitialStartTime: String
-            val calculatedInitialEndTime: String
-
-            if (isEditing) {
-                calculatedInitialStartTime = editingTimeSlot!!.startTime
-                calculatedInitialEndTime = editingTimeSlot!!.endTime
-            } else {
-                if (localTimeSlots.isNotEmpty()) {
-                    val lastTimeSlot = localTimeSlots.maxByOrNull {
-                        it.startTime.let { timeStr ->
-                            try {
-                                LocalTime.parse(timeStr)
-                            } catch (e: DateTimeParseException) {
-                                LocalTime.MAX
-                            }
-                        }
-                    }!!
-                    val lastEndTime = try { LocalTime.parse(lastTimeSlot.endTime, DateTimeFormatter.ofPattern("HH:mm")) } catch (e: DateTimeParseException) { LocalTime.MIDNIGHT }
-
-                    val newStartTime = lastEndTime.plusMinutes(localDefaultBreakDuration.toLong())
-                    val newEndTime = newStartTime.plusMinutes(localDefaultClassDuration.toLong())
-
-                    calculatedInitialStartTime = newStartTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-                    calculatedInitialEndTime = newEndTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-                } else {
-                    val defaultStart = LocalTime.of(8, 0)
-                    val defaultEnd = defaultStart.plusMinutes(localDefaultClassDuration.toLong())
-                    calculatedInitialStartTime = defaultStart.format(DateTimeFormatter.ofPattern("HH:mm"))
-                    calculatedInitialEndTime = defaultEnd.format(DateTimeFormatter.ofPattern("HH:mm"))
-                }
-            }
+            val (initialStart, initialEnd) = calculateInitialTimes(isEditing, editingTimeSlot, localTimeSlots, localDefaultBreakDuration, localDefaultClassDuration)
 
             ModalBottomSheet(
                 onDismissRequest = { showEditBottomSheet = false },
@@ -243,8 +228,8 @@ fun TimeSlotManagementScreen(
             ) {
                 TimeSlotEditContent(
                     initialNumber = editingTimeSlot?.number ?: (localTimeSlots.maxOfOrNull { it.number }?.plus(1) ?: 1),
-                    initialStartTime = calculatedInitialStartTime,
-                    initialEndTime = calculatedInitialEndTime,
+                    initialStartTime = initialStart,
+                    initialEndTime = initialEnd,
                     isEditing = isEditing,
                     onDismiss = { showEditBottomSheet = false },
                     onConfirm = { number, startTime, endTime ->
@@ -256,23 +241,65 @@ fun TimeSlotManagementScreen(
                             localTimeSlots.add(newOrUpdatedSlot)
                             Toast.makeText(context, toastSlotAddedUnsaved, Toast.LENGTH_SHORT).show()
                         }
-                        val renumberedAndSortedList = localTimeSlots
-                            .sortedBy { it.startTime.let { timeStr -> try { LocalTime.parse(timeStr) } catch (e: DateTimeParseException) { LocalTime.MAX } } }
-                            .mapIndexed { i, slot -> slot.copy(number = i + 1) }
+                        val finalSorted = localTimeSlots.sortedBy { it.startTime }.mapIndexed { i, slot -> slot.copy(number = i + 1) }
                         localTimeSlots.clear()
-                        localTimeSlots.addAll(renumberedAndSortedList)
-
+                        localTimeSlots.addAll(finalSorted)
                         showEditBottomSheet = false
                     }
                 )
             }
         }
+
+        if (showExitConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showExitConfirmDialog = false },
+                title = { Text(text = stringResource(R.string.common_dialog_title_abandon_changes)) },
+                text = { Text(text = stringResource(R.string.common_dialog_msg_unsaved_changes)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showExitConfirmDialog = false
+                        onBackClick()
+                    }) {
+                        Text(text = stringResource(R.string.common_action_exit_without_save))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showExitConfirmDialog = false }) {
+                        Text(text = stringResource(R.string.common_action_continue_editing))
+                    }
+                }
+            )
+        }
     }
 }
 
 /**
- * 默认时长设置的 UI 组件
+ * 提取时间计算逻辑以简化主函数代码
  */
+private fun calculateInitialTimes(
+    isEditing: Boolean,
+    editingTimeSlot: TimeSlot?,
+    localTimeSlots: List<TimeSlot>,
+    breakDur: Int,
+    classDur: Int
+): Pair<String, String> {
+    if (isEditing && editingTimeSlot != null) return Pair(editingTimeSlot.startTime, editingTimeSlot.endTime)
+
+    val formatter = DateTimeFormatter.ofPattern("HH:mm")
+    return if (localTimeSlots.isNotEmpty()) {
+        val lastEndTime = localTimeSlots.maxOf { it.endTime }.let {
+            try { LocalTime.parse(it, formatter) } catch (e: Exception) { LocalTime.of(8,0) }
+        }
+        val start = lastEndTime.plusMinutes(breakDur.toLong())
+        val end = start.plusMinutes(classDur.toLong())
+        Pair(start.format(formatter), end.format(formatter))
+    } else {
+        val start = LocalTime.of(8, 0)
+        Pair(start.format(formatter), start.plusMinutes(classDur.toLong()).format(formatter))
+    }
+}
+
+
 @Composable
 fun DefaultDurationSettings(
     defaultClassDuration: Int,
@@ -434,7 +461,6 @@ fun TimeSlotEditContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 时间选择器行
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -442,21 +468,17 @@ fun TimeSlotEditContent(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 开始时间 - 小时
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
                 Text(labelStart, style = MaterialTheme.typography.bodySmall)
                 Text(labelHour, style = MaterialTheme.typography.labelSmall)
                 NativeNumberPicker(
                     values = hours,
-                    selectedValue = String.format(Locale.US, "%02d", startHourState), // Int 转 String
-                    onValueChange = { startHourState = it.toInt() }, // String 转 Int
+                    selectedValue = String.format(Locale.US, "%02d", startHourState),
+                    onValueChange = { startHourState = it.toInt() },
                     modifier = Modifier.height(150.dp).fillMaxWidth()
                 )
             }
-
             Text(":", style = MaterialTheme.typography.headlineMedium)
-
-            // 开始时间 - 分钟
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
                 Text("", style = MaterialTheme.typography.bodySmall)
                 Text(labelMinute, style = MaterialTheme.typography.labelSmall)
@@ -467,10 +489,7 @@ fun TimeSlotEditContent(
                     modifier = Modifier.height(150.dp).fillMaxWidth()
                 )
             }
-
             Spacer(modifier = Modifier.width(16.dp))
-
-            // 结束时间 - 小时
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
                 Text(labelEnd, style = MaterialTheme.typography.bodySmall)
                 Text(labelHour, style = MaterialTheme.typography.labelSmall)
@@ -481,10 +500,7 @@ fun TimeSlotEditContent(
                     modifier = Modifier.height(150.dp).fillMaxWidth()
                 )
             }
-
             Text(":", style = MaterialTheme.typography.headlineMedium)
-
-            // 结束时间 - 分钟
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
                 Text("", style = MaterialTheme.typography.bodySmall)
                 Text(labelMinute, style = MaterialTheme.typography.labelSmall)
@@ -514,9 +530,7 @@ fun TimeSlotEditContent(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) {
-                        Text(actionCancel)
-                    }
+                    TextButton(onClick = onDismiss) { Text(actionCancel) }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(onClick = {
                         val startTotalMinutes = startHourState * 60 + startMinuteState
@@ -527,9 +541,7 @@ fun TimeSlotEditContent(
                             val endTime = LocalTime.of(endHourState, endMinuteState).format(formatter)
                             onConfirm(initialNumber, startTime, endTime)
                         } else {
-                            coroutineScope.launch {
-                                Toast.makeText(context, toastEndTimeMustBeLater, Toast.LENGTH_SHORT).show()
-                            }
+                            coroutineScope.launch { Toast.makeText(context, toastEndTimeMustBeLater, Toast.LENGTH_SHORT).show() }
                         }
                     }) {
                         Text(if (isEditing) actionSaveChanges else actionAdd)
@@ -540,19 +552,12 @@ fun TimeSlotEditContent(
     }
 }
 
-
-/**
- * 解析时间字符串，返回小时和分钟。
- * @param timeString 格式为 "HH:mm" 的时间字符串。
- * @return 包含小时和分钟的 Pair。如果解析失败，返回 (0, 0)。
- */
 fun parseTimeString(timeString: String): Pair<Int, Int> {
     return try {
         val formatter = DateTimeFormatter.ofPattern("HH:mm")
         val localTime = LocalTime.parse(timeString, formatter)
         Pair(localTime.hour, localTime.minute)
-    } catch (e: DateTimeParseException) {
-        Log.e("TimeSlotEditContent", "Error parsing time string: $timeString", e)
+    } catch (e: Exception) {
         Pair(0, 0)
     }
 }
