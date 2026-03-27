@@ -67,7 +67,7 @@
                         android:id="@+id/empty_today"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/text_no_course"
+                        android:text="无课程"
                         android:textColor="@color/widget_text_hint"
                         android:textSize="12dp" />
                 </LinearLayout>
@@ -131,7 +131,7 @@
                         android:id="@+id/empty_tomorrow"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/text_no_course"
+                        android:text="无课程"
                         android:textColor="@color/widget_text_hint"
                         android:textSize="12dp" />
                 </LinearLayout>

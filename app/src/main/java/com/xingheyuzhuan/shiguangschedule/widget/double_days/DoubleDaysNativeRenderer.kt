@@ -116,6 +116,8 @@ object DoubleDaysNativeRenderer {
             rootRv.setViewVisibility(containerId, View.GONE)
             rootRv.setViewVisibility(emptyContainerId, View.VISIBLE)
             rootRv.setViewVisibility(footerId, View.GONE)
+            val emptyTextViewId = if (date == LocalDate.now()) R.id.empty_today else R.id.empty_tomorrow
+            rootRv.setTextViewText(emptyTextViewId, context.getString(R.string.text_no_course))
         } else {
             // 有课：显示课程容器和页脚，隐藏居中容器
             rootRv.setViewVisibility(containerId, View.VISIBLE)
