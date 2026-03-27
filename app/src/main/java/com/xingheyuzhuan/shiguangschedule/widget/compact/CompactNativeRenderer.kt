@@ -132,8 +132,8 @@ object CompactNativeRenderer {
             val style = snapshot.style
             if (course.colorInt < style.courseColorMapsCount) {
                 val colorPair = style.getCourseColorMaps(course.colorInt)
-                itemRv.setInt(R.id.course_indicator, "setBackgroundColor", colorPair.lightColor.toInt())
-                itemRv.setInt(R.id.course_indicator_dark, "setBackgroundColor", colorPair.darkColor.toInt())
+                itemRv.setInt(R.id.course_indicator, "setColorFilter", colorPair.lightColor.toInt())
+                itemRv.setInt(R.id.course_indicator_dark, "setColorFilter", colorPair.darkColor.toInt())
             }
 
             rv.addView(R.id.container_courses, itemRv)

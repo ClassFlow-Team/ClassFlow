@@ -11,11 +11,11 @@
 
     <ImageView
         android:id="@+id/course_indicator_dark"
-        android:layout_width="3dp"
+        android:layout_width="4dp"
         android:layout_height="match_parent"
         android:layout_marginTop="2dp"
         android:layout_marginBottom="2dp"
-        android:background="@color/widget_course_fallback" />
+        android:src="@drawable/widget_indicator_shape" />
 
     <LinearLayout
         android:layout_width="0dp"
