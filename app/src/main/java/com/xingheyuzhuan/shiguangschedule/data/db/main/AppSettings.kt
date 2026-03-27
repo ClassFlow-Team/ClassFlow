@@ -4,9 +4,16 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * Room 实体类，代表“应用设置”数据表。
- * 数据库中只会存在一条记录，使用固定 ID作为主键。
+ * [已废弃] Room 实体类，代表“应用设置”数据表。
+ * * 迁移说明：
+ * 该表中的所有配置项已迁移至 Preferences DataStore。
+ * 业务逻辑请使用 [com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository]。
+ * 本类仅保留用于数据库迁移逻辑，计划在版本 4 (或更高) 物理移除。
  */
+@Deprecated(
+    message = "应用设置已迁移至 Preferences DataStore。请使用新的数据模型，不要再将其作为业务实体使用。",
+    level = DeprecationLevel.WARNING
+)
 @Entity(tableName = "app_settings")
 data class AppSettings(
     @PrimaryKey

@@ -37,13 +37,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.xingheyuzhuan.shiguangschedule.R
+import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import school_index.Adapter
 import school_index.AdapterCategory
 
@@ -67,7 +69,7 @@ fun AdapterSelectionScreen(
     schoolName: String,
     categoryNumber: Int,
     resourceFolder: String,
-    viewModel: SchoolSelectionViewModel = viewModel()
+    viewModel: SchoolSelectionViewModel = hiltViewModel()
 ) {
     // 异步加载状态
     var adapters by remember { mutableStateOf<List<Adapter>>(emptyList()) }
@@ -159,7 +161,7 @@ fun AdapterSelectionScreen(
                                         "$resourceFolder/${selectedAdapter.adapterId}.js"
                                     }
                                     // 导航到 WebView，传递 URL 和正确构建的 JS 路径
-                                    navController.navigate(
+                                    navController.navigateSafe(
                                         WebViewNavigationHelper.createRoute(
                                             initialUrl = initialUrl,
                                             assetJsPath = assetJsPath
@@ -186,7 +188,12 @@ fun AdapterCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
             .clickable { onClick(adapter) },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
@@ -197,8 +204,7 @@ fun AdapterCard(
                     text = adapter.adapterName,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 

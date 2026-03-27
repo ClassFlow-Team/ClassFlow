@@ -19,6 +19,11 @@
     <string name="a11y_state_selected">已选中</string>
     <string name="a11y_state_not_selected">未选中</string>
     <string name="confirm_delete">确认删除</string>
+    <string name="common_dialog_title_abandon_changes">放弃更改？</string>
+    <string name="common_dialog_msg_unsaved_changes">当前内容已修改，退出将丢失未保存的数据。</string>
+    <string name="common_action_exit_without_save">退出</string>
+    <string name="common_action_continue_editing">继续编辑</string>
+    <string name="label_recent_visit">最近访问</string>
 
     <!-- 主界面及今日课表 -->
     <string name="nav_today_schedule">今日课表</string>
@@ -68,8 +73,8 @@
     <string name="course_time_description">时间: 第%1$s-%2$s节 (%3$s-%4$s)</string>
     <string name="course_position_prefix">地点: %1$s</string>
     <string name="course_teacher_prefix">老师: %1$s</string>
-    <string name="title_course_conflict">课程冲突</string>
-    <string name="label_conflict">（冲突）</string>
+    <string name="title_course_overlap">重叠课程列表</string>
+    <string name="label_overlap">（重叠）</string>
     <string name="course_time_sections_count">(%1$s节)</string>
     <string name="title_select_week">选择周次</string>
     <string name="title_current_week">第 %1$s 周</string>
@@ -105,13 +110,15 @@
     <string name="toast_enable_reminder_first">请先开启「课程提醒」</string>
     <string name="alarm_option_none">不提醒</string>
     <string name="alarm_option_on_time">准时提醒</string>
+    <string name="notification_live_status_preparing">准备上课</string>
+    <string name="notification_unknown_course">未知课程</string>
+    <string name="notification_unknown_position">地点未知</string>
 
     <!-- 小组件相关 -->
     <string name="widget_name_tiny">超小课程2x1</string>
     <string name="widget_name_compact">紧凑课程2x2</string>
-    <string name="widget_name_moderate">今日课程4x2</string>
     <string name="widget_name_double_days">近日课程4x2</string>
-    <string name="widget_name_large">今日课程4x3</string>
+    <string name="widget_name_list_vertical">垂直列表课表4xN</string>
     <string name="widget_tomorrow_course_preview">明日预告</string>
     <string name="widget_no_courses_tomorrow">明天没有课程</string>
     <string name="widget_today_courses_finished">今日课程已结束</string>
@@ -171,10 +178,14 @@
     <string name="text_no_skipped_dates">没有设置跳过的日期。</string>
     <string name="action_close">关闭</string>
     <string name="toast_notification_permission_denied">通知权限被拒绝，无法接收课程提醒。</string>
+    <string name="item_compat_wearable_sync">兼容穿戴设备同步通知</string>
+    <string name="desc_compat_wearable_sync">因 Android 16 实时通知属性与部分穿戴设备通知同步软件存在兼容性冲突，开启此项将优化同步兼容性，但会停用实时更新效果</string>
 
     <!-- 设置选项 -->
     <string name="title_schedule_settings">课程表设置</string>
     <string name="section_title_general_settings">通用设置</string>
+    <string name="item_show_non_current_week">显示非本周课程</string>
+    <string name="desc_show_non_current_week">在课表中展示当前周次以外的课程</string>
     <string name="item_show_weekends">是否显示周末</string>
     <string name="desc_show_weekends">开启后，课程表中将显示周末的课程安排</string>
     <string name="item_set_start_date">设置开学日期</string>
@@ -383,7 +394,7 @@
     <string name="toast_url_empty_enter_first">URL为空，请先输入网址。</string>
     <string name="item_devtools_debug">DevTools 网页调试</string>
     <string name="a11y_devtools">DevTools</string>
-    <string name="toast_devtools_enabled_format">DevTools 网页调试已 %1$s。</string>
+    <string name="toast_devtools_enabled_format">DevTools 网页调试 %1$s。</string>
     <string name="text_import_guide">请登录教务系统后切换到有课表显示的页面再点击导入课程，点击右上角的更多查看其他选项</string>
     <string name="action_execute_import">执行导入</string>
     <string name="toast_no_script_manual_import">该适配器没有脚本，请手动导入。</string>
@@ -461,12 +472,20 @@
     <string name="label_opacity">不透明度</string>
     <string name="title_light_color_pool">浅色模式颜色池</string>
     <string name="title_dark_color_pool">深色模式颜色池</string>
-    <string name="label_color_conflict">冲突</string>
+    <string name="label_color_overlap">重叠</string>
     <string name="preview_light_mode">浅色模式预览\n固定深色文字</string>
     <string name="preview_dark_mode">深色模式预览\n固定浅色文字</string>
     <string name="action_reset_style">恢复默认样式设置</string>
     <string name="dialog_reset_title">重置样式</string>
     <string name="dialog_reset_message">确定要将所有样式设置恢复为默认值吗？此操作不可撤销。</string>
+    <string name="action_confirm_crop">确定裁剪</string>
+    <string name="label_text_align_center_h">文字水平居中</string>
+    <string name="label_text_align_center_v">文字垂直居中</string>
+    <string name="label_border_type">边框样式</string>
+    <string name="border_type_solid">实线</string>
+    <string name="border_type_dashed">虚线</string>
+    <string name="label_range">范围</string>
+    <string name="placeholder_input_value">请输入数值</string>
 
     <!-- 快捷操作 -->
     <string name="item_quick_actions">快捷操作</string>

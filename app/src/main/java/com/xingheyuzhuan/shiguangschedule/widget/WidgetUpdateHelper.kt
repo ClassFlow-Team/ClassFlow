@@ -13,10 +13,8 @@ import com.xingheyuzhuan.shiguangschedule.widget.compact.CompactNativeProvider
 import com.xingheyuzhuan.shiguangschedule.widget.compact.CompactNativeRenderer
 import com.xingheyuzhuan.shiguangschedule.widget.double_days.DoubleDaysNativeProvider
 import com.xingheyuzhuan.shiguangschedule.widget.double_days.DoubleDaysNativeRenderer
-import com.xingheyuzhuan.shiguangschedule.widget.large.LargeNativeProvider
-import com.xingheyuzhuan.shiguangschedule.widget.large.LargeNativeRenderer
-import com.xingheyuzhuan.shiguangschedule.widget.moderate.ModerateNativeProvider
-import com.xingheyuzhuan.shiguangschedule.widget.moderate.ModerateNativeRenderer
+import com.xingheyuzhuan.shiguangschedule.widget.list_vertical.ListVerticalNativeProvider
+import com.xingheyuzhuan.shiguangschedule.widget.list_vertical.ListVerticalNativeRenderer
 import com.xingheyuzhuan.shiguangschedule.widget.tiny.TinyNativeProvider
 import com.xingheyuzhuan.shiguangschedule.widget.tiny.TinyNativeRenderer
 import kotlinx.coroutines.flow.first
@@ -90,21 +88,27 @@ suspend fun updateAllWidgets(context: Context) {
         val nativeConfigs = listOf(
             TinyNativeProvider::class.java to TinyNativeRenderer::render,
             CompactNativeProvider::class.java to CompactNativeRenderer::render,
-            ModerateNativeProvider::class.java to ModerateNativeRenderer::render,
             DoubleDaysNativeProvider::class.java to DoubleDaysNativeRenderer::render,
-            LargeNativeProvider::class.java to LargeNativeRenderer::render
+            ListVerticalNativeProvider::class.java to ListVerticalNativeRenderer::render
         )
 
         // 5. 统一分发更新
-        nativeConfigs.forEach { (providerClass, renderFunc) ->
+        nativeConfigs.forEachIndexed { index, (providerClass, renderFunc) ->
             val componentName = ComponentName(context, providerClass)
             val ids = appWidgetManager.getAppWidgetIds(componentName)
+
             if (ids.isNotEmpty()) {
-                val remoteViews = renderFunc(context, snapshot)
-                ids.forEach { id ->
-                    appWidgetManager.updateAppWidget(id, remoteViews)
+                if (index > 0) {
+                    kotlinx.coroutines.delay(300L)
                 }
-                Log.d("WidgetUpdateHelper", "成功刷新规格 ${providerClass.simpleName}: ${ids.size}个实例")
+
+                try {
+                    val remoteViews = renderFunc(context, snapshot)
+                    appWidgetManager.updateAppWidget(componentName, remoteViews)
+                    Log.d("WidgetUpdateHelper", "成功刷新规格 ${providerClass.simpleName}")
+                } catch (e: Exception) {
+                    Log.e("WidgetUpdateHelper", "规格 ${providerClass.simpleName} 渲染失败", e)
+                }
             }
         }
 

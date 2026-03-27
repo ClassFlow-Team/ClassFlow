@@ -11,6 +11,7 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.time.temporal.TemporalAdjusters
 import java.util.UUID
 
 object IcsExportTool {
@@ -25,6 +26,7 @@ object IcsExportTool {
      * @param timeSlots 包含所有时间段的数据列表。
      * @param semesterStartDate 学期开始日期。
      * @param semesterTotalWeeks 本学期的总周数。
+     * @param firstDayOfWeekInt 一周的起始日 (1=周一, 7=周日)，从 CourseTableConfig 获取。
      * @param alarmMinutes 可选的提醒时间，单位分钟。传入null则不设置提醒。
      * @param skippedDates 包含需要跳过的日期的字符串集合，格式为 yyyy-MM-dd。
      * @return ICS 格式的字符串。
@@ -34,6 +36,7 @@ object IcsExportTool {
         timeSlots: List<TimeSlot>,
         semesterStartDate: LocalDate,
         semesterTotalWeeks: Int,
+        firstDayOfWeekInt: Int,
         alarmMinutes: Int? = null,
         skippedDates: Set<String>? = null
     ): String {
@@ -64,6 +67,10 @@ object IcsExportTool {
             6 to DayOfWeek.SATURDAY,
             7 to DayOfWeek.SUNDAY
         )
+
+        // 【核心优化】：计算对齐后的周起始基准日期
+        val firstDayOfWeek = DayOfWeek.of(firstDayOfWeekInt)
+        val alignedSemesterStart = semesterStartDate.with(TemporalAdjusters.previousOrSame(firstDayOfWeek))
 
         // 2. 为每个课程生成一个或多个 VEVENT
         courses.forEach { courseWithWeeks ->
@@ -108,12 +115,12 @@ object IcsExportTool {
             val dayOfWeek = dayOfWeekMap[course.day] ?: return@forEach
 
             weeks.forEach { week ->
-                // 使用 semesterStartDate 计算课程的日期
-                val date = semesterStartDate.plusWeeks((week - 1).toLong())
-                    .plusDays(dayOfWeek.value.toLong() - 1)
+                val dayOffset = (dayOfWeek.value - firstDayOfWeek.value + 7) % 7
+                val date = alignedSemesterStart.plusWeeks((week - 1).toLong())
+                    .plusDays(dayOffset.toLong())
 
-                // 检查周数是否在有效范围内
-                val weekNumberFromStart = ChronoUnit.DAYS.between(semesterStartDate, date) / 7 + 1
+                // 检查周数是否在有效范围内 (使用对齐后的基准计算)
+                val weekNumberFromStart = ChronoUnit.DAYS.between(alignedSemesterStart, date) / 7 + 1
                 if (weekNumberFromStart > semesterTotalWeeks) {
                     return@forEach // 跳过超出学期总周数的课程
                 }

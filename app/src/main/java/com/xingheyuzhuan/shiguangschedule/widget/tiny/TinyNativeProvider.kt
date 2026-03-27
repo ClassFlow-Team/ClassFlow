@@ -20,7 +20,6 @@ class TinyNativeProvider : AppWidgetProvider() {
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
         WorkManagerHelper.schedulePeriodicWork(context)
-        scope.launch { updateAllWidgets(context) }
     }
 
     override fun onDisabled(context: Context) {

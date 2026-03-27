@@ -3,30 +3,38 @@ package com.xingheyuzhuan.shiguangschedule.ui.schedule
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import coil.compose.AsyncImage
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Screen
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
+import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import com.xingheyuzhuan.shiguangschedule.navigation.AddEditCourseChannel
 import com.xingheyuzhuan.shiguangschedule.navigation.PresetCourseData
 import com.xingheyuzhuan.shiguangschedule.ui.components.BottomNavigationBar
-import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ConflictCourseBottomSheet
+import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.OverlapCourseBottomSheet
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGrid
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGridStyleComposed
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.WeekSelectorBottomSheet
@@ -44,13 +52,13 @@ private const val INFINITE_PAGER_CENTER = Int.MAX_VALUE / 2
 
 /**
  * 周课表主屏幕组件。
- * 持三周滑动窗口预加载，消除滑动残留与加载闪烁。
+ * 支持三周滑动窗口预加载，消除滑动残留与加载闪烁。
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun WeeklyScheduleScreen(
     navController: NavHostController,
-    viewModel: WeeklyScheduleViewModel = viewModel(factory = WeeklyScheduleViewModelFactory)
+    viewModel: WeeklyScheduleViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val today = LocalDate.now()
@@ -86,8 +94,8 @@ fun WeeklyScheduleScreen(
 
     // UI 交互控制
     var showWeekSelector by remember { mutableStateOf(false) }
-    var showConflictBottomSheet by remember { mutableStateOf(false) }
-    var conflictCoursesToShow by remember { mutableStateOf(emptyList<CourseWithWeeks>()) }
+    var showOverlapBottomSheet by remember { mutableStateOf(false) }
+    var overlapCoursesToShow by remember { mutableStateOf(emptyList<CourseWithWeeks>()) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -115,16 +123,31 @@ fun WeeklyScheduleScreen(
                 val isTransparent = composedStyle.backgroundImagePath.isNotEmpty()
                 CenterAlignedTopAppBar(
                     title = {
-                        Text(
-                            text = uiState.weekTitle,
-                            modifier = Modifier.clickable {
-                                if (!uiState.isSemesterSet || uiState.semesterStartDate == null) {
-                                    navController.navigate(Screen.Settings.route)
-                                } else {
-                                    showWeekSelector = true
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .clickable {
+                                    if (!uiState.isSemesterSet || uiState.semesterStartDate == null) {
+                                        navController.navigateSafe(Screen.Settings.route)
+                                    } else {
+                                        showWeekSelector = true
+                                    }
                                 }
-                            }
-                        )
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = uiState.weekTitle,
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .offset(y = (-4).dp),
+                                tint = if (isTransparent) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                        }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = if (isTransparent) Color.Transparent else MaterialTheme.colorScheme.surface,
@@ -156,6 +179,10 @@ fun WeeklyScheduleScreen(
                     today.with(TemporalAdjusters.previousOrSame(firstDay)).plusWeeks(offsetWeeks)
                 }
 
+                val pageYearString = remember(pageMondayDate) {
+                    pageMondayDate.year.toString()
+                }
+
                 // 独立日期列表：计算该页显示的日期文本
                 val pageDateStrings = remember(pageMondayDate) {
                     val formatter = DateTimeFormatter.ofPattern("MM-dd")
@@ -174,18 +201,22 @@ fun WeeklyScheduleScreen(
                 ScheduleGrid(
                     style = composedStyle,
                     dates = pageDateStrings,
+                    currentYear = pageYearString,
                     timeSlots = uiState.timeSlots,
-                    mergedCourses = pageCourses, // 绑定本页专属数据
+                    mergedCourses = pageCourses,
                     showWeekends = uiState.showWeekends,
                     todayIndex = pageTodayIndex,
                     firstDayOfWeek = uiState.firstDayOfWeek,
+                    currentSectionIndex = if (pageTodayIndex >= 0) uiState.currentSectionIndex else -1,
                     onCourseBlockClicked = { mergedBlock ->
-                        if (mergedBlock.isConflict) {
-                            conflictCoursesToShow = mergedBlock.courses
-                            showConflictBottomSheet = true
+                        // 如果有超过一门课（无论是否本周），都打开重叠弹窗
+                        if (mergedBlock.courses.size > 1) {
+                            overlapCoursesToShow = mergedBlock.courses
+                            showOverlapBottomSheet = true
                         } else {
+                            // 只有一门课时直接进入编辑
                             mergedBlock.courses.firstOrNull()?.course?.id?.let {
-                                navController.navigate(Screen.AddEditCourse.createRouteWithCourseId(it))
+                                navController.navigateSafe(Screen.AddEditCourse.createRouteWithCourseId(it))
                             }
                         }
                     },
@@ -193,7 +224,7 @@ fun WeeklyScheduleScreen(
                         if (uiState.semesterStartDate != null && !today.isBefore(uiState.semesterStartDate)) {
                             coroutineScope.launch {
                                 AddEditCourseChannel.sendEvent(PresetCourseData(day, section, section))
-                                navController.navigate(Screen.AddEditCourse.createRouteForNewCourse())
+                                navController.navigateSafe(Screen.AddEditCourse.createRouteForNewCourse())
                             }
                         } else {
                             coroutineScope.launch {
@@ -202,7 +233,7 @@ fun WeeklyScheduleScreen(
                         }
                     },
                     onTimeSlotClicked = {
-                        navController.navigate(Screen.TimeSlotSettings.route)
+                        navController.navigateSafe(Screen.TimeSlotSettings.route)
                     }
                 )
             }
@@ -227,17 +258,18 @@ fun WeeklyScheduleScreen(
         )
     }
 
-    // 冲突处理弹窗
-    if (showConflictBottomSheet) {
-        ConflictCourseBottomSheet(
+    // 重叠课程处理弹窗
+    if (showOverlapBottomSheet) {
+        OverlapCourseBottomSheet(
             style = composedStyle,
-            courses = conflictCoursesToShow,
+            courses = overlapCoursesToShow,
             timeSlots = uiState.timeSlots,
+            currentWeek = uiState.weekIndexInPager,
             onCourseClicked = { course ->
-                showConflictBottomSheet = false
-                navController.navigate(Screen.AddEditCourse.createRouteWithCourseId(course.course.id))
+                showOverlapBottomSheet = false
+                navController.navigateSafe(Screen.AddEditCourse.createRouteWithCourseId(course.course.id))
             },
-            onDismissRequest = { showConflictBottomSheet = false }
+            onDismissRequest = { showOverlapBottomSheet = false }
         )
     }
 }

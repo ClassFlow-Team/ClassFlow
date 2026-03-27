@@ -24,17 +24,12 @@ data class PresetCourseData(
 )
 
 /**
- * 核心：用于在 NavController.navigate() 期间安全传递一次性数据的通道。
+ * 安全传递一次性数据的通道。
  */
 object AddEditCourseChannel {
-    // 使用 CONFLATED 模式的 Channel，确保只有最新的事件会被保留
     private val channel = Channel<PresetCourseData>(Channel.CONFLATED)
-
-    // 1. 发送数据 (调用方使用)
     fun sendEvent(data: PresetCourseData) {
         channel.trySend(data)
     }
-
-    // 2. 接收数据 (ViewModel 使用)
     val presetDataFlow = channel.receiveAsFlow()
 }

@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material.icons.outlined.ViewWeek
 import androidx.compose.ui.res.stringResource
 import com.xingheyuzhuan.shiguangschedule.R
+import com.xingheyuzhuan.shiguangschedule.navigateSafe
 
 
 @Composable
@@ -54,7 +55,7 @@ fun BottomNavigationBar(
                 selected = isSelected,
                 onClick = {
                     if (currentRoute != route) {
-                        navController.navigate(route) {
+                        navController.navigateSafe(route) {
                             popUpTo(navController.graph.startDestinationId) {
                                 saveState = true
                             }

@@ -2,30 +2,28 @@ package com.xingheyuzhuan.shiguangschedule.ui.settings.time
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.CreationExtras
-import com.xingheyuzhuan.shiguangschedule.MyApplication
+import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseTableRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
+import javax.inject.Inject
 
 /**
  * ViewModel，用于管理时间段设置界面的 UI 状态和业务逻辑。
- * 它通过 Repository 与数据库进行交互，并为 UI 提供数据流。
  */
-class TimeSlotViewModel(
+@HiltViewModel
+class TimeSlotViewModel @Inject constructor(
     private val timeSlotRepository: TimeSlotRepository,
     private val appSettingsRepository: AppSettingsRepository,
     private val courseTableRepository: CourseTableRepository
@@ -34,64 +32,92 @@ class TimeSlotViewModel(
     // 获取应用设置的流，包括当前课表ID
     private val appSettingsFlow = appSettingsRepository.getAppSettings()
 
+    // 拦截逻辑相关变量
+    private var initialTimeSlots: List<TimeSlot> = emptyList()
+    private var initialClassDuration: Int = 45
+    private var initialBreakDuration: Int = 10
+    private var isDataInitialized = false
 
     /**
      * 将时间段列表、默认上课时长和默认下课时长组合成一个单一的 UI 状态流。
-     * 这个 StateFlow 会自动收集数据并将其暴露给 UI。
-     *
-     * 这里使用 flatMapLatest 来监听 currentCourseTableId 的变化，
-     * 当它变化时，会自动切换到新的时间段列表流和课表配置流。
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val timeSlotsUiState: StateFlow<TimeSlotUiState> =
         appSettingsFlow
             .flatMapLatest { appSettings ->
-                // 如果当前课表ID存在，则获取该课表的时间段流和配置流
                 val currentTableId = appSettings.currentCourseTableId
-                if (currentTableId != null) {
+                run {
                     val timeSlotsFlow = timeSlotRepository.getTimeSlotsByCourseTableId(currentTableId)
-                    // 从 AppSettingsRepository 获取 CourseTableConfig 的流
                     val courseConfigFlow = appSettingsRepository.getCourseTableConfigFlow(currentTableId)
 
-                    // combine 将时间段列表流和 CourseTableConfig 流结合起来
-                    combine(
-                        timeSlotsFlow,
-                        courseConfigFlow
-                    ) { timeSlots, config ->
-                        // 从 config 中获取默认时长，如果 config 为 null 则使用默认值 (45 和 10)
-                        val defaultClassDuration = config?.defaultClassDuration ?: 45
-                        val defaultBreakDuration = config?.defaultBreakDuration ?: 10
+                    combine(timeSlotsFlow, courseConfigFlow) { timeSlots, config ->
+                        val classDuration = config?.defaultClassDuration ?: 45
+                        val breakDuration = config?.defaultBreakDuration ?: 10
+
+                        // 核心逻辑：当数据第一次从数据库加载成功时，记录为初始状态
+                        if (!isDataInitialized && timeSlots.isNotEmpty()) {
+                            // 存储备份（按开始时间排序以确保比对一致性）
+                            initialTimeSlots = timeSlots.sortedBy { it.startTime }
+                            initialClassDuration = classDuration
+                            initialBreakDuration = breakDuration
+                            isDataInitialized = true
+                        }
 
                         TimeSlotUiState(
                             timeSlots = timeSlots,
-                            defaultClassDuration = defaultClassDuration,
-                            defaultBreakDuration = defaultBreakDuration
+                            defaultClassDuration = classDuration,
+                            defaultBreakDuration = breakDuration,
+                            isDataLoaded = true
                         )
                     }
-                } else {
-                    // 如果当前课表ID为空，则返回一个包含空列表的默认状态流
-                    flowOf(
-                        TimeSlotUiState(
-                            timeSlots = emptyList(),
-                            defaultClassDuration = 45, // 使用默认值
-                            defaultBreakDuration = 10 // 使用默认值
-                        )
-                    )
                 }
             }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),
-                initialValue = TimeSlotUiState(emptyList(), 45, 10)
+                initialValue = TimeSlotUiState(emptyList(), 45, 10, false)
             )
 
     /**
-     * UI 事件：一次性保存所有设置，包括时间段列表和默认时长。
+     * 供 UI 调用：比对当前内存中的数据与进入页面时的初始数据是否有差异
+     */
+    fun hasUnsavedChanges(
+        currentTimeSlots: List<TimeSlot>,
+        currentClassDuration: Int,
+        currentBreakDuration: Int
+    ): Boolean {
+        // 如果数据还没加载好，不认为有修改
+        if (!isDataInitialized) return false
+
+        // 1. 检查时长设置是否有变
+        if (currentClassDuration != initialClassDuration) return true
+        if (currentBreakDuration != initialBreakDuration) return true
+
+        // 2. 检查时间段列表是否有变
+        if (currentTimeSlots.size != initialTimeSlots.size) return true
+
+        // 排序后进行内容比对 (TimeSlot 是 data class，会自动比对字段值)
+        val sortedCurrent = currentTimeSlots.sortedBy { it.startTime }
+        return sortedCurrent != initialTimeSlots
+    }
+
+    /**
+     * 保存成功后更新备份点，这样点击返回就不会再触发拦截弹窗
+     */
+    private fun updateBackupPoint(timeSlots: List<TimeSlot>, classDuration: Int, breakDuration: Int) {
+        initialTimeSlots = timeSlots.sortedBy { it.startTime }
+        initialClassDuration = classDuration
+        initialBreakDuration = breakDuration
+    }
+
+    /**
+     * UI 事件：一次性保存所有设置
      */
     fun onSaveAllSettings(
         timeSlots: List<TimeSlot>,
         classDuration: Int,
-        breakDuration: Int
+        breakDuration: Int,
+        onSuccess: () -> Unit = {}
     ) {
         viewModelScope.launch {
             val currentTableId = appSettingsRepository.getAppSettings().first().currentCourseTableId
@@ -100,14 +126,14 @@ class TimeSlotViewModel(
 
             val tableExists = allTableIds.contains(currentTableId)
 
-            if (currentTableId != null && tableExists) {
+            if (tableExists) {
+                // 确保时间段关联正确的课表 ID
                 val timeSlotsWithCorrectId = timeSlots.map { it.copy(courseTableId = currentTableId) }
 
                 // 1. 替换时间段列表
                 timeSlotRepository.replaceAllForCourseTable(currentTableId, timeSlotsWithCorrectId)
 
-                // 2. 获取当前的课表配置，并更新时长字段
-                // 如果配置不存在，则使用当前 ID 创建一个默认配置
+                // 2. 更新课表配置
                 val currentConfig = appSettingsRepository.getCourseConfigOnce(currentTableId)
                     ?: CourseTableConfig(courseTableId = currentTableId)
 
@@ -116,12 +142,16 @@ class TimeSlotViewModel(
                     defaultBreakDuration = breakDuration
                 )
 
-                // 3. 将新的课表配置写入数据库
+                // 3. 写入数据库
                 appSettingsRepository.insertOrUpdateCourseConfig(updatedConfig)
 
-                Log.d("TimeSlotViewModel", "Settings saved successfully for table: $currentTableId")
+                // 4. 重要：保存成功后同步备份状态
+                updateBackupPoint(timeSlotsWithCorrectId, classDuration, breakDuration)
+
+                onSuccess()
+                Log.d("TimeSlotViewModel", "Settings saved successfully")
             } else {
-                Log.e("TimeSlotViewModel", "Cannot save settings. The current CourseTable ID is invalid or not found.")
+                Log.e("TimeSlotViewModel", "Cannot save settings: Invalid table ID")
             }
         }
     }
@@ -130,25 +160,6 @@ class TimeSlotViewModel(
 data class TimeSlotUiState(
     val timeSlots: List<TimeSlot>,
     val defaultClassDuration: Int,
-    val defaultBreakDuration: Int
+    val defaultBreakDuration: Int,
+    val isDataLoaded: Boolean = false
 )
-
-/**
- * ViewModel 的工厂类，用于依赖注入。
- */
-object TimeSlotViewModelFactory : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-        val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
-        val myApplication = application as MyApplication
-
-        val appSettingsRepository = myApplication.appSettingsRepository
-        val timeSlotRepository = myApplication.timeSlotRepository
-        val courseTableRepository = myApplication.courseTableRepository
-
-        if (modelClass.isAssignableFrom(TimeSlotViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return TimeSlotViewModel(timeSlotRepository, appSettingsRepository, courseTableRepository) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class")
-    }
-}

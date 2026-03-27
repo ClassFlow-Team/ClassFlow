@@ -2,6 +2,7 @@
 #### 与我们交流和讨论 ![](https://img.shields.io/badge/QQ_频道-pd68794181-blue)  
 
 本仓库为拾光课程表（shiguangschedule）项目的主仓库，包含软件的全部源代码及相关资源。项目采用开源模式，欢迎社区开发者参与贡献和适配。  
+
 ## 预览图
 
 ![预览图1](/picture/Preview_1.png "预览图")
@@ -30,7 +31,7 @@
   
 #### 小组件  
 - 多种功能小组件任其选择  
-  > [全部小组件预览图](/picture/all_widget.jpg)。
+  > [全部小组件预览图](/picture/all_widget.png)。
 - 小组件支持明日预告
   > 超小小组件不支持明日预告,因为只有2x1的尺寸,设计上是用来展示最近一节课的消息  
 
@@ -90,8 +91,9 @@
 - 项目主页：[https://github.com/XingHeYuZhuan/shiguangschedule](https://github.com/XingHeYuZhuan/shiguangschedule)
 - 适配脚本仓库：[https://github.com/XingHeYuZhuan/shiguang_warehouse](https://github.com/XingHeYuZhuan/shiguang_warehouse)
 - 查看如何适配,Wiki：[https://github.com/XingHeYuZhuan/shiguangschedule/wiki](https://github.com/XingHeYuZhuan/shiguangschedule/wiki)
-- 浏览器测试插件:[https://github.com/XingHeYuZhuan/shiguang_Tester](https://github.com/XingHeYuZhuan/shiguang_Tester)
+- 浏览器测试插件:[https://github.com/XingHeYuZhuan/shiguang_Tester](https://github.com/XingHeYuZhuan/shiguang_Tester)  
 
+- ###### 由[@Jursin](https://github.com/Jursin)主导并维护的网站:[https://sgschedule.jursin.top/](https://sgschedule.jursin.top/)  
 ---
 
 如有问题或建议，欢迎提交 Issue 或 PR。

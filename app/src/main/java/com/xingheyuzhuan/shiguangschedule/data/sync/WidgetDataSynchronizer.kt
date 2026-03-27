@@ -1,12 +1,12 @@
 package com.xingheyuzhuan.shiguangschedule.data.sync
 
 import android.content.Context
-import com.xingheyuzhuan.shiguangschedule.data.db.main.AppSettings
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetCourse
 import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetAppSettings
+import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseTableRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
@@ -24,13 +24,15 @@ import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import javax.inject.Inject
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 /**
  * 负责主数据库和 Widget 数据库之间的数据同步。
  * 它持续监听数据变化，并自动将数据处理后存入为 Widget 优化的数据库。
  */
-class WidgetDataSynchronizer(
-    private val appContext: Context,
+class WidgetDataSynchronizer @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val appSettingsRepository: AppSettingsRepository,
     private val courseTableRepository: CourseTableRepository,
     private val timeSlotRepository: TimeSlotRepository,
@@ -56,7 +58,7 @@ class WidgetDataSynchronizer(
         .flatMapLatest { appSettings ->
             val tableId = appSettings.currentCourseTableId
 
-            if (tableId != null) {
+            if (tableId.isNotEmpty()) {
                 // 1. 课程列表 Flow
                 val coursesFlow = courseTableRepository.getCoursesWithWeeksByTableId(tableId)
                 // 2. 时间段列表 Flow
@@ -95,11 +97,11 @@ class WidgetDataSynchronizer(
         val tableId = appSettings.currentCourseTableId
 
         // 1. 获取 Courses 和 TimeSlots
-        val coursesWithWeeks = if (tableId != null) courseTableRepository.getCoursesWithWeeksByTableId(tableId).first() else emptyList()
-        val timeSlots = if (tableId != null) timeSlotRepository.getTimeSlotsByCourseTableId(tableId).first() else emptyList()
+        val coursesWithWeeks = if (tableId.isNotEmpty()) courseTableRepository.getCoursesWithWeeksByTableId(tableId).first() else emptyList()
+        val timeSlots = if (tableId.isNotEmpty()) timeSlotRepository.getTimeSlotsByCourseTableId(tableId).first() else emptyList()
 
         // 2. 获取 CourseTableConfig
-        val courseConfig = if (tableId != null) appSettingsRepository.getCourseConfigOnce(tableId) else null
+        val courseConfig = if (tableId.isNotEmpty()) appSettingsRepository.getCourseConfigOnce(tableId) else null
 
         if (courseConfig != null) {
             performSync(appSettings, courseConfig, coursesWithWeeks, timeSlots)
@@ -114,7 +116,7 @@ class WidgetDataSynchronizer(
      * 实际执行同步逻辑的私有方法，避免代码重复。
      */
     private suspend fun performSync(
-        appSettings: AppSettings,
+        appSettings: AppSettingsModel,
         courseConfig: CourseTableConfig,
         coursesWithWeeks: List<CourseWithWeeks>,
         timeSlots: List<TimeSlot>
@@ -144,8 +146,7 @@ class WidgetDataSynchronizer(
         )
         widgetRepository.insertOrUpdateAppSettings(widgetSettings)
 
-        // 保持不变：从 AppSettings 获取数据
-        val skippedDates = appSettings.skippedDates ?: emptySet()
+        val skippedDates = appSettings.skippedDates
         val timeSlotMap = timeSlots.associateBy { it.number }
         val today = LocalDate.now()
 

@@ -8,88 +8,64 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.media.AudioManager
+import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import androidx.core.content.getSystemService
 import com.xingheyuzhuan.shiguangschedule.MainActivity
-import com.xingheyuzhuan.shiguangschedule.MyApplication
 import com.xingheyuzhuan.shiguangschedule.R
+import com.xingheyuzhuan.shiguangschedule.data.model.AutoControlMode
 import com.xingheyuzhuan.shiguangschedule.widget.updateAllWidgets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 
+@AndroidEntryPoint
 class CourseAlarmReceiver : BroadcastReceiver() {
+
+    @Inject lateinit var appSettingsRepository: AppSettingsRepository
 
     companion object {
         const val NOTIFICATION_CHANNEL_ID = "course_notification_channel"
-        const val NOTIFICATION_ID_BASE = 1000
         const val EXTRA_COURSE_NAME = "course_name"
         const val EXTRA_COURSE_POSITION = "course_position"
+        const val EXTRA_COURSE_TEACHER = "extra_course_teacher"
         const val EXTRA_COURSE_ID = "course_id"
 
-        const val EXTRA_DND_ACTION = "extra_dnd_action" // Intent 中用于传递动作类型的 Key
-        const val DND_ACTION_START = "dnd_action_start" // 模式开启的动作值
-        const val DND_ACTION_END = "dnd_action_end"     // 模式关闭的动作值
+        const val EXTRA_DND_ACTION = "extra_dnd_action"
+        const val DND_ACTION_START = "dnd_action_start"
+        const val DND_ACTION_END = "dnd_action_end"
+
+        const val EXTRA_ALARM_SLOT_ID = "EXTRA_ALARM_SLOT_ID"
+        // 覆盖 50001 (DND) 到 50110 (Course Reminders)
+        private const val SLOT_START = 50001
+        private const val SLOT_END = 50110
+
+        const val ACTION_DISMISS_NOTIFICATION = "com.xingheyuzhuan.shiguangschedule.ACTION_DISMISS_NOTIFICATION"
 
         private const val ALARM_IDS_PREFS = "alarm_ids_prefs"
         private const val KEY_ACTIVE_ALARM_IDS = "active_alarm_ids"
-
         private const val TAG = "CourseAlarmReceiver"
 
-        const val MODE_DND = "DND"
-        const val MODE_SILENT = "SILENT"
-
-        /**
-         * 核心功能：切换上课时行为模式 (勿扰/静音)
-         * @param context Context
-         * @param enableMode true 表示开启模式，false 表示关闭模式
-         * @param modeType 决定要切换的模式类型 ("DND" 或 "SILENT")
-         */
-        fun toggleMode(context: Context, enableMode: Boolean, modeType: String) {
+        fun toggleMode(context: Context, enableMode: Boolean, modeType: AutoControlMode) {
             val audioManager = context.getSystemService<AudioManager>()
             val notificationManager = context.getSystemService<NotificationManager>()
-
-            if (audioManager == null || notificationManager == null) {
-                Log.e(TAG, "无法获取 AudioManager 或 NotificationManager 服务。")
-                return
-            }
-
-            // 勿扰模式权限是 DND 和静音模式都需要的基础权限
-            if (!notificationManager.isNotificationPolicyAccessGranted) {
-                Log.w(TAG, "缺少勿扰模式权限，无法切换自动行为模式状态。")
-                return
-            }
-
-            val logPrefix = if (enableMode) "开启" else "关闭"
-
+            if (audioManager == null || notificationManager == null) return
+            if (!notificationManager.isNotificationPolicyAccessGranted) return
             when (modeType) {
-                MODE_DND -> {
-                    if (enableMode) {
-                        // DND 开启: 完全静音 (Total Silence)
-                        notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
-                        Log.i(TAG, "自动模式：已${logPrefix} [勿扰模式] (INTERRUPTION_FILTER_NONE)。")
-                    } else {
-                        // DND 关闭: 恢复所有通知
-                        notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
-                        Log.i(TAG, "自动模式：已${logPrefix} [勿扰模式] (INTERRUPTION_FILTER_ALL)。")
-                    }
+                AutoControlMode.DND -> {
+                    notificationManager.setInterruptionFilter(
+                        if (enableMode) NotificationManager.INTERRUPTION_FILTER_PRIORITY
+                        else NotificationManager.INTERRUPTION_FILTER_ALL
+                    )
                 }
-                MODE_SILENT -> {
-                    if (enableMode) {
-                        // 静音模式开启 (Silent)
-                        audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
-                        Log.i(TAG, "自动模式：已${logPrefix} [静音模式] (RINGER_MODE_SILENT)。")
-                    } else {
-                        // 静音模式关闭 (恢复正常模式)
-                        audioManager.ringerMode = AudioManager.RINGER_MODE_NORMAL
-                        Log.i(TAG, "自动模式：已${logPrefix} [静音模式] (RINGER_MODE_NORMAL)。")
-                    }
-                }
-                else -> {
-                    Log.e(TAG, "未知或不支持的自动模式类型: $modeType")
+                AutoControlMode.SILENT -> {
+                    audioManager.ringerMode = if (enableMode) AudioManager.RINGER_MODE_SILENT
+                    else AudioManager.RINGER_MODE_NORMAL
                 }
             }
         }
@@ -97,48 +73,55 @@ class CourseAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context?, intent: Intent?) {
         context?.let { ctx ->
-            val pendingResult = goAsync()
+            if (intent?.action == ACTION_DISMISS_NOTIFICATION) {
+                val notifyId = intent.getIntExtra("target_notification_id", -1)
+                if (notifyId != -1) {
+                    val nm = ctx.getSystemService<NotificationManager>()
+                    nm?.cancel(notifyId)
+                }
+                return
+            }
 
+            val slotId = intent?.getIntExtra(EXTRA_ALARM_SLOT_ID, -1) ?: -1
+            val dndAction = intent?.getStringExtra(EXTRA_DND_ACTION)
+
+            if (intent?.data != null || (slotId !in SLOT_START..SLOT_END && dndAction.isNullOrEmpty())) {
+                Log.d(TAG, "已拦截非法或旧版闹钟。")
+                return
+            }
+
+            val pendingResult = goAsync()
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    val app = ctx.applicationContext as? MyApplication
-                    val appSettingsRepository = app?.appSettingsRepository
-
-                    if (appSettingsRepository == null) {
-                        Log.e(TAG, "无法获取 MyApplication 实例或 AppSettingsRepository。")
-                        return@launch
-                    }
-
-                    val appSettings = appSettingsRepository.getAppSettings().first()
+                    val appSettings = appSettingsRepository.getAppSettingsOnce()
                     val modeToUse = appSettings.autoControlMode
-
-                    // 检查模式动作
-                    val dndAction = intent?.getStringExtra(EXTRA_DND_ACTION)
+                    val isCompatMode = appSettings.compatWearableSync
 
                     if (!dndAction.isNullOrEmpty()) {
-                        // 1. 模式闹钟被触发
-                        if (dndAction == DND_ACTION_START) {
-                            toggleMode(ctx, true, modeToUse)
-                        } else if (dndAction == DND_ACTION_END) {
-                            toggleMode(ctx, false, modeToUse)
-
-                            DndSchedulerWorker.enqueueWork(ctx)
+                        when (dndAction) {
+                            DND_ACTION_START -> toggleMode(ctx, true, modeToUse)
+                            DND_ACTION_END -> {
+                                toggleMode(ctx, false, modeToUse)
+                                DndSchedulerWorker.enqueueWork(ctx)
+                            }
                         }
-
                     } else {
-                        val courseName = intent?.getStringExtra(EXTRA_COURSE_NAME) ?: "未知课程"
-                        val coursePosition = intent?.getStringExtra(EXTRA_COURSE_POSITION) ?: "地点未知"
+                        val courseName = intent?.getStringExtra(EXTRA_COURSE_NAME).takeUnless { it.isNullOrEmpty() }
+                            ?: ctx.getString(R.string.notification_unknown_course)
+
+                        val position = intent?.getStringExtra(EXTRA_COURSE_POSITION).takeUnless { it.isNullOrEmpty() }
+                            ?: ctx.getString(R.string.notification_unknown_position)
+                        val teacher = intent?.getStringExtra(EXTRA_COURSE_TEACHER) ?: ""
                         val courseIdString = intent?.getStringExtra(EXTRA_COURSE_ID)
 
                         if (!courseIdString.isNullOrEmpty()) {
-                            val notificationId = courseIdString.hashCode() and 0x7fffffff
-                            showNotification(ctx, notificationId, courseName, coursePosition)
+                            showNotification(ctx, slotId, courseName, position, teacher, isCompatMode)
                             removeAlarmIdFromPrefs(ctx, courseIdString)
-
-                            Log.d(TAG, "正在触发小组件更新...")
                             updateAllWidgets(ctx)
                         }
                     }
+                } catch (e: Exception) {
+                    Log.e(TAG, "onReceive 异常", e)
                 } finally {
                     pendingResult.finish()
                 }
@@ -146,62 +129,85 @@ class CourseAlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun showNotification(context: Context, courseId: Int, name: String, position: String) {
-        val notificationManager = context.getSystemService<NotificationManager>() ?: return
+    private fun showNotification(
+        context: Context,
+        notificationId: Int,
+        name: String,
+        position: String,
+        teacher: String,
+        isCompatMode: Boolean
+    ) {
+        val nm = context.getSystemService<NotificationManager>() ?: return
 
-        if (notificationManager.getNotificationChannel(NOTIFICATION_CHANNEL_ID) == null) {
+        val alertTitle = context.getString(R.string.notification_title_course_alert)
+        val posLabel = context.getString(R.string.label_position)
+        val teacherLabel = context.getString(R.string.label_teacher)
+        val closeActionText = context.getString(R.string.action_close)
+        val liveStatusText = context.getString(R.string.notification_live_status_preparing)
+
+        if (nm.getNotificationChannel(NOTIFICATION_CHANNEL_ID) == null) {
             val channel = NotificationChannel(
                 NOTIFICATION_CHANNEL_ID,
                 context.getString(R.string.item_course_reminder),
                 NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = context.getString(R.string.notification_channel_desc_course_alert)
-            }
-            notificationManager.createNotificationChannel(channel)
+            )
+            nm.createNotificationChannel(channel)
         }
 
-        val launchIntent = Intent(context, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            context,
-            0,
-            launchIntent,
+        val dismissIntent = Intent(context, CourseAlarmReceiver::class.java).apply {
+            action = ACTION_DISMISS_NOTIFICATION
+            putExtra("target_notification_id", notificationId)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                identifier = notificationId.toString()
+            }
+        }
+        val dismissPI = PendingIntent.getBroadcast(
+            context, notificationId, dismissIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // 1. 获取彩色大图标的 Bitmap
-        val largeIconBitmap = BitmapFactory.decodeResource(
-            context.resources,
-            R.mipmap.ic_launcher
-        )
+        val bigTextStyle = NotificationCompat.BigTextStyle()
+            .setBigContentTitle(name)
+            .bigText("$posLabel: $position\n$teacherLabel: $teacher")
 
-        val notification = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setLargeIcon(largeIconBitmap)
-            .setContentTitle(context.getString(R.string.notification_title_course_alert))
-            .setContentText("$name - $position")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .build()
+            .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher))
+            .setContentTitle(name)
+            .setContentText("$posLabel: $position")
+            .setSubText(alertTitle)
+            .setStyle(bigTextStyle)
 
-        val finalNotificationId = NOTIFICATION_ID_BASE + courseId
-        notificationManager.notify(finalNotificationId, notification)
+            // 非兼容模式应用
+            .setOngoing(!isCompatMode)
+            .setAutoCancel(isCompatMode)
+
+            .setCategory(NotificationCompat.CATEGORY_EVENT)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setShowWhen(true)
+            .addAction(0, closeActionText, dismissPI)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    context, 0, Intent(context, MainActivity::class.java),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            )
+
+        // Android 16 实时更新特性
+        if (Build.VERSION.SDK_INT >= 36) {
+            builder.setRequestPromotedOngoing(true)
+            builder.setShortCriticalText(liveStatusText)
+        }
+
+        nm.notify(notificationId, builder.build())
     }
 
-    /**
-     * 在闹钟触发后，从 SharedPreferences 中移除对应的闹钟 ID。
-     * 这确保了已完成的闹钟不会被重复取消，并保持记录的准确性。
-     */
     private fun removeAlarmIdFromPrefs(context: Context, courseId: String) {
-        val sharedPreferences = context.getSharedPreferences(ALARM_IDS_PREFS, Context.MODE_PRIVATE)
-        val currentIds = sharedPreferences.getStringSet(KEY_ACTIVE_ALARM_IDS, null)?.toMutableSet()
+        val sp = context.getSharedPreferences(ALARM_IDS_PREFS, Context.MODE_PRIVATE)
+        val currentIds = sp.getStringSet(KEY_ACTIVE_ALARM_IDS, null)?.toMutableSet()
         if (currentIds != null) {
             currentIds.remove(courseId)
-            // 使用 KTX 扩展函数，代码更简洁
-            sharedPreferences.edit {
-                putStringSet(KEY_ACTIVE_ALARM_IDS, currentIds)
-            }
-            Log.d(TAG, "已从 SharedPreferences 中移除闹钟ID：$courseId")
+            sp.edit { putStringSet(KEY_ACTIVE_ALARM_IDS, currentIds) }
         }
     }
 }

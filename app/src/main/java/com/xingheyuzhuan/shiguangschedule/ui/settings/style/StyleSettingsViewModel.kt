@@ -1,24 +1,23 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.style
 
 import android.content.Context
-import android.net.Uri
+import android.graphics.Bitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.CreationExtras
-import com.xingheyuzhuan.shiguangschedule.MyApplication
 import com.xingheyuzhuan.shiguangschedule.data.db.main.Course
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.model.DualColor
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.BorderTypeProto
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.StyleSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.MergedCourseBlock
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.WeeklyScheduleUiState
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGridStyleComposed
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGridStyleComposed.Companion.toComposedStyle
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,9 +29,12 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.FileOutputStream
 import java.util.UUID
+import javax.inject.Inject
 
-class StyleSettingsViewModel(
+@HiltViewModel
+class StyleSettingsViewModel @Inject constructor(
     private val styleRepository: StyleSettingsRepository,
     private val appSettingsRepository: AppSettingsRepository
 ) : ViewModel() {
@@ -81,7 +83,7 @@ class StyleSettingsViewModel(
      * 2. 生成一个全新的随机文件名 (UUID)。
      * 3. 将新图拷贝到私有目录并更新数据库。
      */
-    fun updateWallpaper(context: Context, uri: Uri) = viewModelScope.launch(Dispatchers.IO) {
+    fun saveCroppedWallpaper(context: Context, bitmap: Bitmap) = viewModelScope.launch(Dispatchers.IO) {
         try {
             val currentStyle = styleRepository.getStyleOnce()
             val currentPath = currentStyle.backgroundImagePath ?: ""
@@ -96,10 +98,9 @@ class StyleSettingsViewModel(
             val newFileName = "wallpaper_${UUID.randomUUID()}.jpg"
             val newFile = File(context.filesDir, newFileName)
 
-            context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                newFile.outputStream().use { outputStream ->
-                    inputStream.copyTo(outputStream)
-                }
+            FileOutputStream(newFile).use { out ->
+                // 使用 100 质量不压缩画质
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
             }
 
             styleRepository.setBackgroundImagePath(newFile.absolutePath)
@@ -146,6 +147,7 @@ class StyleSettingsViewModel(
         // 再重置数据库所有项
         styleRepository.resetAllStyleSettings()
     }
+
     // --- 尺寸与边距 API ---
     fun updateSectionHeight(height: Float) = viewModelScope.launch { styleRepository.setSectionHeight(height) }
     fun updateTimeColumnWidth(width: Float) = viewModelScope.launch { styleRepository.setTimeColumnWidth(width) }
@@ -187,8 +189,9 @@ class StyleSettingsViewModel(
         styleRepository.setShowStartTime(show)
     }
 
-    fun updateConflictColor(color: Color, isDark: Boolean) = viewModelScope.launch {
-        styleRepository.setConflictCourseColorLong(color.toArgb().toLong(), isDark)
+    /** 重叠课程的背景颜色 */
+    fun updateOverlapColor(color: Color, isDark: Boolean) = viewModelScope.launch {
+        styleRepository.setOverlapCourseColorLong(color.toArgb().toLong(), isDark)
     }
 
     /** * 更新课程块字体的缩放比例
@@ -211,6 +214,21 @@ class StyleSettingsViewModel(
     /** 更新是否移除地点前的 "@" 符号 */
     fun updateRemoveLocationAt(remove: Boolean) = viewModelScope.launch {
         styleRepository.setRemoveLocationAt(remove)
+    }
+
+    /** 更新文字是否水平居中 */
+    fun updateTextAlignCenterHorizontal(center: Boolean) = viewModelScope.launch {
+        styleRepository.setTextAlignCenterHorizontal(center)
+    }
+
+    /** 更新文字是否垂直居中 */
+    fun updateTextAlignCenterVertical(center: Boolean) = viewModelScope.launch {
+        styleRepository.setTextAlignCenterVertical(center)
+    }
+
+    /** 更新课程块边框类型 (无/实线/虚线) */
+    fun updateBorderType(type: BorderTypeProto) = viewModelScope.launch {
+        styleRepository.setBorderType(type)
     }
 
     /**
@@ -244,7 +262,6 @@ class StyleSettingsViewModel(
         styleRepository.setCourseColorMaps(updatedMaps)
     }
 
-    //  演示数据构造
     //  演示数据构造
     private fun createDemoCourses(): List<MergedCourseBlock> {
         val dummyTableId = UUID.randomUUID().toString()
@@ -281,11 +298,9 @@ class StyleSettingsViewModel(
         }
 
         // 1. 普通课程展示 (周一 1-2节)
-        // 占满第 1 节和第 2 节，逻辑坐标应该是从 0.0 到 2.0
         val courseA = Course(UUID.randomUUID().toString(), dummyTableId, "普通课程展示", "张老师", "教A-101", 1, 1, 2, false, null, null, 0)
 
         // 2. 自定义时间演示 (周二 09:50 - 11:30)
-        // 假设第 3 节是 10:20 开始，那么 09:50 会被计算在第 2 节和第 3 节之间
         val courseB = Course(UUID.randomUUID().toString(), dummyTableId, "精准渲染演示", "系统", "1:1还原", 2, null, null, true, "09:50", "11:30", 1)
 
         // 3. 冲突课程 (周三 1-2节)
@@ -330,15 +345,4 @@ class StyleSettingsViewModel(
         TimeSlot(7, "16:00", "16:45", "demo"),
         TimeSlot(8, "16:55", "17:40", "demo")
     )
-}
-
-object StyleSettingsViewModelFactory : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-        val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]) as MyApplication
-        return StyleSettingsViewModel(
-            styleRepository = application.styleSettingsRepository,
-            appSettingsRepository = application.appSettingsRepository
-        ) as T
-    }
 }

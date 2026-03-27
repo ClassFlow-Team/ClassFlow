@@ -19,8 +19,14 @@ import com.xingheyuzhuan.shiguangschedule.tool.IcsExportTool
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 import java.util.UUID
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class CourseConversionRepository(
+/**
+ * 课表转换仓库，负责处理课程数据的导入、导出以及 ICS 生成等逻辑。
+ */
+@Singleton
+class CourseConversionRepository @Inject constructor(
     private val courseDao: CourseDao,
     private val courseWeekDao: CourseWeekDao,
     private val timeSlotDao: TimeSlotDao,
@@ -205,7 +211,7 @@ class CourseConversionRepository(
      * @param tableId 要导出的课表的 ID。
      * @return 包含课程和时间段的完整 JSON 模型。
      */
-    suspend fun exportCourseTableToJson(tableId: String): CourseTableExportModel? {
+    suspend fun exportCourseTableToJson(tableId: String): CourseTableExportModel {
 
         val coursesWithWeeks = courseDao.getCoursesWithWeeksByTableId(tableId).first()
         val exportCourses = coursesWithWeeks.map { courseWithWeeks ->
@@ -275,7 +281,7 @@ class CourseConversionRepository(
 
         // 1. 从 AppSettings 获取全局设置 (用于 skippedDates)
         val appSettings = appSettingsRepository.getAppSettingsOnce()
-        val skippedDates = appSettings?.skippedDates
+        val skippedDates = appSettings.skippedDates
 
         // 2. 从 CourseTableConfig 获取课表配置 (用于日期和总周数)
         val courseConfig = appSettingsRepository.getCourseConfigOnce(tableId)
@@ -291,6 +297,7 @@ class CourseConversionRepository(
             timeSlots = timeSlots,
             semesterStartDate = semesterStartDate,
             semesterTotalWeeks = courseConfig.semesterTotalWeeks,
+            firstDayOfWeekInt = courseConfig.firstDayOfWeek,
             alarmMinutes = alarmMinutes,
             skippedDates = skippedDates
         )

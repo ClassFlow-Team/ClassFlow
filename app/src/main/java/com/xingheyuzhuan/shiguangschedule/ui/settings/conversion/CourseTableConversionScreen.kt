@@ -51,13 +51,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import com.xingheyuzhuan.shiguangschedule.tool.shareFile
 import com.xingheyuzhuan.shiguangschedule.ui.components.CourseTablePickerDialog
 import com.xingheyuzhuan.shiguangschedule.ui.components.NativeNumberPicker
@@ -161,50 +160,40 @@ fun IcsExportDialog(
     var alarmMinutes by remember { mutableStateOf<Int?>(15) }
     var showTablePicker by remember { mutableStateOf(false) }
 
-    val dialogTitleIcsExport = stringResource(R.string.dialog_title_ics_export_settings)
-    val labelSelectAlarm = stringResource(R.string.label_select_alarm_time)
-    val actionCancel = stringResource(R.string.action_cancel)
-    val actionNextStep = stringResource(R.string.action_next_step)
     val dialogTitleSelectExportTable = stringResource(R.string.dialog_title_select_export_table)
 
     // 当 showTablePicker 为 false 时，显示第一个对话框（提醒时间选择）
     if (!showTablePicker) {
-        Dialog(onDismissRequest = onDismissRequest) {
-            Card {
+        AlertDialog(
+            onDismissRequest = onDismissRequest,
+            title = {
+                Text(text = stringResource(R.string.dialog_title_ics_export_settings))
+            },
+            text = {
                 Column(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = dialogTitleIcsExport,
-                        style = MaterialTheme.typography.titleLarge
-                    )
+                    Text(stringResource(R.string.label_select_alarm_time))
                     Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(labelSelectAlarm, fontSize = 16.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
                     AlarmMinutesPicker(
                         modifier = Modifier.width(150.dp),
                         onValueSelected = { minutes -> alarmMinutes = minutes },
                         itemHeight = 48.dp
                     )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = onDismissRequest) {
-                            Text(actionCancel)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(onClick = { showTablePicker = true }) {
-                            Text(actionNextStep)
-                        }
-                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showTablePicker = true }) {
+                    Text(stringResource(R.string.action_next_step))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismissRequest) {
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
-        }
+        )
     }
 
     // 当 showTablePicker 为 true 时，显示第二个对话框（课表选择）
@@ -226,7 +215,7 @@ fun IcsExportDialog(
 @Composable
 fun CourseTableConversionScreen(
     navController: NavHostController,
-    viewModel: CourseTableConversionViewModel = viewModel(factory = CourseTableConversionViewModelFactory)
+    viewModel: CourseTableConversionViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -381,6 +370,10 @@ fun CourseTableConversionScreen(
             Text(stringResource(R.string.section_file_conversion), style = MaterialTheme.typography.titleLarge, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
             Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -475,6 +468,10 @@ fun CourseTableConversionScreen(
             Text(stringResource(R.string.section_school_import), style = MaterialTheme.typography.titleLarge, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
             Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -482,7 +479,7 @@ fun CourseTableConversionScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { navController.navigate(Screen.SchoolSelectionListScreen.route) }
+                            .clickable { navController.navigateSafe(Screen.SchoolSelectionListScreen.route) }
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween

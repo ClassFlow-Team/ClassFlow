@@ -1,166 +1,152 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.CreationExtras
-import com.xingheyuzhuan.shiguangschedule.MyApplication
-import com.xingheyuzhuan.shiguangschedule.data.db.main.AppSettings
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
+import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.DayOfWeek
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import javax.inject.Inject
 
+/**
+ * 界面原子状态类：包含设置页渲染所需的全部数据包
+ */
+data class SettingsUiState(
+    val appSettings: AppSettingsModel = AppSettingsModel(),
+    val courseConfig: CourseTableConfig? = null,
+    val currentWeek: Int? = null,
+    val isReady: Boolean = false
+)
 
-class SettingsViewModel(
+@HiltViewModel
+class SettingsViewModel @Inject constructor(
     private val appSettingsRepository: AppSettingsRepository
 ) : ViewModel() {
 
-    // 直接从 Repository 获取 AppSettings 的数据流，并暴露给 UI
-    val appSettingsState: StateFlow<AppSettings> = appSettingsRepository.getAppSettings()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = AppSettings()
-        )
+    // 1. 基础配置流 (DataStore)
+    private val appSettingsFlow = appSettingsRepository.getAppSettings()
 
+    // 2. 动态物理配置流 (Room)
     @OptIn(ExperimentalCoroutinesApi::class)
-    val courseTableConfigState: StateFlow<CourseTableConfig?> = appSettingsState
-        .flatMapLatest { appSettings ->
-            val id = appSettings.currentCourseTableId
-            if (id != null) {
-                appSettingsRepository.getCourseTableConfigFlow(id)
-            } else {
-                flowOf(null)
-            }
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = null
-        )
-
-    private val _currentWeekState = MutableStateFlow<Int?>(null)
-    val currentWeekState: StateFlow<Int?> = _currentWeekState
-
-    init {
-        updateCurrentWeek()
+    private val courseTableConfigFlow = appSettingsFlow.flatMapLatest { settings ->
+        val id = settings.currentCourseTableId
+        if (id.isNotEmpty()) appSettingsRepository.getCourseTableConfigFlow(id)
+        else flowOf(null)
     }
 
     /**
-     * 一个私有函数，用于更新当前周数的 StateFlow。
+     * 核心优化：聚合 UI 状态流
+     * 使用 combine 将多个异步源合并为一个原子包，消除状态裂缝
      */
-    private fun updateCurrentWeek() {
+    val uiState: StateFlow<SettingsUiState> = combine(
+        appSettingsFlow,
+        courseTableConfigFlow
+    ) { settings, config ->
+        val week = if (config != null) {
+            val rawWeek = appSettingsRepository.getWeekIndexAtDate(
+                targetDate = LocalDate.now(),
+                startDateStr = config.semesterStartDate,
+                firstDayOfWeekInt = config.firstDayOfWeek
+            )
+            rawWeek?.takeIf { it in 1..config.semesterTotalWeeks }
+        } else null
+
+        SettingsUiState(
+            appSettings = settings,
+            courseConfig = config,
+            currentWeek = week,
+            isReady = true
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Lazily,
+        initialValue = SettingsUiState()
+    )
+
+    /**
+     * 是否显示非本周课程
+     */
+    fun onShowNonCurrentWeekChanged(show: Boolean) {
         viewModelScope.launch {
-            _currentWeekState.value = appSettingsRepository.calculateCurrentWeekFromDb()
+            val currentSettings = uiState.value.appSettings
+            val updatedSettings = currentSettings.copy(showNonCurrentWeekCourses = show)
+            appSettingsRepository.insertOrUpdateAppSettings(updatedSettings)
         }
     }
 
     /**
-     * UI 事件：更新是否显示周末。
-     * 逻辑：现在更新的是 CourseTableConfig
+     * 更新周末显示
      */
     fun onShowWeekendsChanged(show: Boolean) {
         viewModelScope.launch {
-            val currentId = appSettingsState.value.currentCourseTableId ?: return@launch
-            // 从 DB 获取最新快照以进行更新
-            val currentConfig = appSettingsRepository.getCourseConfigOnce(currentId) ?: return@launch
-
-            val newConfig = currentConfig.copy(showWeekends = show)
-            appSettingsRepository.insertOrUpdateCourseConfig(newConfig)
+            uiState.value.courseConfig?.let { currentConfig ->
+                val update = if (!show) {
+                    currentConfig.copy(showWeekends = false, firstDayOfWeek = DayOfWeek.MONDAY.value)
+                } else {
+                    currentConfig.copy(showWeekends = true)
+                }
+                appSettingsRepository.insertOrUpdateCourseConfig(update)
+            }
         }
     }
 
     /**
-     * UI 事件：更新学期开始日期。
-     * 逻辑：现在更新的是 CourseTableConfig
+     * 更新起始日期
      */
     fun onSemesterStartDateSelected(selectedDateMillis: Long?) {
         viewModelScope.launch {
-            if (selectedDateMillis != null) {
-                val currentId = appSettingsState.value.currentCourseTableId ?: return@launch
-                // 从 DB 获取最新快照以进行更新
-                val currentConfig = appSettingsRepository.getCourseConfigOnce(currentId) ?: return@launch
-
-                val selectedDate = Instant.ofEpochMilli(selectedDateMillis)
-                    .atZone(ZoneId.systemDefault())
-                    .toLocalDate()
+            val dateMillis = selectedDateMillis ?: return@launch
+            uiState.value.courseConfig?.let { currentConfig ->
+                val selectedDate = Instant.ofEpochMilli(dateMillis).atZone(ZoneId.systemDefault()).toLocalDate()
                 val newConfig = currentConfig.copy(
                     semesterStartDate = selectedDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
                 )
                 appSettingsRepository.insertOrUpdateCourseConfig(newConfig)
-                updateCurrentWeek()
             }
         }
     }
 
     /**
-     * UI 事件：更新学期总周数。
-     * 逻辑：现在更新的是 CourseTableConfig
+     * 更新总周数
      */
     fun onSemesterTotalWeeksSelected(totalWeeks: Int) {
         viewModelScope.launch {
-            val currentId = appSettingsState.value.currentCourseTableId ?: return@launch
-            val currentConfig = appSettingsRepository.getCourseConfigOnce(currentId) ?: return@launch
-
-            val newConfig = currentConfig.copy(semesterTotalWeeks = totalWeeks)
-            appSettingsRepository.insertOrUpdateCourseConfig(newConfig)
-            updateCurrentWeek()
+            uiState.value.courseConfig?.let {
+                appSettingsRepository.insertOrUpdateCourseConfig(it.copy(semesterTotalWeeks = totalWeeks))
+            }
         }
     }
 
     /**
-     * UI 事件：手动设置当前周数。
-     * 接受一个可空的 Int? 类型，以支持“假期中”选项。
-     * 逻辑：Repository 内部会处理 AppSettings 和 CourseTableConfig 的获取和更新，所以调用不变。
+     * 手动对齐周数 (联动：反向推算开学日期)
      */
     fun onCurrentWeekManuallySet(weekNumber: Int?) {
         viewModelScope.launch {
             appSettingsRepository.setSemesterStartDateFromWeek(weekNumber)
-            updateCurrentWeek()
         }
     }
 
     /**
-     * UI 事件：更新每周起始日。
-     * 逻辑：现在更新的是 CourseTableConfig 中的 firstDayOfWeek 字段。
+     * 更新每周起始日
      */
     fun onFirstDayOfWeekSelected(dayOfWeekInt: Int) {
         viewModelScope.launch {
-            val currentId = appSettingsState.value.currentCourseTableId ?: return@launch
-            // 从 DB 获取最新快照以进行更新
-            val currentConfig = appSettingsRepository.getCourseConfigOnce(currentId) ?: return@launch
-
-            val newConfig = currentConfig.copy(firstDayOfWeek = dayOfWeekInt)
-            appSettingsRepository.insertOrUpdateCourseConfig(newConfig)
-            // 修改了周起始日，需要重新计算当前周数
-            updateCurrentWeek()
+            uiState.value.courseConfig?.let { currentConfig ->
+                appSettingsRepository.insertOrUpdateCourseConfig(currentConfig.copy(firstDayOfWeek = dayOfWeekInt))
+            }
         }
-    }
-}
-/**
- * ViewModel 的工厂类，用于依赖注入。
- * 在此文件中定义，以提高代码内聚性。
- */
-object SettingsViewModelFactory : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-        val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
-
-        if (modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
-            val appSettingsRepository = (application as MyApplication).appSettingsRepository
-
-            @Suppress("UNCHECKED_CAST")
-            return SettingsViewModel(appSettingsRepository) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

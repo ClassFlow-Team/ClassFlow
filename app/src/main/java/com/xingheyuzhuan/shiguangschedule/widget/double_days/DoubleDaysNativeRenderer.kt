@@ -19,20 +19,22 @@ object DoubleDaysNativeRenderer {
     fun render(context: Context, snapshot: WidgetSnapshot): RemoteViews {
         val rv = RemoteViews(context.packageName, R.layout.widget_double_days_native)
 
-        // --- 1. 点击跳转主页逻辑 ---
+        // 状态彻底重置
+        resetWidgetState(rv)
+
+        // 点击跳转逻辑
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pendingIntent = PendingIntent.getActivity(
-            context,
-            0,
-            intent,
+            context, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         rv.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
 
-        // --- 2. 全局状态判断 (假期/开学) ---
-        val currentWeek = if (snapshot.currentWeek == 0) null else snapshot.currentWeek
+        // 全局状态判断
+        val currentWeek = if (snapshot.currentWeek <= 0) null else snapshot.currentWeek
+
         if (currentWeek == null) {
             rv.setViewVisibility(R.id.inner_content_card, View.GONE)
             rv.setViewVisibility(R.id.container_vacation, View.VISIBLE)
@@ -54,25 +56,38 @@ object DoubleDaysNativeRenderer {
         val todayCourses = allCourses.filter { it.date == today.toString() || it.date.isBlank() }
         val remainingToday = todayCourses.filter {
             !it.isSkipped && try { LocalTime.parse(it.endTime) > now } catch (e: Exception) { true }
-        }
+        }.sortedBy { it.startTime }
+
         renderColumn(
             context, rv,
-            R.id.container_today, R.id.tv_today_date, R.id.tv_today_footer, R.id.empty_today,
+            R.id.container_today, R.id.tv_today_date, R.id.tv_today_footer,
+            R.id.empty_today_container,
             today, remainingToday.take(2), remainingToday.size,
             R.string.widget_remaining_courses_format_today, snapshot
         )
 
         // 渲染右侧：明日
         val tomorrowCourses = allCourses.filter { it.date == tomorrow.toString() }
-        val effectiveTomorrow = tomorrowCourses.filter { !it.isSkipped }
+        val effectiveTomorrow = tomorrowCourses.filter { !it.isSkipped }.sortedBy { it.startTime }
+
         renderColumn(
             context, rv,
-            R.id.container_tomorrow, R.id.tv_tomorrow_date, R.id.tv_tomorrow_footer, R.id.empty_tomorrow,
+            R.id.container_tomorrow, R.id.tv_tomorrow_date, R.id.tv_tomorrow_footer,
+            R.id.empty_tomorrow_container,
             tomorrow, effectiveTomorrow.take(2), effectiveTomorrow.size,
             R.string.widget_remaining_courses_format_tomorrow, snapshot
         )
 
         return rv
+    }
+
+    private fun resetWidgetState(rv: RemoteViews) {
+        rv.setViewVisibility(R.id.inner_content_card, View.VISIBLE)
+        rv.setViewVisibility(R.id.container_vacation, View.GONE)
+        rv.removeAllViews(R.id.container_today)
+        rv.removeAllViews(R.id.container_tomorrow)
+        rv.setViewVisibility(R.id.empty_today_container, View.GONE)
+        rv.setViewVisibility(R.id.empty_tomorrow_container, View.GONE)
     }
 
     private fun renderColumn(
@@ -81,7 +96,7 @@ object DoubleDaysNativeRenderer {
         containerId: Int,
         dateId: Int,
         footerId: Int,
-        emptyId: Int,
+        emptyContainerId: Int,
         date: LocalDate,
         displayCourses: List<WidgetCourseProto>,
         totalCount: Int,
@@ -96,15 +111,17 @@ object DoubleDaysNativeRenderer {
         val datePattern = date.format(DateTimeFormatter.ofPattern("M.dd E", Locale.getDefault()))
         rootRv.setTextViewText(dateId, "$prefix $datePattern")
 
-        rootRv.removeAllViews(containerId)
-
         if (totalCount == 0) {
+            // 无课：隐藏课程容器和页脚，显示居中容器
             rootRv.setViewVisibility(containerId, View.GONE)
-            rootRv.setViewVisibility(emptyId, View.VISIBLE)
+            rootRv.setViewVisibility(emptyContainerId, View.VISIBLE)
             rootRv.setViewVisibility(footerId, View.GONE)
+            val emptyTextViewId = if (date == LocalDate.now()) R.id.empty_today else R.id.empty_tomorrow
+            rootRv.setTextViewText(emptyTextViewId, context.getString(R.string.text_no_course))
         } else {
+            // 有课：显示课程容器和页脚，隐藏居中容器
             rootRv.setViewVisibility(containerId, View.VISIBLE)
-            rootRv.setViewVisibility(emptyId, View.GONE)
+            rootRv.setViewVisibility(emptyContainerId, View.GONE)
             rootRv.setViewVisibility(footerId, View.VISIBLE)
             rootRv.setTextViewText(footerId, context.getString(footerResId, totalCount))
 
@@ -112,9 +129,7 @@ object DoubleDaysNativeRenderer {
                 val itemRv = RemoteViews(context.packageName, R.layout.widget_item_course_common)
                 itemRv.setTextViewText(R.id.tv_course_name, course.name)
                 itemRv.setTextViewText(R.id.tv_course_position, course.position)
-
-                val timeInterval = try { "${course.startTime.take(5)}-${course.endTime.take(5)}" } catch (e: Exception) { "" }
-                itemRv.setTextViewText(R.id.tv_course_time, timeInterval)
+                itemRv.setTextViewText(R.id.tv_course_time, "${course.startTime.take(5)}-${course.endTime.take(5)}")
 
                 if (course.teacher.isNotBlank()) {
                     itemRv.setViewVisibility(R.id.tv_course_teacher, View.VISIBLE)
@@ -123,22 +138,11 @@ object DoubleDaysNativeRenderer {
                     itemRv.setViewVisibility(R.id.tv_course_teacher, View.GONE)
                 }
 
-                // --- 核心改动：发送两条颜色指令 ---
                 val style = snapshot.style
                 if (course.colorInt < style.courseColorMapsCount) {
                     val colorPair = style.getCourseColorMaps(course.colorInt)
-
-                    // 指令 1: 发送给白天版的 ID
-                    val lightC = colorPair.lightColor.toInt()
-                    itemRv.setInt(R.id.course_indicator, "setBackgroundColor", lightC)
-
-                    // 指令 2: 发送给深色版的 ID (对应 layout-night 里的新 ID)
-                    val darkC = colorPair.darkColor.toInt()
-                    itemRv.setInt(R.id.course_indicator_dark, "setBackgroundColor", darkC)
-                } else {
-                    // 如果溢出，同样发送两条，或者直接用资源 ID（系统会自动换资源）
-                    itemRv.setInt(R.id.course_indicator, "setBackgroundResource", R.color.widget_course_fallback)
-                    itemRv.setInt(R.id.course_indicator_dark, "setBackgroundResource", R.color.widget_course_fallback)
+                    itemRv.setInt(R.id.course_indicator, "setColorFilter", colorPair.lightColor.toInt())
+                    itemRv.setInt(R.id.course_indicator_dark, "setColorFilter", colorPair.darkColor.toInt())
                 }
 
                 rootRv.addView(containerId, itemRv)

@@ -49,10 +49,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import com.xingheyuzhuan.shiguangschedule.navigation.AddEditCourseChannel
 import com.xingheyuzhuan.shiguangschedule.navigation.PresetCourseData
 import kotlinx.coroutines.launch
@@ -66,7 +67,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun CourseNameListScreen(
     navController: NavController,
-    viewModel: CourseNameListViewModel = viewModel(factory = CourseNameListViewModel.Factory)
+    viewModel: CourseNameListViewModel = hiltViewModel()
 ) {
     val uniqueCourseNames by viewModel.uniqueCourseNames.collectAsState()
     val coroutineScope = rememberCoroutineScope()
@@ -204,7 +205,7 @@ fun CourseNameListScreen(
 
                             // 3. 执行导航
                             val route = Screen.AddEditCourse.createRouteForNewCourse()
-                            navController.navigate(route)
+                            navController.navigateSafe(route)
                         }
                     }
                 ) {
@@ -253,7 +254,7 @@ fun CourseNameListScreen(
                             } else {
                                 // 正常模式：点击导航到详情页
                                 val route = Screen.CourseManagementDetail.createRoute(clickedName)
-                                navController.navigate(route)
+                                navController.navigateSafe(route)
                             }
                         },
                         onCourseLongClick = { clickedName ->

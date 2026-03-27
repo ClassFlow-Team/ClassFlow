@@ -4,22 +4,26 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.navigateSafe
 
 /**
  * 快捷操作二级页面
@@ -41,7 +46,7 @@ fun QuickActionsScreen(
 ) {
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = { Text(stringResource(R.string.item_quick_actions)) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
@@ -54,47 +59,51 @@ fun QuickActionsScreen(
             )
         }
     ) { innerPadding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            item {
-                // 课表调整分类卡片
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
+            Spacer(Modifier.height(16.dp))
+
+            Text(
+                text = stringResource(R.string.label_quick_action_category_schedule),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            // 内容卡片
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // 分类标题
-                        Text(
-                            text = stringResource(R.string.label_quick_action_category_schedule),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
+                    // 调课功能项
+                    QuickActionItem(
+                        title = stringResource(R.string.item_schedule_tweak),
+                        subtitle = stringResource(R.string.desc_schedule_tweak),
+                        onClick = { navController.navigateSafe(Screen.TweakSchedule.route) }
+                    )
 
-                        // 调课功能项
-                        QuickActionItem(
-                            title = stringResource(R.string.item_schedule_tweak),
-                            subtitle = stringResource(R.string.desc_schedule_tweak),
-                            onClick = { navController.navigate(Screen.TweakSchedule.route) }
-                        )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                        // 2. 快速删除功能项
-                        QuickActionItem(
-                            title = stringResource(R.string.item_quick_delete),
-                            subtitle = stringResource(R.string.quick_delete_subtitle),
-                            onClick = { navController.navigate(Screen.QuickDelete.route) }
-                        )
-                    }
+                    // 快速删除功能项
+                    QuickActionItem(
+                        title = stringResource(R.string.item_quick_delete),
+                        subtitle = stringResource(R.string.quick_delete_subtitle),
+                        onClick = { navController.navigateSafe(Screen.QuickDelete.route) }
+                    )
                 }
             }
         }

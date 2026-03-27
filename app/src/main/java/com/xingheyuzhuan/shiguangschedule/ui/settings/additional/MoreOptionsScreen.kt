@@ -62,6 +62,7 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateChecker
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateStatus
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateChecker.Companion.UPDATE_CHANNELS
@@ -439,6 +440,10 @@ fun MoreOptionsScreen(navController: NavController) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 shape = MaterialTheme.shapes.medium
             ) {
@@ -481,7 +486,7 @@ fun MoreOptionsScreen(navController: NavController) {
                         icon = Icons.AutoMirrored.Filled.ListAlt,
                         title = stringResource(R.string.item_open_source_licenses),
                         onClick = {
-                            navController.navigate(Screen.OpenSourceLicenses.route)
+                            navController.navigateSafe(Screen.OpenSourceLicenses.route)
                         }
                     )
 
@@ -490,7 +495,7 @@ fun MoreOptionsScreen(navController: NavController) {
                         icon = Icons.Default.Update,
                         title = stringResource(R.string.item_update_repo),
                         onClick = {
-                            navController.navigate(Screen.UpdateRepo.route)
+                            navController.navigateSafe(Screen.UpdateRepo.route)
                         }
                     )
                     // 贡献者列表
@@ -498,7 +503,7 @@ fun MoreOptionsScreen(navController: NavController) {
                         icon = Icons.Default.PeopleAlt,
                         title = stringResource(R.string.item_contributors),
                         onClick = {
-                            navController.navigate(Screen.ContributionList.route)
+                            navController.navigateSafe(Screen.ContributionList.route)
                         },
                         showDivider = true
                     )
