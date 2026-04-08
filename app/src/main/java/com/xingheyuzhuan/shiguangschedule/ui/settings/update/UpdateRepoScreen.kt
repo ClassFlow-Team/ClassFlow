@@ -12,24 +12,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -45,8 +28,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.xingheyuzhuan.shiguangschedule.BuildConfig
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.model.RepoType
@@ -55,10 +37,10 @@ import com.xingheyuzhuan.shiguangschedule.data.model.RepositoryInfo
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UpdateRepoScreen(
-    navController: NavController,
-    viewModel: UpdateRepoViewModel = viewModel(factory = UpdateRepoViewModelFactory)
+    onBack: () -> Unit,
+    viewModel: UpdateRepoViewModel = hiltViewModel()
 ) {
-    // 观察ViewModel的uiState
+    // 观察 ViewModel 的 uiState
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
@@ -66,7 +48,7 @@ fun UpdateRepoScreen(
             TopAppBar(
                 title = { Text(text = stringResource(R.string.title_update_repo_screen)) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.a11y_back)
@@ -83,7 +65,7 @@ fun UpdateRepoScreen(
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            // 第一个矩形区域：仓库选择与操作
+            // 仓库选择与操作卡片
             RepoSelectionCard(
                 repoList = uiState.repoList,
                 selectedRepo = uiState.selectedRepo,
@@ -102,7 +84,7 @@ fun UpdateRepoScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 第二个矩形区域：日志显示
+            // 日志显示卡片
             LogDisplayCard(logs = uiState.logs)
         }
     }
@@ -259,7 +241,7 @@ fun RepoEditOptions(
     currentPassword: String,
     onUsernameChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
-    textFieldColors: androidx.compose.material3.TextFieldColors
+    textFieldColors: TextFieldColors
 ) {
     // 只有在仓库被选中且可编辑时才显示编辑框
     if (selectedRepo?.editable == true) {

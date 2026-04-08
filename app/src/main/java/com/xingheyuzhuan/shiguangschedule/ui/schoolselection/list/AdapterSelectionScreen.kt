@@ -1,6 +1,5 @@
 package com.xingheyuzhuan.shiguangschedule.ui.schoolselection.list
 
-import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,20 +42,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.navigation.NavController
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import school_index.Adapter
 import school_index.AdapterCategory
-
-object WebViewNavigationHelper {
-    fun createRoute(initialUrl: String?, assetJsPath: String?): String {
-        val urlParam = Uri.encode(initialUrl ?: "about:blank")
-        val pathParam = Uri.encode(assetJsPath ?: "")
-        return "web_view/$urlParam/$pathParam"
-    }
-}
-
 
 /**
  * 二级页面：显示特定学校和当前类别下的所有适配器列表。
@@ -64,7 +53,8 @@ object WebViewNavigationHelper {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdapterSelectionScreen(
-    navController: NavController,
+    onNavigate: (Destination) -> Unit,
+    onBack: () -> Unit,
     schoolId: String,
     schoolName: String,
     categoryNumber: Int,
@@ -75,10 +65,10 @@ fun AdapterSelectionScreen(
     var adapters by remember { mutableStateOf<List<Adapter>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    // 关键修正：从传入的 number 参数计算出当前的 AdapterCategory
-    val currentCategory = AdapterCategory.forNumber(categoryNumber)
-        ?: AdapterCategory.BACHELOR_AND_ASSOCIATE
-
+    // 从传入的 number 计算当前的 AdapterCategory
+    val currentCategory = remember(categoryNumber) {
+        AdapterCategory.forNumber(categoryNumber) ?: AdapterCategory.BACHELOR_AND_ASSOCIATE
+    }
 
     @Composable
     fun getCategoryDisplayName(): String {
@@ -90,17 +80,13 @@ fun AdapterSelectionScreen(
         }
     }
 
-
-    // 当 schoolId 或当前计算出的类别改变时，重新加载适配器列表
+    // 数据加载逻辑
     LaunchedEffect(schoolId, currentCategory) {
         isLoading = true
         try {
             viewModel.updateSelectedCategory(currentCategory)
-
-            val loadedAdapters = viewModel.getAdaptersForSchoolAndCategory(schoolId)
-            adapters = loadedAdapters
+            adapters = viewModel.getAdaptersForSchoolAndCategory(schoolId)
         } catch (e: Exception) {
-            println("Error loading adapters for $schoolName: ${e.message}")
             adapters = emptyList()
         } finally {
             isLoading = false
@@ -114,7 +100,7 @@ fun AdapterSelectionScreen(
             TopAppBar(
                 title = { Text("$schoolName - $categoryDisplayName", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = onBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.a11y_back_to_school_list)
@@ -131,18 +117,15 @@ fun AdapterSelectionScreen(
         ) {
             when {
                 isLoading -> {
-                    // 加载中状态
                     CircularProgressIndicator(Modifier.align(Alignment.Center))
                 }
                 adapters.isEmpty() -> {
-                    // 列表为空状态
                     Text(
                         text = stringResource(R.string.text_no_adapter_for_category_school, categoryDisplayName),
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
                 else -> {
-                    // 显示适配器列表
                     LazyColumn(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -152,17 +135,16 @@ fun AdapterSelectionScreen(
                                 adapter = adapter,
                                 onClick = { selectedAdapter ->
                                     val initialUrl = selectedAdapter.importUrl.ifBlank { "about:blank" }
-
                                     val jsFileName = selectedAdapter.assetJsPath
 
+                                    // 构建正确的 JS 路径
                                     val assetJsPath = if (jsFileName.isNotBlank()) {
                                         "$resourceFolder/$jsFileName"
                                     } else {
                                         "$resourceFolder/${selectedAdapter.adapterId}.js"
                                     }
-                                    // 导航到 WebView，传递 URL 和正确构建的 JS 路径
-                                    navController.navigateSafe(
-                                        WebViewNavigationHelper.createRoute(
+                                    onNavigate(
+                                        Destination.WebView(
                                             initialUrl = initialUrl,
                                             assetJsPath = assetJsPath
                                         )

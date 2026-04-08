@@ -53,10 +53,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.navigation.NavHostController
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
-import com.xingheyuzhuan.shiguangschedule.navigateSafe
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.tool.shareFile
 import com.xingheyuzhuan.shiguangschedule.ui.components.CourseTablePickerDialog
 import com.xingheyuzhuan.shiguangschedule.ui.components.NativeNumberPicker
@@ -214,7 +212,8 @@ fun IcsExportDialog(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CourseTableConversionScreen(
-    navController: NavHostController,
+    onNavigate: (Destination) -> Unit,
+    onBack: () -> Unit,
     viewModel: CourseTableConversionViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -348,7 +347,7 @@ fun CourseTableConversionScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.title_conversion)) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
+                    IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.a11y_back)
@@ -479,7 +478,7 @@ fun CourseTableConversionScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { navController.navigateSafe(Screen.SchoolSelectionListScreen.route) }
+                            .clickable { onNavigate(Destination.SchoolSelectionListScreen) }
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween

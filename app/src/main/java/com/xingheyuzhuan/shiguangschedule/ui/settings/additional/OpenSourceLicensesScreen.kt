@@ -16,7 +16,7 @@ import com.xingheyuzhuan.shiguangschedule.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OpenSourceLicensesScreen(navController: NavController) {
+fun OpenSourceLicensesScreen(onBack: () -> Unit) {
 
 
     val libraries by produceLibraries()
@@ -28,7 +28,7 @@ fun OpenSourceLicensesScreen(navController: NavController) {
                     Text(text = stringResource(R.string.title_open_source_licenses))
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.a11y_back)

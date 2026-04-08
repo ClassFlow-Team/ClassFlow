@@ -50,7 +50,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavController
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.ui.components.AdvancedColorPicker
 import com.xingheyuzhuan.shiguangschedule.ui.components.ColorPickerConfig
@@ -59,7 +58,7 @@ import com.xingheyuzhuan.shiguangschedule.ui.components.ImageCropper
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StyleSettingsScreen(
-    navController: NavController,
+    onBack: () -> Unit,
     viewModel: StyleSettingsViewModel = hiltViewModel()
 ) {
     val styleState by viewModel.styleState.collectAsStateWithLifecycle()
@@ -106,7 +105,7 @@ fun StyleSettingsScreen(
             TopAppBar(
                 title = { Text(text = stringResource(R.string.item_personalization), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.a11y_back))
                     }
                 }

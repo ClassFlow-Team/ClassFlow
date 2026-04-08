@@ -42,10 +42,12 @@ class AddEditCourseViewModel @Inject constructor(
     private val timeSlotRepository: TimeSlotRepository,
     private val appSettingsRepository: AppSettingsRepository,
     private val styleSettingsRepository: StyleSettingsRepository,
-    savedStateHandle: SavedStateHandle
+    // 保留注入，用于未来可能的状态保存，但不再从中读取 courseId
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
-    private val rawCourseId: String? = savedStateHandle["courseId"]
-    private val courseId: String? = if (rawCourseId == "new_course") null else rawCourseId
+
+    private var _courseId: String? = null
+    private val courseId: String? get() = _courseId
 
     private val _uiState = MutableStateFlow(AddEditCourseUiState())
     val uiState: StateFlow<AddEditCourseUiState> = _uiState.asStateFlow()
@@ -54,12 +56,17 @@ class AddEditCourseViewModel @Inject constructor(
     val uiEvent = _uiEvent.receiveAsFlow()
 
     private var originalDbIds = setOf<String>()
-
-    // 备份初始状态用于比对
     private var initialName: String = ""
     private var initialSchemes: List<CourseScheme> = emptyList()
 
-    init {
+    fun initWithId(id: String?) {
+        if (_uiState.value.isDataLoaded) return
+
+        _courseId = id
+        loadData()
+    }
+
+    private fun loadData() {
         viewModelScope.launch {
             val initialPresetData: PresetCourseData? = if (courseId == null) {
                 try { AddEditCourseChannel.presetDataFlow.first() } catch (e: Exception) { null }

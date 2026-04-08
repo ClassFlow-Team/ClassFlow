@@ -11,13 +11,19 @@ import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import school_index.SchoolIndex
 import java.io.File
 import com.xingheyuzhuan.shiguangschedule.BuildConfig
+import dagger.hilt.android.qualifiers.ApplicationContext
+import jakarta.inject.Inject
+import jakarta.inject.Singleton
 
 /**
  * GitUpdater
  * 延迟写入、协议版本校验和时间戳版本去重。
  * @param context 应用上下文，用于获取文件路径。
  */
-class GitUpdater(private val context: Context) {
+@Singleton // 建议设为单例，避免重复创建
+class GitUpdater @Inject constructor(
+    @ApplicationContext private val context: Context
+){
 
     // --- 客户端的协议版本定义 ---
     private val CLIENT_PROTOCOL_VERSION: Int = 1

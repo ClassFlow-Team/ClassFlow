@@ -28,6 +28,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -58,11 +59,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
-import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
-import com.xingheyuzhuan.shiguangschedule.navigateSafe
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateChecker
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateStatus
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateChecker.Companion.UPDATE_CHANNELS
@@ -223,17 +222,21 @@ private fun UpdateResultDialog(
 ) {
     val context = LocalContext.current
 
-    // 检查中和空闲状态不显示弹窗
-    if (!showDialog || updateStatus is UpdateStatus.Checking || updateStatus is UpdateStatus.Idle) {
-        if (showDialog && updateStatus is UpdateStatus.Checking) {
-            // 如果在检查中，显示加载弹窗
-            AlertDialog(
-                onDismissRequest = { /* 检查中不允许关闭 */ },
-                title = { Text(stringResource(R.string.dialog_checking_update)) },
-                text = { Text(stringResource(R.string.tip_please_wait)) },
-                confirmButton = {}
-            )
-        }
+    if (!showDialog || updateStatus is UpdateStatus.Idle) return
+
+    if (updateStatus is UpdateStatus.Checking) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text(stringResource(R.string.dialog_checking_update)) },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(16.dp))
+                    Text(stringResource(R.string.tip_please_wait))
+                }
+            },
+            confirmButton = {}
+        )
         return
     }
 
@@ -294,27 +297,23 @@ private fun UpdateResultDialog(
     )
 }
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoreOptionsScreen(navController: NavController) {
-
+fun MoreOptionsScreen(
+    onNavigate: (Destination) -> Unit,
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     val coroutineScope = LocalLifecycleOwner.current.lifecycleScope
     val scrollState = rememberScrollState()
 
-    // 状态管理
     val checker = remember { UpdateChecker(context) }
     var updateStatus by remember { mutableStateOf<UpdateStatus>(UpdateStatus.Idle) }
     var showUpdateDialog by remember { mutableStateOf(false) }
     var showChannelSelectionDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
+    var selectedChannelUrl by remember { mutableStateOf(UpdateChecker.DEFAULT_PLATFORM_URL) }
 
-    var selectedChannelUrl by remember {
-        mutableStateOf(UpdateChecker.DEFAULT_PLATFORM_URL)
-    }
-
-    // 应用信息获取
     val defaultAppName = stringResource(R.string.default_app_name)
     val a11yAppIcon = stringResource(R.string.a11y_app_icon)
 
@@ -337,21 +336,15 @@ fun MoreOptionsScreen(navController: NavController) {
         updateStatus = UpdateStatus.Checking
         showUpdateDialog = true
         coroutineScope.launch {
-            val result = checker.checkUpdate(platformUrl)
-            updateStatus = result
+            updateStatus = checker.checkUpdate(platformUrl)
         }
     }
 
-
-    // 更新检查触发逻辑 (供列表项点击调用)
-    val onCheckClick: () -> Unit = fun() {
-        if (updateStatus is UpdateStatus.Checking) return
-
-        // 重置 selectedChannelUrl 为默认值
-        selectedChannelUrl = UpdateChecker.DEFAULT_PLATFORM_URL
-
-        // 显示渠道选择弹窗
-        showChannelSelectionDialog = true
+    val onCheckClick: () -> Unit = {
+        if (updateStatus !is UpdateStatus.Checking) {
+            selectedChannelUrl = UpdateChecker.DEFAULT_PLATFORM_URL
+            showChannelSelectionDialog = true
+        }
     }
 
     // 处理下载点击
@@ -369,7 +362,6 @@ fun MoreOptionsScreen(navController: NavController) {
         }
     }
 
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -377,7 +369,7 @@ fun MoreOptionsScreen(navController: NavController) {
                     Text(text = stringResource(R.string.title_more_options))
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.a11y_back)
@@ -485,26 +477,20 @@ fun MoreOptionsScreen(navController: NavController) {
                     SettingListItem(
                         icon = Icons.AutoMirrored.Filled.ListAlt,
                         title = stringResource(R.string.item_open_source_licenses),
-                        onClick = {
-                            navController.navigateSafe(Screen.OpenSourceLicenses.route)
-                        }
+                        onClick = { onNavigate(Destination.OpenSourceLicenses) }
                     )
 
                     // 更新教务适配仓库
                     SettingListItem(
                         icon = Icons.Default.Update,
                         title = stringResource(R.string.item_update_repo),
-                        onClick = {
-                            navController.navigateSafe(Screen.UpdateRepo.route)
-                        }
+                        onClick = { onNavigate(Destination.UpdateRepo) }
                     )
                     // 贡献者列表
                     SettingListItem(
                         icon = Icons.Default.PeopleAlt,
                         title = stringResource(R.string.item_contributors),
-                        onClick = {
-                            navController.navigateSafe(Screen.ContributionList.route)
-                        },
+                        onClick = { onNavigate(Destination.ContributionList) },
                         showDivider = true
                     )
                     // 鸣谢内容

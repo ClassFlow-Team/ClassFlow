@@ -1,74 +1,92 @@
 package com.xingheyuzhuan.shiguangschedule
 
-import android.net.Uri
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
 
-sealed class Screen(val route: String) {
-    object CourseSchedule : Screen("course_schedule")
+/**
+ * Navigation 3 导航目标定义
+ * 不再继承自带 String route 的基类，而是使用 @Serializable 标记。
+ * 所有的参数直接定义在 data class 的构造函数中。
+ */
+@Serializable
+sealed interface Destination: NavKey {
 
-    object Settings : Screen("settings")
+    // 主屏幕
 
-    object TodaySchedule : Screen("today_schedule")
+    @Serializable
+    data object CourseSchedule : Destination
 
-    object TimeSlotSettings : Screen("time_slot_settings")
+    @Serializable
+    data object Settings : Destination
 
-    object ManageCourseTables : Screen("manage_course_tables")
+    @Serializable
+    data object TodaySchedule : Destination
 
-    object SchoolSelectionListScreen : Screen("school_selection")
+    @Serializable
+    data object TimeSlotSettings : Destination
 
-    object CourseTableConversion : Screen("course_table_conversion")
+    @Serializable
+    data object ManageCourseTables : Destination
 
-    object AdapterSelection : Screen("adapterSelection/{schoolId}/{schoolName}/{categoryNumber}/{resourceFolder}") {
+    @Serializable
+    data object SchoolSelectionListScreen : Destination
 
-        fun createRoute(schoolId: String, schoolName: String, categoryNumber: Int, resourceFolder: String): String {
-            val encodedSchoolName = Uri.encode(schoolName)
-            val encodedResourceFolder = Uri.encode(resourceFolder)
-            return "adapterSelection/$schoolId/$encodedSchoolName/$categoryNumber/$encodedResourceFolder"
-        }
-    }
-    object WebView : Screen("web_view/{initialUrl}/{assetJsPath}") {
-        fun createRoute(initialUrl: String?, assetJsPath: String?): String {
-            val urlParam = Uri.encode(initialUrl ?: "about:blank")
-            val pathParam = Uri.encode(assetJsPath ?: "")
-            return "web_view/$urlParam/$pathParam"
-        }
-    }
+    @Serializable
+    data object CourseTableConversion : Destination
 
-    object NotificationSettings : Screen("notification_settings")
+    @Serializable
+    data object NotificationSettings : Destination
 
-    object AddEditCourse : Screen("add_edit_course_route/{courseId}") {
-        fun createRouteWithCourseId(courseId: String): String {
-            return "add_edit_course_route/$courseId"
-        }
-        fun createRouteForNewCourse(): String {
-            return "add_edit_course_route/new_course"
-        }
-    }
+    @Serializable
+    data object MoreOptions : Destination
 
-    object MoreOptions : Screen("more_options")
+    @Serializable
+    data object OpenSourceLicenses : Destination
 
-    object OpenSourceLicenses : Screen("open_source_licenses")
+    @Serializable
+    data object UpdateRepo : Destination
 
-    object UpdateRepo : Screen("update_repo")
+    @Serializable
+    data object QuickActions : Destination
 
-    object QuickActions : Screen("quick_actions")
+    @Serializable
+    data object TweakSchedule : Destination
 
-    object TweakSchedule : Screen("tweak_schedule")
+    @Serializable
+    data object QuickDelete : Destination
 
-    object QuickDelete : Screen("quick_delete")
-    object ContributionList : Screen("contribution_list")
+    @Serializable
+    data object ContributionList : Destination
 
-    object CourseManagementList : Screen("course_management_list")
+    @Serializable
+    data object CourseManagementList : Destination
 
-    object CourseManagementDetail : Screen("course_management_detail/{courseName}") {
-        /**
-         * 创建二级页面的路由。
-         * 课程名称需要进行 URI 编码，以防包含特殊字符。
-         */
-        fun createRoute(courseName: String): String {
-            val encodedCourseName = Uri.encode(courseName)
-            return "course_management_detail/$encodedCourseName"
-        }
-    }
+    @Serializable
+    data object StyleSettings : Destination
 
-    object StyleSettings : Screen("style_settings")
+    // 带参数的屏幕
+
+    @Serializable
+    data class AdapterSelection(
+        val schoolId: String,
+        val schoolName: String,
+        val categoryNumber: Int,
+        val resourceFolder: String
+    ) : Destination
+
+    @Serializable
+    data class WebView(
+        val initialUrl: String? = "about:blank",
+        val assetJsPath: String? = null
+    ) : Destination
+
+    @Serializable
+    data class AddEditCourse(
+        val courseId: String? = null
+    ) : Destination
+
+    @Serializable
+    data class CourseManagementDetail(
+        val courseName: String
+    ) : Destination
 }

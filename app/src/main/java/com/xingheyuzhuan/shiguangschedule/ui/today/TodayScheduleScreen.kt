@@ -33,8 +33,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.navigation.NavHostController
-import androidx.navigation.compose.currentBackStackEntryAsState
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.model.ScheduleGridStyle
 import com.xingheyuzhuan.shiguangschedule.ui.components.BottomNavigationBar
@@ -48,12 +47,10 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayScheduleScreen(
-    navController: NavHostController,
+    onNavigate: (Destination) -> Unit,
+    onBack: () -> Unit,
     viewModel: TodayScheduleViewModel = hiltViewModel()
 ) {
-    val currentBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = currentBackStackEntry?.destination?.route
-
     val semesterStatus by viewModel.semesterStatus.collectAsState()
     val todayCourses by viewModel.todayCourses.collectAsState()
     // 1. 获取全局样式配置
@@ -72,7 +69,10 @@ fun TodayScheduleScreen(
             )
         },
         bottomBar = {
-            BottomNavigationBar(navController = navController, currentRoute = currentRoute)
+            BottomNavigationBar(
+                currentDestination = Destination.TodaySchedule,
+                onTabSelected = { dest -> onNavigate(dest) }
+            )
         }
     ) { innerPadding ->
         Column(

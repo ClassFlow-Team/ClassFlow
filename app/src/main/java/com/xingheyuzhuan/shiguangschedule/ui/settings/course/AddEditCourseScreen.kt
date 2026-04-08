@@ -48,11 +48,16 @@ import com.xingheyuzhuan.shiguangschedule.R
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditCourseScreen(
-    onNavigateBack: () -> Unit,
+    onBack: () -> Unit,
+    courseId: String? = null,
     viewModel: AddEditCourseViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    LaunchedEffect(courseId) {
+        viewModel.initWithId(courseId)
+    }
 
     // 状态追踪：记录当前正在操作哪一个方案
     var activeSchemeId by remember { mutableStateOf<String?>(null) }
@@ -77,7 +82,7 @@ fun AddEditCourseScreen(
         if (viewModel.hasUnsavedChanges()) {
             showExitConfirmDialog = true
         } else {
-            onNavigateBack()
+            onBack()
         }
     }
 
@@ -92,13 +97,13 @@ fun AddEditCourseScreen(
             when (event) {
                 UiEvent.SaveSuccess -> {
                     Toast.makeText(context, saveSuccessText, Toast.LENGTH_SHORT).show()
-                    onNavigateBack()
+                    onBack()
                 }
                 UiEvent.DeleteSuccess -> {
                     Toast.makeText(context, deleteSuccessText, Toast.LENGTH_SHORT).show()
-                    onNavigateBack()
+                    onBack()
                 }
-                UiEvent.Cancel -> onNavigateBack()
+                UiEvent.Cancel -> onBack()
             }
         }
     }
@@ -315,7 +320,7 @@ fun AddEditCourseScreen(
                 TextButton(
                     onClick = {
                         showExitConfirmDialog = false
-                        onNavigateBack()
+                        onBack()
                     }
                 ) {
                     Text(text = stringResource(R.string.common_action_exit_without_save))

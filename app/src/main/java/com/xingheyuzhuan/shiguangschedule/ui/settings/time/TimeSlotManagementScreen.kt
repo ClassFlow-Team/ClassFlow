@@ -55,6 +55,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.ui.components.NativeNumberPicker
@@ -67,13 +68,15 @@ import java.util.Locale
 /**
  * 时间段管理界面的 Compose UI。
  *
- * @param onBackClick 返回上一页的回调。
+ * @param onNavigate 导航回调。
+ * @param onBack 返回上一页的回调。
  * @param timeSlotViewModel ViewModel，负责管理 UI 状态和业务逻辑。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimeSlotManagementScreen(
-    onBackClick: () -> Unit,
+    onNavigate: (Destination) -> Unit,
+    onBack: () -> Unit,
     timeSlotViewModel: TimeSlotViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -120,7 +123,7 @@ fun TimeSlotManagementScreen(
         if (hasChanged) {
             showExitConfirmDialog = true
         } else {
-            onBackClick()
+            onBack()
         }
     }
 
@@ -143,8 +146,6 @@ fun TimeSlotManagementScreen(
                 },
                 actions = {
                     IconButton(onClick = {
-                        editingTimeSlot = null
-                        editingIndex = null
                         showEditBottomSheet = true
                     }) {
                         Icon(Icons.Filled.Add, contentDescription = a11yAddTimeSlot)
@@ -223,7 +224,11 @@ fun TimeSlotManagementScreen(
             val (initialStart, initialEnd) = calculateInitialTimes(isEditing, editingTimeSlot, localTimeSlots, localDefaultBreakDuration, localDefaultClassDuration)
 
             ModalBottomSheet(
-                onDismissRequest = { showEditBottomSheet = false },
+                onDismissRequest = {
+                    showEditBottomSheet = false
+                    editingTimeSlot = null
+                    editingIndex = null
+                },
                 sheetState = sheetState
             ) {
                 TimeSlotEditContent(
@@ -231,7 +236,11 @@ fun TimeSlotManagementScreen(
                     initialStartTime = initialStart,
                     initialEndTime = initialEnd,
                     isEditing = isEditing,
-                    onDismiss = { showEditBottomSheet = false },
+                    onDismiss = {
+                        showEditBottomSheet = false
+                        editingTimeSlot = null
+                        editingIndex = null
+                        },
                     onConfirm = { number, startTime, endTime ->
                         val newOrUpdatedSlot = TimeSlot(number, startTime, endTime, courseTableId = "")
                         if (isEditing && editingIndex != null) {
@@ -258,7 +267,7 @@ fun TimeSlotManagementScreen(
                 confirmButton = {
                     TextButton(onClick = {
                         showExitConfirmDialog = false
-                        onBackClick()
+                        onBack()
                     }) {
                         Text(text = stringResource(R.string.common_action_exit_without_save))
                     }

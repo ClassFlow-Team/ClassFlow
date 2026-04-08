@@ -2,6 +2,7 @@ package com.xingheyuzhuan.shiguangschedule.data.repository
 
 import com.xingheyuzhuan.shiguangschedule.data.model.RepositoryInfo
 import com.xingheyuzhuan.shiguangschedule.tool.GitUpdater
+import jakarta.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -22,7 +23,9 @@ interface GitRepository {
  * GitRepository 的具体实现类。
  * 负责将 ViewModel 的调用映射到底层 GitUpdater 的操作。
  */
-class GitRepositoryImpl(private val gitUpdater: GitUpdater) : GitRepository {
+class GitRepositoryImpl @Inject constructor(
+    private val gitUpdater: GitUpdater
+) : GitRepository {
 
     override suspend fun updateRepository(repoInfo: RepositoryInfo, onLog: (String) -> Unit) {
         withContext(Dispatchers.IO) {

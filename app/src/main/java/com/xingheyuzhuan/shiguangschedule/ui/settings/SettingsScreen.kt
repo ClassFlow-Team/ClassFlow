@@ -41,11 +41,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.navigation.NavHostController
-import androidx.navigation.compose.currentBackStackEntryAsState
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
-import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import com.xingheyuzhuan.shiguangschedule.ui.components.BottomNavigationBar
 import com.xingheyuzhuan.shiguangschedule.ui.components.DatePickerModal
 import com.xingheyuzhuan.shiguangschedule.ui.components.NativeNumberPicker
@@ -62,12 +59,11 @@ private val ITEM_SPACING = 16.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    navController: NavHostController,
+    onNavigate: (Destination) -> Unit,
+    onBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val currentBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = currentBackStackEntry?.destination?.route
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
@@ -80,7 +76,10 @@ fun SettingsScreen(
             )
         },
         bottomBar = {
-            BottomNavigationBar(navController = navController, currentRoute = currentRoute)
+            BottomNavigationBar(
+                currentDestination = Destination.Settings,
+                onTabSelected = { dest -> onNavigate(dest) }
+            )
         }
     ) { innerPadding ->
         if (!uiState.isReady) {
@@ -135,7 +134,7 @@ fun SettingsScreen(
                         onSemesterTotalWeeksClick = { showTotalWeeksDialog = true },
                         onManualWeekClick = { showManualWeekDialog = true },
                         onFirstDayOfWeekClick = { showFirstDayOfWeekDialog = true },
-                        onQuickActionsClick = { navController.navigateSafe(Screen.QuickActions.route) }
+                        onQuickActionsClick = { onNavigate(Destination.QuickActions) }
                     )
                 }
                 item {
@@ -147,7 +146,7 @@ fun SettingsScreen(
                 }
                 item {
                     // 高级功能卡片
-                    AdvancedSettingsSection(navController)
+                    AdvancedSettingsSection(onNavigate = onNavigate)
                 }
             }
 
@@ -320,7 +319,7 @@ private fun GeneralSettingsSection(
  * 高级功能卡片
  */
 @Composable
-private fun AdvancedSettingsSection(navController: NavHostController) {
+private fun AdvancedSettingsSection(onNavigate: (Destination) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -338,47 +337,47 @@ private fun AdvancedSettingsSection(navController: NavHostController) {
             SettingItem(
                 title = stringResource(R.string.item_course_conversion),
                 subtitle = stringResource(R.string.desc_course_conversion),
-                onClick = { navController.navigateSafe(Screen.CourseTableConversion.route) }
+                onClick = { onNavigate(Destination.CourseTableConversion) }
             )
             // 课程提醒设置项
             SettingItem(
                 title = stringResource(R.string.title_course_notification_settings),
                 subtitle = stringResource(R.string.desc_notification_settings),
-                onClick = { navController.navigateSafe(Screen.NotificationSettings.route) }
+                onClick = { onNavigate(Destination.NotificationSettings) }
             )
 
             // 管理课表设置项
             SettingItem(
                 title = stringResource(R.string.title_manage_course_tables),
                 subtitle = stringResource(R.string.desc_manage_course_tables),
-                onClick = { navController.navigateSafe(Screen.ManageCourseTables.route) }
+                onClick = { onNavigate(Destination.ManageCourseTables) }
             )
 
             // 课程管理设置项
             SettingItem(
                 title = stringResource(R.string.item_course_management),
                 subtitle = stringResource(R.string.desc_course_management),
-                onClick = { navController.navigateSafe(Screen.CourseManagementList.route) }
+                onClick = { onNavigate(Destination.CourseManagementList) }
             )
 
             // 自定义时间段设置项
             SettingItem(
                 title = stringResource(R.string.item_time_slot_customization),
                 subtitle = stringResource(R.string.desc_time_slot_customization),
-                onClick = { navController.navigateSafe(Screen.TimeSlotSettings.route) }
+                onClick = { onNavigate(Destination.TimeSlotSettings) }
             )
 
             // 个性化配置
             SettingItem(
                 title = stringResource(R.string.item_personalization),
                 subtitle = stringResource(R.string.desc_personalization),
-                onClick = { navController.navigateSafe(Screen.StyleSettings.route) }
+                onClick = { onNavigate(Destination.StyleSettings) }
             )
             // 更多选项设置项
             SettingItem(
                 title = stringResource(R.string.item_more_options),
                 subtitle = stringResource(R.string.desc_more_options),
-                onClick = { navController.navigateSafe(Screen.MoreOptions.route) },
+                onClick = { onNavigate(Destination.MoreOptions) },
                 icon = Icons.Default.MoreHoriz
             )
         }

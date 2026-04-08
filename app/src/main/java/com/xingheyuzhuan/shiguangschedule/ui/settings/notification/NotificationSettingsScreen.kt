@@ -32,7 +32,7 @@ import com.xingheyuzhuan.shiguangschedule.service.DndSchedulerWorker
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationSettingsScreen(
-    onNavigateBack: () -> Unit,
+    onBack: () -> Unit,
     viewModel: NotificationSettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -70,7 +70,7 @@ fun NotificationSettingsScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.title_course_notification_settings)) },
-                navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } }
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } }
             )
         }
     ) { innerPadding ->
