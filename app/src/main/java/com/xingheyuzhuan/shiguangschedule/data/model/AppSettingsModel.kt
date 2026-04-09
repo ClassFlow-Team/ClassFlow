@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.xingheyuzhuan.shiguangschedule.R
 
 /**
  * 上课时的自动化控制模式枚举
@@ -22,6 +23,23 @@ enum class AutoControlMode(val value: String) {
          */
         fun fromString(value: String?): AutoControlMode {
             return entries.find { it.value == value } ?: DND
+        }
+    }
+}
+
+/**
+ * 可选的启动页面枚举
+ */
+enum class StartScreen(val value: String, val labelRes: Int) {
+    /** 周课表 */
+    COURSE_SCHEDULE("COURSE_SCHEDULE", R.string.nav_course_schedule),
+
+    /** 今日课表 */
+    TODAY_SCHEDULE("TODAY_SCHEDULE", R.string.nav_today_schedule);
+
+    companion object {
+        fun fromString(value: String?): StartScreen {
+            return entries.find { it.value == value } ?: COURSE_SCHEDULE
         }
     }
 }
@@ -56,8 +74,10 @@ data class AppSettingsModel(
     val compatWearableSync: Boolean = false,
 
     /** 是否显示非本周课程 */
-    val showNonCurrentWeekCourses: Boolean = false
+    val showNonCurrentWeekCourses: Boolean = false,
 
+    /** 应用启动时显示的页面 */
+    val startScreen: StartScreen = StartScreen.COURSE_SCHEDULE,
 ) {
     /**
      * 将 DataStore 的 Key 定义在伴生对象中。
@@ -73,6 +93,7 @@ data class AppSettingsModel(
         val KEY_AUTO_CONTROL_MODE = stringPreferencesKey("auto_control_mode")
         val KEY_COMPAT_WEARABLE_SYNC = booleanPreferencesKey("compat_wearable_sync")
         val KEY_SHOW_NON_CURRENT_WEEK_COURSES = booleanPreferencesKey("show_non_current_week_courses")
+        val KEY_START_SCREEN = stringPreferencesKey("start_screen")
 
         /**
          * 从 Preferences 中解析出 AppSettingsModel
@@ -87,7 +108,8 @@ data class AppSettingsModel(
                 autoModeEnabled = prefs[KEY_AUTO_MODE_ENABLED] ?: d.autoModeEnabled,
                 autoControlMode = AutoControlMode.fromString(prefs[KEY_AUTO_CONTROL_MODE]),
                 compatWearableSync = prefs[KEY_COMPAT_WEARABLE_SYNC] ?: d.compatWearableSync,
-                showNonCurrentWeekCourses = prefs[KEY_SHOW_NON_CURRENT_WEEK_COURSES] ?: d.showNonCurrentWeekCourses
+                showNonCurrentWeekCourses = prefs[KEY_SHOW_NON_CURRENT_WEEK_COURSES] ?: d.showNonCurrentWeekCourses,
+                startScreen = prefs[KEY_START_SCREEN]?.let { StartScreen.fromString(it) } ?: d.startScreen,
             )
         }
     }

@@ -340,6 +340,8 @@
     <string name="tip_non_mandatory_update">提示：强制更新不会显示此取消按钮。</string>
     <string name="dialog_select_update_channel">选择更新渠道</string>
     <string name="a11y_selected">已选中</string>
+    <string name="item_start_screen_settings">启动页面设置</string>
+    <string name="dialog_select_start_screen">选择启动时显示的页面</string>
 
     <!-- 课程调动 -->
     <string name="title_tweak_schedule">调课</string>
@@ -485,9 +487,9 @@
     <string name="border_type_dashed">虚线</string>
     <string name="label_range">范围</string>
     <string name="placeholder_input_value">请输入数值</string>
+    <string name="label_overlap_style_toggle">重叠课程块样式切换</string>
 
     <!-- 快捷操作 -->
-    <string name="label_overlap_style_toggle">重叠课程块样式切换</string>
     <string name="item_quick_actions">快捷操作</string>
     <string name="desc_quick_actions">包含调课、课程临时变动等功能</string>
     <string name="label_quick_action_category_schedule">课表调整</string>

@@ -340,6 +340,8 @@
     <string name="tip_non_mandatory_update">Tip: The cancel button is not shown for mandatory updates.</string>
     <string name="dialog_select_update_channel">Select update channel</string>
     <string name="a11y_selected">Selected</string>
+    <string name="item_start_screen_settings">Startup Page Settings</string>
+    <string name="dialog_select_start_screen">Select default startup page</string>
     
     <!-- Schedule Adjustment -->
     <string name="title_tweak_schedule">Schedule adjustment</string>

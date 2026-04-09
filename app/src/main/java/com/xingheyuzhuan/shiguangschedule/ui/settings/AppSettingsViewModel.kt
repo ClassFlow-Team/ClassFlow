@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
 import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
+import com.xingheyuzhuan.shiguangschedule.data.model.StartScreen
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -147,6 +148,17 @@ class SettingsViewModel @Inject constructor(
             uiState.value.courseConfig?.let { currentConfig ->
                 appSettingsRepository.insertOrUpdateCourseConfig(currentConfig.copy(firstDayOfWeek = dayOfWeekInt))
             }
+        }
+    }
+
+    /**
+     * 更新应用启动时的默认主页
+     */
+    fun onStartScreenChanged(newScreen: StartScreen) {
+        viewModelScope.launch {
+            val currentSettings = uiState.value.appSettings
+            val updatedSettings = currentSettings.copy(startScreen = newScreen)
+            appSettingsRepository.insertOrUpdateAppSettings(updatedSettings)
         }
     }
 }

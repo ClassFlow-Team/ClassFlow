@@ -4,6 +4,7 @@ import android.os.Bundle
 
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
@@ -18,11 +19,13 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import com.xingheyuzhuan.shiguangschedule.data.model.StartScreen
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.WeeklyScheduleScreen
 import com.xingheyuzhuan.shiguangschedule.ui.schoolselection.list.AdapterSelectionScreen
 import com.xingheyuzhuan.shiguangschedule.ui.schoolselection.list.SchoolSelectionListScreen
 import com.xingheyuzhuan.shiguangschedule.ui.schoolselection.web.WebViewScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.SettingsScreen
+import com.xingheyuzhuan.shiguangschedule.ui.settings.SettingsViewModel
 import com.xingheyuzhuan.shiguangschedule.ui.settings.additional.MoreOptionsScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.additional.OpenSourceLicensesScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.contribution.ContributionScreen
@@ -44,20 +47,36 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
+
+    private val viewModel: SettingsViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
         setContent {
+            val state by viewModel.uiState.collectAsState()
+
             ShiguangScheduleTheme {
-                AppNavigation()
+                if (state.isReady) {
+                    val startDest = remember(state.appSettings.startScreen) {
+                        when (state.appSettings.startScreen) {
+                            StartScreen.COURSE_SCHEDULE -> Destination.CourseSchedule
+                            StartScreen.TODAY_SCHEDULE -> Destination.TodaySchedule
+                        }
+                    }
+                    AppNavigation(startDestination = startDest)
+                } else {
+                    Surface(modifier = Modifier.fillMaxSize()) {}
+                }
             }
         }
     }
 }
 
 @Composable
-fun AppNavigation() {
-    val backStack = rememberNavBackStack(Destination.CourseSchedule)
+fun AppNavigation(startDestination: Destination) {
+    val backStack = rememberNavBackStack(startDestination)
 
     // 将 mainScreens 提升到 remember 中，确保不会因为重组导致列表对象变化
     val mainScreens = remember {
