@@ -1,21 +1,30 @@
 package com.xingheyuzhuan.shiguangschedule
 
 import android.os.Bundle
-
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.animation.*
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
-import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.get
+import androidx.navigation3.runtime.metadata
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
@@ -78,19 +87,9 @@ class MainActivity : AppCompatActivity() {
 fun AppNavigation(startDestination: Destination) {
     val backStack = rememberNavBackStack(startDestination)
 
-    // 将 mainScreens 提升到 remember 中，确保不会因为重组导致列表对象变化
-    val mainScreens = remember {
-        listOf<NavKey>(
-            Destination.CourseSchedule,
-            Destination.TodaySchedule,
-            Destination.Settings
-        )
-    }
-
     val onNavigate: (Destination) -> Unit = remember(backStack) {
         { dest ->
-            if (dest in mainScreens) {
-                // 只有当前页面不是目标主页时才执行切换，防止重复点击底栏导致的死循环
+            if (dest.isMainScreen) {
                 if (backStack.lastOrNull() != dest) {
                     backStack.clear()
                     backStack.add(dest)
@@ -117,13 +116,10 @@ fun AppNavigation(startDestination: Destination) {
         backStack = backStack,
         onBack = onBack,
         transitionSpec = {
-            val fromName = initialState.key.toString()
-            val toName = targetState.key.toString()
-            val mainScreenNames = listOf("CourseSchedule", "TodaySchedule", "Settings")
+            val fromMain = initialState.metadata[ShiguangNavMetadata.IsMainScreenKey] ?: false
+            val toMain = targetState.metadata[ShiguangNavMetadata.IsMainScreenKey] ?: false
 
-            val isMainToMain = fromName in mainScreenNames && toName in mainScreenNames
-
-            if (isMainToMain) {
+            if (fromMain && toMain) {
                 EnterTransition.None togetherWith ExitTransition.None
             } else {
                 slideInHorizontally(initialOffsetX = { it }, animationSpec = animSpec) togetherWith
@@ -131,13 +127,10 @@ fun AppNavigation(startDestination: Destination) {
             }
         },
         popTransitionSpec = {
-            val fromName = initialState.key.toString()
-            val toName = targetState.key.toString()
+            val fromMain = initialState.metadata[ShiguangNavMetadata.IsMainScreenKey] ?: false
+            val toMain = targetState.metadata[ShiguangNavMetadata.IsMainScreenKey] ?: false
 
-            val mainScreenNames = listOf("CourseSchedule", "TodaySchedule", "Settings")
-            val isMainToMain = fromName in mainScreenNames && toName in mainScreenNames
-
-            if (isMainToMain) {
+            if (fromMain && toMain) {
                 EnterTransition.None togetherWith ExitTransition.None
             } else {
                 slideInHorizontally(initialOffsetX = { -it / 3 }, animationSpec = animSpec) + fadeIn() togetherWith
@@ -154,7 +147,13 @@ fun AppNavigation(startDestination: Destination) {
         )
     ) { key ->
         val destination = key as Destination
-        NavEntry(key) {
+
+        NavEntry(
+            key = key,
+            metadata = metadata {
+                put(ShiguangNavMetadata.IsMainScreenKey, destination.isMainScreen)
+            }
+        ) {
             Surface(modifier = Modifier.fillMaxSize()) {
                 ScreenContent(
                     targetDest = destination,
