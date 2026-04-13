@@ -70,8 +70,8 @@ fun BottomNavigationBar(
                     indicatorColor = if (isTransparent) Color.Transparent else MaterialTheme.colorScheme.secondaryContainer,
                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    selectedIconColor = if (isTransparent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSecondaryContainer,
-                    selectedTextColor = if (isTransparent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    selectedTextColor = MaterialTheme.colorScheme.onSurface
                 )
             )
         }

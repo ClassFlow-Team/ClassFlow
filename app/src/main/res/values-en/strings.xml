@@ -26,6 +26,7 @@
     <string name="label_recent_visit">Recent Visit</string>
     
     <!-- Main Interface and Today's Schedule -->
+    <string name="action_reset">Reset</string>
     <string name="nav_today_schedule">Today</string>
     <string name="nav_course_schedule">Schedule</string>
     <string name="nav_settings">Settings</string>
@@ -510,5 +511,16 @@
     <string name="quick_delete_success">Schedule cleared successfully</string>
     <string name="error_load_failed">Failed to initialize, please try again</string>
     <string name="error_op_failed">Operation failed: %1$s</string>
+    <string name="theme_follow_system">Follow System</string>
+    <string name="theme_light">Light Mode</string>
+    <string name="theme_dark">Dark Mode</string>
+    <string name="theme_settings_title">Theme Settings</string>
+    <string name="theme_mode_label">Theme Mode</string>
+    <string name="dynamic_color_title">Dynamic Color (Material You)</string>
+    <string name="dynamic_color_desc">Generate color schemes based on system wallpaper (Android 12+ only)</string>
+    <string name="custom_color_title">Custom Primary Color</string>
+    <string name="light_primary_color">Light Primary Color</string>
+    <string name="dark_primary_color">Dark Primary Color</string>
+    <string name="theme_color_hint">Note: After changing this color, the system will use it as a seed color to recalculate the entire app\\\'s color scheme.</string>
 
 </resources>

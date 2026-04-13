@@ -146,6 +146,13 @@ fun MoreOptionsScreen(
                         onClick = { handleLanguageSettingClick(context) { showLanguageDialog = true } }
                     )
 
+                    // 主题设置
+                    SettingListItem(
+                        icon = Icons.Default.Palette,
+                        title = stringResource(R.string.theme_settings_title),
+                        onClick = { onNavigate(Destination.ThemeSettings) }
+                    )
+
                     // 启动页面设置
                     SettingListItem(
                         icon = Icons.Default.Home,

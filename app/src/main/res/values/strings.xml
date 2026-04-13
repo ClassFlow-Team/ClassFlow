@@ -24,6 +24,7 @@
     <string name="common_action_exit_without_save">退出</string>
     <string name="common_action_continue_editing">继续编辑</string>
     <string name="label_recent_visit">最近访问</string>
+    <string name="action_reset">重置</string>
 
     <!-- 主界面及今日课表 -->
     <string name="nav_today_schedule">今日课表</string>
@@ -510,5 +511,18 @@
     <string name="quick_delete_success">课表清理成功</string>
     <string name="error_load_failed">初始化失败，请重试</string>
     <string name="error_op_failed">操作失败: %1$s</string>
+
+    <!-- 主题设置 -->
+    <string name="theme_follow_system">跟随系统</string>
+    <string name="theme_light">浅色模式</string>
+    <string name="theme_dark">深色模式</string>
+    <string name="theme_settings_title">主题设置</string>
+    <string name="theme_mode_label">主题模式切换</string>
+    <string name="dynamic_color_title">动态取色 (Material You)</string>
+    <string name="dynamic_color_desc">基于系统壁纸自动生成配色方案（仅支持 Android 12+）</string>
+    <string name="custom_color_title">自定义主色调</string>
+    <string name="light_primary_color">浅色模式主色</string>
+    <string name="dark_primary_color">深色模式主色</string>
+    <string name="theme_color_hint">说明：改变此颜色后，系统将作为种子色重新计算全应用配色方案。</string>
 
 </resources>

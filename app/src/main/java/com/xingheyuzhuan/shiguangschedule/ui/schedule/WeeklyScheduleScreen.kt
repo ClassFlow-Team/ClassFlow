@@ -147,8 +147,8 @@ fun WeeklyScheduleScreen(
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = if (isTransparent) Color.Transparent else MaterialTheme.colorScheme.surface,
-                        scrolledContainerColor = if (isTransparent) Color.Transparent else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent,
                     ),
                     scrollBehavior = scrollBehavior
                 )

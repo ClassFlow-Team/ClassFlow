@@ -1,11 +1,15 @@
 package com.xingheyuzhuan.shiguangschedule.data.model
 
+import androidx.compose.ui.graphics.toArgb
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.xingheyuzhuan.shiguangschedule.R
+import com.xingheyuzhuan.shiguangschedule.ui.theme.Purple40
+import com.xingheyuzhuan.shiguangschedule.ui.theme.Purple80
 
 /**
  * 上课时的自动化控制模式枚举
@@ -45,6 +49,26 @@ enum class StartScreen(val value: String, val labelRes: Int) {
 }
 
 /**
+ * 应用主题模式枚举
+ */
+enum class AppThemeMode(val value: String, val labelRes: Int) {
+    /** 跟随系统 */
+    FOLLOW_SYSTEM("FOLLOW_SYSTEM", R.string.theme_follow_system),
+
+    /** 浅色模式 */
+    LIGHT("LIGHT", R.string.theme_light),
+
+    /** 深色模式 */
+    DARK("DARK", R.string.theme_dark);
+
+    companion object {
+        fun fromString(value: String?): AppThemeMode? {
+            return entries.find { it.value == value }
+        }
+    }
+}
+
+/**
  * 应用全局设置业务模型（DataStore 专用）
  * 集中管理业务字段、存储键 (Keys) 以及默认值。
  */
@@ -78,6 +102,20 @@ data class AppSettingsModel(
 
     /** 应用启动时显示的页面 */
     val startScreen: StartScreen = StartScreen.COURSE_SCHEDULE,
+
+    /** 应用主题模式 */
+    val themeMode: AppThemeMode = AppThemeMode.FOLLOW_SYSTEM,
+
+    /** 是否开启动态取色 (Material You) */
+    val useDynamicColor: Boolean = true,
+
+    /** * 自定义浅色主题主色
+     */
+    val customLightPrimary: Long = Purple40.toArgb().toLong(),
+
+    /** * 自定义深色主题主色
+     */
+    val customDarkPrimary: Long = Purple80.toArgb().toLong(),
 ) {
     /**
      * 将 DataStore 的 Key 定义在伴生对象中。
@@ -94,6 +132,10 @@ data class AppSettingsModel(
         val KEY_COMPAT_WEARABLE_SYNC = booleanPreferencesKey("compat_wearable_sync")
         val KEY_SHOW_NON_CURRENT_WEEK_COURSES = booleanPreferencesKey("show_non_current_week_courses")
         val KEY_START_SCREEN = stringPreferencesKey("start_screen")
+        val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
+        val KEY_USE_DYNAMIC_COLOR = booleanPreferencesKey("use_dynamic_color")
+        val KEY_CUSTOM_LIGHT_PRIMARY = longPreferencesKey("custom_light_primary")
+        val KEY_CUSTOM_DARK_PRIMARY = longPreferencesKey("custom_dark_primary")
 
         /**
          * 从 Preferences 中解析出 AppSettingsModel
@@ -110,6 +152,10 @@ data class AppSettingsModel(
                 compatWearableSync = prefs[KEY_COMPAT_WEARABLE_SYNC] ?: d.compatWearableSync,
                 showNonCurrentWeekCourses = prefs[KEY_SHOW_NON_CURRENT_WEEK_COURSES] ?: d.showNonCurrentWeekCourses,
                 startScreen = prefs[KEY_START_SCREEN]?.let { StartScreen.fromString(it) } ?: d.startScreen,
+                themeMode = prefs[KEY_THEME_MODE]?.let { AppThemeMode.fromString(it) } ?: d.themeMode,
+                useDynamicColor = prefs[KEY_USE_DYNAMIC_COLOR] ?: d.useDynamicColor,
+                customLightPrimary = prefs[KEY_CUSTOM_LIGHT_PRIMARY] ?: d.customLightPrimary,
+                customDarkPrimary = prefs[KEY_CUSTOM_DARK_PRIMARY] ?: d.customDarkPrimary,
             )
         }
     }

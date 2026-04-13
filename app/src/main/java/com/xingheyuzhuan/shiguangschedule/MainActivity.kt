@@ -48,6 +48,7 @@ import com.xingheyuzhuan.shiguangschedule.ui.settings.quickactions.QuickActionsS
 import com.xingheyuzhuan.shiguangschedule.ui.settings.quickactions.delete.QuickDeleteScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.quickactions.tweaks.TweakScheduleScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.style.StyleSettingsScreen
+import com.xingheyuzhuan.shiguangschedule.ui.settings.themesettings.ThemeSettingsScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.time.TimeSlotManagementScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.update.UpdateRepoScreen
 import com.xingheyuzhuan.shiguangschedule.ui.theme.ShiguangScheduleTheme
@@ -66,8 +67,8 @@ class MainActivity : AppCompatActivity() {
         setContent {
             val state by viewModel.uiState.collectAsState()
 
-            ShiguangScheduleTheme {
-                if (state.isReady) {
+            if (state.isReady) {
+                ShiguangScheduleTheme(settings = state.appSettings) {
                     val startDest = remember(state.appSettings.startScreen) {
                         when (state.appSettings.startScreen) {
                             StartScreen.COURSE_SCHEDULE -> Destination.CourseSchedule
@@ -75,9 +76,9 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                     AppNavigation(startDestination = startDest)
-                } else {
-                    Surface(modifier = Modifier.fillMaxSize()) {}
                 }
+            }else {
+                Surface(modifier = Modifier.fillMaxSize()) {}
             }
         }
     }
@@ -189,6 +190,7 @@ fun ScreenContent(
         Destination.CourseManagementList -> CourseNameListScreen(onNavigate, onBack)
         Destination.StyleSettings -> StyleSettingsScreen(onBack)
         Destination.QuickDelete -> QuickDeleteScreen(onBack)
+        Destination.ThemeSettings -> ThemeSettingsScreen(onBack = onBack)
 
         // 处理 data class (带参数的目的地)
         is Destination.AdapterSelection -> AdapterSelectionScreen(
