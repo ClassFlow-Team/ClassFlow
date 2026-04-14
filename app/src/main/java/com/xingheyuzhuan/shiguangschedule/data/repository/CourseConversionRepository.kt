@@ -8,7 +8,6 @@ import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWeek
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWeekDao
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlotDao
-import com.xingheyuzhuan.shiguangschedule.data.model.ScheduleGridStyle
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.CourseConfigJsonModel
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.CourseTableExportModel
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.CourseTableImportModel
@@ -21,6 +20,7 @@ import java.time.LocalDate
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.random.Random
 
 /**
  * 课表转换仓库，负责处理课程数据的导入、导出以及 ICS 生成等逻辑。
@@ -34,18 +34,28 @@ class CourseConversionRepository @Inject constructor(
     private val styleSettingsRepository: StyleSettingsRepository
 ) {
     /**
-     * @param importColor 导入的颜色值（Int 或 null）。
-     * @param currentStyle 当前的样式配置对象。
-     * @return 最终写入数据库的颜色索引。
+     * 内部辅助函数：根据课程名称获取或分配颜色索引。
      */
-    private fun getValidatedOrRandomColorIndex(importColor: Int?, currentStyle: ScheduleGridStyle): Int {
-        // 使用 in indices 检查范围，既安全又符合 Kotlin 习惯
-        return if (importColor != null && importColor in currentStyle.courseColorMaps.indices) {
-            importColor
+    private fun getOrAssignColorByName(
+        jsonCourse: ImportCourseJsonModel,
+        colorSize: Int,
+        nameToColorMap: MutableMap<String, Int>,
+        getNextAutoColor: () -> Int
+    ): Int {
+        val trimmedName = jsonCourse.name.trim()
+        val existingColor = nameToColorMap[trimmedName]
+
+        if (existingColor != null) return existingColor
+
+        val importedColor = jsonCourse.color
+        val finalColor = if (importedColor != null && importedColor in 0 until colorSize) {
+            importedColor
         } else {
-            // 如果索引无效，调用模型自带的随机逻辑
-            currentStyle.generateRandomColorIndex()
+            getNextAutoColor()
         }
+
+        nameToColorMap[trimmedName] = finalColor
+        return finalColor
     }
 
     /**
@@ -57,17 +67,31 @@ class CourseConversionRepository @Inject constructor(
         coursesJsonModel: List<ImportCourseJsonModel>
     ) {
         val currentStyle = styleSettingsRepository.styleFlow.first()
+        val colorSize = currentStyle.courseColorMaps.size
 
         courseDao.deleteCoursesByTableId(tableId)
 
-        // 优化：预设 ArrayList 容量避免频繁扩容
         val courseEntities = ArrayList<Course>(coursesJsonModel.size)
         val courseWeekEntities = mutableListOf<CourseWeek>()
+
+        // 维护名称到颜色的映射，实现同名同色
+        val nameToColorMap = mutableMapOf<String, Int>()
+        // 随机起始偏移量，确保每次导入不会总是从同一种颜色开始
+        var colorOffset = if (colorSize > 0) Random.nextInt(colorSize) else 0
 
         coursesJsonModel.forEach { jsonCourse ->
             val courseId = UUID.randomUUID().toString()
 
-            val courseIndex = getValidatedOrRandomColorIndex(jsonCourse.color, currentStyle)
+            val courseIndex = getOrAssignColorByName(
+                jsonCourse = jsonCourse,
+                colorSize = colorSize,
+                nameToColorMap = nameToColorMap,
+                getNextAutoColor = {
+                    val next = if (colorSize > 0) colorOffset % colorSize else 0
+                    colorOffset++
+                    next
+                }
+            )
 
             courseEntities.add(
                 Course(
@@ -106,6 +130,7 @@ class CourseConversionRepository @Inject constructor(
         courseTableJsonModel: CourseTableImportModel
     ) {
         val currentStyle = styleSettingsRepository.styleFlow.first()
+        val colorSize = currentStyle.courseColorMaps.size
 
         courseDao.deleteCoursesByTableId(tableId)
         timeSlotDao.deleteAllTimeSlotsByCourseTableId(tableId)
@@ -114,10 +139,24 @@ class CourseConversionRepository @Inject constructor(
         val courseWeekEntities = mutableListOf<CourseWeek>()
         val timeSlotEntities = mutableListOf<TimeSlot>()
 
+        // 维护名称到颜色的映射，实现同名同色
+        val nameToColorMap = mutableMapOf<String, Int>()
+        // 随机起始偏移量
+        var colorOffset = if (colorSize > 0) Random.nextInt(colorSize) else 0
+
         courseTableJsonModel.courses.forEach { jsonCourse ->
             val courseId = jsonCourse.id ?: UUID.randomUUID().toString()
 
-            val courseIndex = getValidatedOrRandomColorIndex(jsonCourse.color, currentStyle)
+            val courseIndex = getOrAssignColorByName(
+                jsonCourse = jsonCourse,
+                colorSize = colorSize,
+                nameToColorMap = nameToColorMap,
+                getNextAutoColor = {
+                    val next = if (colorSize > 0) colorOffset % colorSize else 0
+                    colorOffset++
+                    next
+                }
+            )
 
             courseEntities.add(
                 Course(
@@ -158,7 +197,6 @@ class CourseConversionRepository @Inject constructor(
         if (courseWeekEntities.isNotEmpty()) courseWeekDao.insertAll(courseWeekEntities)
         if (timeSlotEntities.isNotEmpty()) timeSlotDao.insertAll(timeSlotEntities)
 
-        // 配置导入逻辑保持不变...
         val configJson = courseTableJsonModel.config
         if (configJson != null) {
             val currentConfig = appSettingsRepository.getCourseConfigOnce(tableId)
@@ -217,8 +255,6 @@ class CourseConversionRepository @Inject constructor(
         val exportCourses = coursesWithWeeks.map { courseWithWeeks ->
             val course = courseWithWeeks.course
             val weeks = courseWithWeeks.weeks.map { it.weekNumber }
-
-            // 修正 3: 从数据库获取索引，直接导出索引编号（Int），而不是 ARGB 值。
             val colorIndex = course.colorInt
 
             ExportCourseJsonModel(
@@ -279,11 +315,11 @@ class CourseConversionRepository @Inject constructor(
         val courses = courseDao.getCoursesWithWeeksByTableId(tableId).first()
         val timeSlots = timeSlotDao.getTimeSlotsByCourseTableId(tableId).first()
 
-        // 1. 从 AppSettings 获取全局设置 (用于 skippedDates)
+        // 从 AppSettings 获取全局设置 (用于 skippedDates)
         val appSettings = appSettingsRepository.getAppSettingsOnce()
         val skippedDates = appSettings.skippedDates
 
-        // 2. 从 CourseTableConfig 获取课表配置 (用于日期和总周数)
+        // 从 CourseTableConfig 获取课表配置 (用于日期和总周数)
         val courseConfig = appSettingsRepository.getCourseConfigOnce(tableId)
         val semesterStartDate = courseConfig?.semesterStartDate?.let { LocalDate.parse(it) }
 
