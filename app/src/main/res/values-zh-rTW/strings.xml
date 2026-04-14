@@ -126,11 +126,11 @@
     <string name="widget_vacation_expecting">期待新學期</string>
     <string name="widget_remaining_courses_format_today">今日還有 %1$d 節課</string>
     <string name="widget_remaining_courses_format_tomorrow">明天有 %1$d 節課</string>
-    <string name="widget_date_dayofweek_format">%1$s %2$s</string>
     <string name="widget_title_today">今天</string>
     <string name="widget_title_tomorrow">明天</string>
     
     <!-- 通知設定 -->
+    <string name="widget_course_total_count">共有 %1$d 節</string>
     <string name="title_course_notification_settings">課程提醒設定</string>
     <string name="section_title_general">一般</string>
     <string name="section_title_advanced">進階</string>
@@ -524,5 +524,6 @@
     <string name="dark_primary_color">深色模式主色</string>
     <string name="theme_color_hint">說明：改變此顏色後，系統將作為種子色重新計算全應用配色方案。</string>
     <string name="label_page_text_color">課表頁面文字顏色</string>
+    <string name="widget_course_remaining_count">剩餘 %1$d 節</string>
 
 </resources>

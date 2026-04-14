@@ -126,9 +126,10 @@
     <string name="widget_vacation_expecting">期待新学期</string>
     <string name="widget_remaining_courses_format_today">今日还有 %1$d 节课</string>
     <string name="widget_remaining_courses_format_tomorrow">明天有 %1$d 节课</string>
-    <string name="widget_date_dayofweek_format">%1$s %2$s</string>
     <string name="widget_title_today">今天</string>
     <string name="widget_title_tomorrow">明天</string>
+    <string name="widget_course_remaining_count">剩余 %1$d 节</string>
+    <string name="widget_course_total_count">共有 %1$d 节</string>
 
     <!-- 通知设置 -->
     <string name="title_course_notification_settings">课程提醒设置</string>

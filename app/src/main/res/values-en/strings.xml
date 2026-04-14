@@ -126,11 +126,11 @@
     <string name="widget_vacation_expecting">Looking forward to new semester</string>
     <string name="widget_remaining_courses_format_today">%1$d courses left today</string>
     <string name="widget_remaining_courses_format_tomorrow">%1$d courses tomorrow</string>
-    <string name="widget_date_dayofweek_format">%1$s %2$s</string>
     <string name="widget_title_today">Today</string>
     <string name="widget_title_tomorrow">Tomorrow</string>
     
     <!-- Notification Settings -->
+    <string name="widget_course_total_count">%1$d total</string>
     <string name="title_course_notification_settings">Course reminder settings</string>
     <string name="section_title_general">General</string>
     <string name="section_title_advanced">Advanced</string>
@@ -524,5 +524,6 @@
     <string name="dark_primary_color">Dark Primary Color</string>
     <string name="theme_color_hint">Note: After changing this color, the system will use it as a seed color to recalculate the entire app\\\'s color scheme.</string>
     <string name="label_page_text_color">Schedule text color</string>
+    <string name="widget_course_remaining_count">%1$d left</string>
 
 </resources>

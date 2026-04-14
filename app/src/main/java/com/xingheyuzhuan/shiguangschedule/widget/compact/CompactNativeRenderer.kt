@@ -114,8 +114,7 @@ object CompactNativeRenderer {
         rv.setViewVisibility(R.id.container_status, View.GONE)
         rv.setViewVisibility(R.id.tv_footer, View.VISIBLE)
 
-        val displayList = courses.take(2)
-        displayList.forEachIndexed { index, course ->
+        courses.forEachIndexed { index, course ->
             val itemRv = RemoteViews(context.packageName, R.layout.widget_item_course_common)
             itemRv.setTextViewText(R.id.tv_course_name, course.name)
             itemRv.setTextViewText(R.id.tv_course_position, course.position)
@@ -138,15 +137,12 @@ object CompactNativeRenderer {
 
             rv.addView(R.id.container_courses, itemRv)
 
-            // 分割线逻辑
-            if (index == 0 && displayList.size > 1) {
+            if (index < courses.size - 1) {
                 rv.addView(R.id.container_courses, RemoteViews(context.packageName, R.layout.widget_divider_horizontal))
             }
         }
 
-        // 页脚
-        val footerRes = if (isTomorrow) R.string.widget_remaining_courses_format_tomorrow
-        else R.string.widget_remaining_courses_format_today
+        val footerRes = if (isTomorrow) R.string.widget_course_total_count else R.string.widget_course_remaining_count
         rv.setTextViewText(R.id.tv_footer, context.getString(footerRes, courses.size))
     }
 

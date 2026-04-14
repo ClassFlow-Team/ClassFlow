@@ -38,14 +38,35 @@
                     android:layout_height="match_parent"
                     android:orientation="vertical">
 
-                    <TextView
-                        android:id="@+id/tv_today_date"
-                        android:layout_width="wrap_content"
+                    <LinearLayout
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:textColor="@color/widget_text_secondary"
-                        android:textSize="11dp"
-                        android:textStyle="bold"
-                        tools:text="今日 1.07 周三" />
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/tv_today_date"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="@color/widget_text_secondary"
+                            android:textSize="11dp"
+                            android:textStyle="bold"
+                            tools:text="今日 1.07 周三" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_weight="1"
+                            android:orientation="horizontal" />
+
+                        <TextView
+                            android:id="@+id/tv_today_footer"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="@color/widget_text_hint"
+                            android:textSize="8dp"
+                            tools:text="剩余 2 节" />
+                    </LinearLayout>
 
                     <LinearLayout
                         android:id="@+id/container_today"
@@ -71,16 +92,6 @@
                         android:textColor="@color/widget_text_hint"
                         android:textSize="12dp" />
                 </LinearLayout>
-
-                <TextView
-                    android:id="@+id/tv_today_footer"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_alignParentBottom="true"
-                    android:gravity="center"
-                    android:textColor="@color/widget_text_hint"
-                    android:textSize="8dp"
-                    tools:text="今日剩余 2 节" />
             </RelativeLayout>
 
             <ImageView
@@ -102,14 +113,35 @@
                     android:layout_height="match_parent"
                     android:orientation="vertical">
 
-                    <TextView
-                        android:id="@+id/tv_tomorrow_date"
-                        android:layout_width="wrap_content"
+                    <LinearLayout
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:textColor="@color/widget_text_secondary"
-                        android:textSize="11dp"
-                        android:textStyle="bold"
-                        tools:text="明日 1.08 周四" />
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/tv_tomorrow_date"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="@color/widget_text_secondary"
+                            android:textSize="11dp"
+                            android:textStyle="bold"
+                            tools:text="明日 1.08 周四" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_weight="1"
+                            android:orientation="horizontal" />
+
+                        <TextView
+                            android:id="@+id/tv_tomorrow_footer"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="@color/widget_text_hint"
+                            android:textSize="8dp"
+                            tools:text="共有 4 节" />
+                    </LinearLayout>
 
                     <LinearLayout
                         android:id="@+id/container_tomorrow"
@@ -135,16 +167,6 @@
                         android:textColor="@color/widget_text_hint"
                         android:textSize="12dp" />
                 </LinearLayout>
-
-                <TextView
-                    android:id="@+id/tv_tomorrow_footer"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_alignParentBottom="true"
-                    android:gravity="center"
-                    android:textColor="@color/widget_text_hint"
-                    android:textSize="8dp"
-                    tools:text="明日共有 4 节" />
             </RelativeLayout>
         </LinearLayout>
     </LinearLayout>
