@@ -133,13 +133,16 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.datastore.core)
     implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.retrofit)
     implementation(libs.okhttp)
-    implementation(libs.retrofit.converter.kotlinx.serialization)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
-    implementation(libs.jgit)
+    implementation(libs.jgit) {
+        exclude(group = "org.apache.httpcomponents", module = "httpclient")
+        exclude(group = "com.googlecode.javaewah", module = "JavaEWAH")
+        exclude(group = "org.slf4j", module = "slf4j-api")
+    }
     implementation(libs.slf4j.api)
+    implementation(libs.slf4j.android)
     implementation(libs.androidx.compose.animation)
     implementation(libs.coil.compose)
     implementation(libs.protobuf.kotlin.lite)
@@ -150,6 +153,12 @@ dependencies {
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.hilt.work)
     implementation(libs.aboutlibraries.compose)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.okhttp)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.client.logging)
+
 
     debugImplementation(libs.okhttp.logging.interceptor)
 
