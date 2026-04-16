@@ -24,8 +24,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-// 移除旧的 Navigation 导入
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Destination // 导入新的 Destination
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks

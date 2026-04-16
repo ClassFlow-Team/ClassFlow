@@ -18,7 +18,7 @@ ksp = "2.3.3"
 jgit = "5.13.5.202508271544-r"
 slf4j = "2.0.17"
 compose-animation = "1.10.6"
-coil = "2.7.0"
+coil = "3.4.0"
 protobuf = "4.34.1"
 protobufPlugin = "0.9.6"
 javax-inject = "1"
@@ -61,7 +61,7 @@ androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = 
 jgit = { module = "org.eclipse.jgit:org.eclipse.jgit", version.ref = "jgit" }
 slf4j-api = { group = "org.slf4j", name = "slf4j-api", version.ref = "slf4j" }
 androidx-compose-animation = { group = "androidx.compose.animation", name = "animation", version.ref = "compose-animation" }
-coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 protobuf-kotlin-lite = { module = "com.google.protobuf:protobuf-kotlin-lite", version.ref = "protobuf" }
 protobuf-java-lite = { module = "com.google.protobuf:protobuf-javalite", version.ref = "protobuf" }
 javax-inject = { group = "javax.inject", name = "javax.inject", version.ref = "javax-inject" }
