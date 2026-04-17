@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.BorderTypeProto
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.MergedCourseBlock
+import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
 
 /**
  * 渲染单个课程块的 UI 组件。
@@ -50,7 +51,7 @@ fun CourseBlock(
     startTime: String? = null
 ) {
     val firstCourse = mergedBlock.courses.firstOrNull()
-    val isDarkTheme = isSystemInDarkTheme() // 获取当前主题模式
+    val isDarkTheme = LocalIsDarkTheme.current
 
     // 尝试获取颜色索引 (colorInt)
     val colorIndex = firstCourse?.course?.colorInt

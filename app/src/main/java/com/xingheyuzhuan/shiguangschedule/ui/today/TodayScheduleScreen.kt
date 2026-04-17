@@ -37,6 +37,7 @@ import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.model.ScheduleGridStyle
 import com.xingheyuzhuan.shiguangschedule.ui.components.BottomNavigationBar
+import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -56,7 +57,7 @@ fun TodayScheduleScreen(
     // 1. 获取全局样式配置
     val gridStyle by viewModel.gridStyle.collectAsState()
     // 2. 监测系统深色模式状态
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalIsDarkTheme.current
 
     Scaffold(
         topBar = {

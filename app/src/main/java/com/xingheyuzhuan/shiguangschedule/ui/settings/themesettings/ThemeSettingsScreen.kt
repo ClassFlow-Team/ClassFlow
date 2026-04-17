@@ -28,6 +28,7 @@ import com.xingheyuzhuan.shiguangschedule.data.model.AppThemeMode
 import com.xingheyuzhuan.shiguangschedule.ui.components.AdvancedColorPicker
 import com.xingheyuzhuan.shiguangschedule.ui.components.ColorPickerConfig
 import com.xingheyuzhuan.shiguangschedule.ui.settings.SettingsViewModel
+import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,11 +90,7 @@ fun ThemeSettingsScreen(
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     SectionHeader(stringResource(R.string.custom_color_title))
 
-                    val isDark = when (settings.themeMode) {
-                        AppThemeMode.FOLLOW_SYSTEM -> isSystemInDarkTheme()
-                        AppThemeMode.DARK -> true
-                        AppThemeMode.LIGHT -> false
-                    }
+                    val isDark = LocalIsDarkTheme.current
 
                     if (isDark) {
                         ColorPickerItem(

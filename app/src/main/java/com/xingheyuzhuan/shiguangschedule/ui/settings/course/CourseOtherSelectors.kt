@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.model.DualColor
+import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
 import kotlinx.coroutines.launch
 
 
@@ -87,7 +88,7 @@ fun ColorIndicatorSection(
     colorMaps: List<DualColor>,
     onClick: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalIsDarkTheme.current
     val displayColor = colorMaps.getOrNull(colorIndex)?.let {
         if (isDark) it.dark else it.light
     } ?: MaterialTheme.colorScheme.outlineVariant
@@ -241,7 +242,7 @@ fun ColorPickerBottomSheet(
     val modalBottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var tempSelectedIndex by remember { mutableIntStateOf(selectedIndex) }
 
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalIsDarkTheme.current
     val actionCancel = stringResource(R.string.action_cancel)
     val actionConfirm = stringResource(R.string.action_confirm)
 
@@ -290,7 +291,7 @@ fun ColorPickerBottomSheet(
                             Icon(
                                 imageVector = Icons.Default.Done,
                                 contentDescription = null,
-                                tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
+                                tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.size(20.dp)
                             )
                         }

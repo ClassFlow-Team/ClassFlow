@@ -9,7 +9,9 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -18,6 +20,11 @@ import androidx.core.view.WindowCompat
 import androidx.core.graphics.drawable.toDrawable
 import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
 import com.xingheyuzhuan.shiguangschedule.data.model.AppThemeMode
+
+/**
+ * 定义一个用于全局同步深色模式状态的 Local 变量
+ */
+val LocalIsDarkTheme = staticCompositionLocalOf { false }
 
 /**
  * 外部调用的快捷主题函数
@@ -34,13 +41,15 @@ fun ShiguangScheduleTheme(
         AppThemeMode.DARK -> true
     }
 
-    ShiguangScheduleTheme(
-        darkTheme = darkTheme,
-        dynamicColor = settings.useDynamicColor,
-        customLightPrimary = Color(settings.customLightPrimary),
-        customDarkPrimary = Color(settings.customDarkPrimary),
-        content = content
-    )
+    CompositionLocalProvider(LocalIsDarkTheme provides darkTheme) {
+        ShiguangScheduleTheme(
+            darkTheme = darkTheme,
+            dynamicColor = settings.useDynamicColor,
+            customLightPrimary = Color(settings.customLightPrimary),
+            customDarkPrimary = Color(settings.customDarkPrimary),
+            content = content
+        )
+    }
 }
 
 /**
