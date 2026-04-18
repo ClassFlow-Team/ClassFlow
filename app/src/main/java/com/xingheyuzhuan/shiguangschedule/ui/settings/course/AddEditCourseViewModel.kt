@@ -25,6 +25,7 @@ data class CourseScheme(
     val dbId: String? = null,
     val teacher: String = "",
     val position: String = "",
+    val remark: String = "",
     val day: Int = 1,
     val startSection: Int = 1,
     val endSection: Int = 1,
@@ -133,6 +134,7 @@ class AddEditCourseViewModel @Inject constructor(
                                     dbId = cw.course.id,
                                     teacher = cw.course.teacher,
                                     position = cw.course.position,
+                                    remark = cw.course.remark.orEmpty(),
                                     day = cw.course.day,
                                     startSection = cw.course.startSection ?: 1,
                                     endSection = cw.course.endSection ?: 1,
@@ -194,6 +196,7 @@ class AddEditCourseViewModel @Inject constructor(
             val newScheme = CourseScheme(
                 teacher = lastScheme?.teacher.orEmpty(),
                 position = lastScheme?.position.orEmpty(),
+                remark = lastScheme?.remark.orEmpty(),
                 colorIndex = lastScheme?.colorIndex ?: 0,
                 weeks = (1..state.semesterTotalWeeks).toSet()
             )
@@ -213,6 +216,12 @@ class AddEditCourseViewModel @Inject constructor(
             state.copy(schemes = state.schemes.map {
                 if (it.id == schemeId) transform(it) else it
             })
+        }
+    }
+
+    fun onSchemeRemarkChange(schemeId: String, remark: String) {
+        if (remark.length <= 300) {
+            updateScheme(schemeId) { it.copy(remark = remark) }
         }
     }
 
@@ -257,6 +266,7 @@ class AddEditCourseViewModel @Inject constructor(
                     name = state.name,
                     teacher = scheme.teacher,
                     position = scheme.position,
+                    remark = scheme.remark,
                     day = scheme.day,
                     startSection = if (scheme.isCustomTime) null else scheme.startSection,
                     endSection = if (scheme.isCustomTime) null else scheme.endSection,
@@ -291,6 +301,7 @@ class AddEditCourseViewModel @Inject constructor(
         name = "",
         teacher = "",
         position = "",
+        remark = null,
         day = 1,
         startSection = null,
         endSection = null,

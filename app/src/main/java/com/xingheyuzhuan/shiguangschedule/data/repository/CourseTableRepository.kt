@@ -103,25 +103,29 @@ class CourseTableRepository @Inject constructor(
 
     /**
      * 插入或更新一个课程，并同时更新其对应的周数列表。
-     * 通过先检查是否存在，决定使用 @Update 还是 @Insert，
-     * 从而在更新课程属性时保护 course_weeks 表不被级联删除误伤。
      */
     @Transaction
     suspend fun upsertCourse(course: Course, weekNumbers: List<Int>) {
+        // take(300) 会截取前 300 个字符，如果为 null 则返回 null
+        val safeRemark = course.remark?.take(300)?.ifBlank { null }
+
+        // 使用 copy 创建一个处理过备注的新对象
+        val processedCourse = course.copy(remark = safeRemark)
+
         // 逻辑判断：如果数据库里已经有这个 ID
-        if (courseDao.exists(course.id)) {
+        if (courseDao.exists(processedCourse.id)) {
             // 使用 @Update 精准修改字段。
-            courseDao.update(course)
+            courseDao.update(processedCourse)
         } else {
             // 如果是新 ID，则执行插入。
-            courseDao.insertAll(listOf(course))
+            courseDao.insertAll(listOf(processedCourse))
         }
 
-        // 更新周次关联
+        // 更新周次关联（保持不变）
         val courseWeeks = weekNumbers.map { week ->
-            CourseWeek(courseId = course.id, weekNumber = week)
+            CourseWeek(courseId = processedCourse.id, weekNumber = week)
         }
-        courseWeekDao.updateCourseWeeks(course.id, courseWeeks)
+        courseWeekDao.updateCourseWeeks(processedCourse.id, courseWeeks)
     }
 
     /**

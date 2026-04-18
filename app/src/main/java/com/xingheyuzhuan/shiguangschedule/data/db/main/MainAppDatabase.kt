@@ -1,6 +1,7 @@
 package com.xingheyuzhuan.shiguangschedule.data.db.main
 
 import android.content.Context
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -19,11 +20,14 @@ import kotlinx.coroutines.launch
         Course::class,
         CourseWeek::class,
         TimeSlot::class,
-        AppSettings::class, // 暂存用于迁移，版本 4 将物理移除
+        AppSettings::class, // 暂存用于迁移，版本 5 将物理移除
         CourseTableConfig::class
     ],
-    version = 3,
-    exportSchema = false
+    version = 4,
+    autoMigrations = [
+        AutoMigration(from = 3, to = 4)
+    ],
+    exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class MainAppDatabase : RoomDatabase() {
@@ -52,7 +56,7 @@ abstract class MainAppDatabase : RoomDatabase() {
                     "main_app_database"
                 )
                     .addMigrations(*ALL_MIGRATIONS)
-                    .addCallback(object : RoomDatabase.Callback() {
+                    .addCallback(object : Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             super.onCreate(db)
                             CoroutineScope(Dispatchers.IO).launch {

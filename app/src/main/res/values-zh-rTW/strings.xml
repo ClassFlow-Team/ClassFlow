@@ -71,6 +71,7 @@
     <string name="label_end_time">結束時間</string>
 
     <!-- 課程相關 -->
+    <string name="label_remark">備註</string>
     <string name="course_time_description">時間: 第%1$s-%2$s節 (%3$s-%4$s)</string>
     <string name="course_position_prefix">地點: %1$s</string>
     <string name="course_teacher_prefix">老師: %1$s</string>

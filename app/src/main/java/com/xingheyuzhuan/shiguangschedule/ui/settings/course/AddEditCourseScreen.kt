@@ -189,6 +189,9 @@ fun AddEditCourseScreen(
                     onPositionChange = { newPos ->
                         viewModel.updateScheme(scheme.id) { it.copy(position = newPos) }
                     },
+                    onRemarkChange = { newRemark ->
+                        viewModel.onSchemeRemarkChange(scheme.id, newRemark)
+                    },
                     onColorClick = {
                         activeSchemeId = scheme.id
                         showColorSelectorDialog = true
