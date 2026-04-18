@@ -280,7 +280,7 @@ private fun GeneralSettingsSection(
             ) {
                 val weekStatusText = when {
                     semesterStartDate == null -> stringResource(R.string.status_set_start_date_first)
-                    displayCurrentWeek == null -> stringResource(R.string.status_on_vacation)
+                    displayCurrentWeek == null -> stringResource(R.string.title_vacation)
                     else -> stringResource(R.string.status_current_week_format, displayCurrentWeek)
                 }
                 Text(
@@ -423,7 +423,7 @@ fun ManualWeekPickerDialog(
     onDismiss: () -> Unit,
     onConfirm: (Int?) -> Unit
 ) {
-    val optionOnVacationText = stringResource(R.string.dialog_option_on_vacation)
+    val optionOnVacationText = stringResource(R.string.title_vacation)
 
     // 构建选项列表
     val weekOptions = listOf(optionOnVacationText) + (1..totalWeeks).map { stringResource(R.string.status_current_week_format, it) }

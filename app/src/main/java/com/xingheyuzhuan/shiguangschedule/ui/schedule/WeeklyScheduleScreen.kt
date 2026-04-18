@@ -26,7 +26,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Destination // 导入新的 Destination
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.navigation.AddEditCourseChannel
 import com.xingheyuzhuan.shiguangschedule.navigation.PresetCourseData
@@ -64,13 +64,6 @@ fun WeeklyScheduleScreen(
     val coroutineScope = rememberCoroutineScope()
 
     val snackbarMsg = stringResource(id = R.string.snackbar_add_course_after_start)
-    val appContext = remember { context.applicationContext }
-
-    LaunchedEffect(Unit) {
-        viewModel.setStringProvider { id, args ->
-            appContext.resources.getString(id, *args)
-        }
-    }
 
     val pagerState = rememberPagerState(
         initialPage = INFINITE_PAGER_CENTER,
@@ -104,6 +97,21 @@ fun WeeklyScheduleScreen(
     val customTextColor = composedStyle.pageTextColor ?: MaterialTheme.colorScheme.onSurface
     val customSubTextColor = customTextColor.copy(alpha = 0.7f)
 
+    val displayTitle = when {
+        !uiState.isSemesterSet || uiState.semesterStartDate == null -> {
+            stringResource(R.string.title_semester_not_set)
+        }
+        uiState.daysUntilStart > 0 -> {
+            stringResource(R.string.title_vacation_until_start, uiState.daysUntilStart.toString())
+        }
+        uiState.weekIndexInPager != null && uiState.weekIndexInPager!! in 1..uiState.totalWeeks -> {
+            stringResource(R.string.title_current_week, uiState.weekIndexInPager.toString())
+        }
+        else -> {
+            stringResource(R.string.title_vacation)
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         if (composedStyle.backgroundImagePath.isNotEmpty()) {
             AsyncImage(
@@ -133,7 +141,7 @@ fun WeeklyScheduleScreen(
                                 .padding(vertical = 4.dp)
                         ) {
                             Text(
-                                text = uiState.weekTitle,
+                                text = displayTitle,
                                 style = MaterialTheme.typography.titleLarge,
                                 color = customTextColor
                             )

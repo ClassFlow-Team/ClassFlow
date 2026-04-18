@@ -32,7 +32,7 @@
     <string name="nav_settings">Settings</string>
     <string name="title_today_schedule">Today\'s schedule</string>
     <string name="text_no_courses_today">No courses today</string>
-    <string name="title_vacation_until_start">On vacation (%1$s days until semester starts)</string>
+    <string name="title_vacation_until_start">Vacation (%1$s days left)</string>
     <string name="title_semester_not_set">Please set semester start date</string>
     <string name="date_format_year_month_day">MMM d, yyyy</string>
 
@@ -199,7 +199,6 @@
     <string name="item_current_week">Current week</string>
     <string name="desc_current_week_manual">Manually adjust current week</string>
     <string name="status_set_start_date_first">Please set start date first</string>
-    <string name="status_on_vacation">On vacation</string>
     <string name="status_current_week_format">Week %1$d</string>
     <string name="item_first_day_of_week">Week starts on</string>
     <string name="desc_first_day_of_week">Set which day the week starts on</string>
@@ -220,7 +219,6 @@
     <string name="dialog_title_select_total_weeks">Select total weeks</string>
     <string name="dialog_title_manual_set_week">Manually set current week</string>
     <string name="dialog_title_set_first_day_of_week">Set week start day</string>
-    <string name="dialog_option_on_vacation">On vacation</string>
     <string name="text_no_course_tables">No schedules available</string>
     <string name="course_table_id_prefix">ID: %s</string>
     <string name="course_table_created_at_prefix">Created: %s</string>

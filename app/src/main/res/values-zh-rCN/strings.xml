@@ -200,7 +200,6 @@
     <string name="item_current_week">当前周数</string>
     <string name="desc_current_week_manual">手动调整当前周数</string>
     <string name="status_set_start_date_first">请设置开始日期</string>
-    <string name="status_on_vacation">假期中</string>
     <string name="status_current_week_format">第 %1$d 周</string>
     <string name="item_first_day_of_week">设置每周起始日</string>
     <string name="desc_first_day_of_week">设置一周从哪天开始计算和显示</string>
@@ -221,7 +220,6 @@
     <string name="dialog_title_select_total_weeks">选择总周数</string>
     <string name="dialog_title_manual_set_week">手动设置当前周数</string>
     <string name="dialog_title_set_first_day_of_week">设置每周起始日</string>
-    <string name="dialog_option_on_vacation">假期中</string>
     <string name="text_no_course_tables">暂无课表可选择</string>
     <string name="course_table_id_prefix">ID: %s</string>
     <string name="course_table_created_at_prefix">创建于: %s</string>
