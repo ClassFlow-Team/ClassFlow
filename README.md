@@ -101,7 +101,11 @@
 ## 贡献  
 欢迎任何人提交你的贡献  
 ### 教务适配贡献  
-[![app-Contributors](https://stg.contrib.rocks/image?repo=XingHeYuZhuan/shiguang_warehouse)](https://github.com/XingHeYuZhuan/shiguang_warehouse/graphs/contributors)  
+<a href="https://github.com/XingHeYuZhuan/shiguang_warehouse/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=XingHeYuZhuan/shiguang_warehouse" />
+</a>
 
 ### 软件开发贡献  
-[![app-Contributors](https://stg.contrib.rocks/image?repo=XingHeYuZhuan/shiguangschedule)](https://github.com/XingHeYuZhuan/shiguangschedule/graphs/contributors)  
+<a href="https://github.com/XingHeYuZhuan/shiguangschedule/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=XingHeYuZhuan/shiguangschedule" />
+</a>
