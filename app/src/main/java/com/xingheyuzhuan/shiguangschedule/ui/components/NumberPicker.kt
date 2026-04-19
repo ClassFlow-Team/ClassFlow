@@ -26,7 +26,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
 import com.xingheyuzhuan.shiguangschedule.R
-import kotlinx.coroutines.flow.*
 import kotlin.math.abs
 
 @Composable
@@ -52,7 +51,7 @@ fun <T> NativeNumberPicker(
 
     val listState = rememberLazyListState(initialSelectedIndex)
     val itemHeightPx = with(LocalDensity.current) { itemHeight.toPx() }
-    
+
     // 计算当前精确的滚动位置（用于线性插值）
     val currentScrollPosition by remember {
         derivedStateOf {
@@ -62,8 +61,21 @@ fun <T> NativeNumberPicker(
         }
     }
 
-    // 用于语义反馈的“当前选中项”
-    var visuallyCenteredIndex by remember { mutableIntStateOf(initialSelectedIndex) }
+    val centerIndex by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val visibleItems = layoutInfo.visibleItemsInfo
+            if (visibleItems.isEmpty()) initialSelectedIndex
+            else {
+                // 计算视口中心线
+                val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
+                // 寻找距离视口中心最近的 item
+                visibleItems.minByOrNull { item ->
+                    abs((item.offset + item.size / 2) - viewportCenter)
+                }?.index ?: initialSelectedIndex
+            }
+        }
+    }
 
     // 获取基础状态词
     val stateSelected = stringResource(R.string.a11y_state_selected)
@@ -81,27 +93,10 @@ fun <T> NativeNumberPicker(
             }
         }
     }
-
-    // 逻辑部分：滚动停止时上报选中的值
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.isScrollInProgress }
-            .distinctUntilChanged()
-            .filter { !it } // 滚动停止
-            .collect {
-                val index = listState.firstVisibleItemIndex
-                if (index in values.indices && values[index] != selectedValue) {
-                    onValueChange(values[index])
-                }
-            }
-    }
-
-    // 逻辑部分：实时更新视觉索引（用于语义）
-    LaunchedEffect(listState) {
-        snapshotFlow {
-            val offset = listState.firstVisibleItemScrollOffset
-            if (offset > itemHeightPx / 2) (listState.firstVisibleItemIndex + 1).coerceAtMost(values.lastIndex) 
-            else listState.firstVisibleItemIndex
-        }.distinctUntilChanged().collect { visuallyCenteredIndex = it }
+    LaunchedEffect(centerIndex) {
+        if (centerIndex in values.indices && values[centerIndex] != selectedValue) {
+            onValueChange(values[centerIndex])
+        }
     }
 
     Box(
@@ -138,7 +133,7 @@ fun <T> NativeNumberPicker(
             contentPadding = PaddingValues(vertical = itemHeight * (visibleItemsCount / 2))
         ) {
             itemsIndexed(values) { index, item ->
-                val isSelected = index == visuallyCenteredIndex
+                val isSelected = index == centerIndex
                 val distance = abs(index - currentScrollPosition)
 
                 // 线性插值计算样式
