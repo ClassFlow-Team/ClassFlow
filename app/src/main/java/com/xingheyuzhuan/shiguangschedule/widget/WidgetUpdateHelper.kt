@@ -55,33 +55,35 @@ suspend fun updateAllWidgets(context: Context) {
         }
 
         // 样式保底逻辑
-        val finalStyleToSync = if (currentStyle == null || currentStyle.courseColorMapsCount == 0) {
+        val finalStyleToSync = if (currentStyle == null || currentStyle.course_color_maps.isEmpty()) {
             ScheduleGridStyle.DEFAULT.toProto()
         } else {
             currentStyle
         }
 
         // 3. 构造数据快照 (Protobuf)
-        val snapshot = WidgetSnapshot.newBuilder().apply {
-            this.currentWeek = currentWeek
-            this.style = finalStyleToSync
 
-            // 遍历数据库实体并转为 Proto 格式
-            dbCourses.forEach { course ->
-                val courseProto = WidgetCourseProto.newBuilder()
-                    .setId(course.id)
-                    .setName(course.name)
-                    .setTeacher(course.teacher)
-                    .setPosition(course.position)
-                    .setStartTime(course.startTime)
-                    .setEndTime(course.endTime)
-                    .setColorInt(course.colorInt)
-                    .setIsSkipped(course.isSkipped)
-                    .setDate(course.date)
-                    .build()
-                addCourses(courseProto)
-            }
-        }.build()
+        // 先将数据库实体转为 Wire 的 WidgetCourseProto 对象
+        val courseProtoList = dbCourses.map { course ->
+            WidgetCourseProto(
+                id = course.id,
+                name = course.name,
+                teacher = course.teacher,
+                position = course.position,
+                start_time = course.startTime,
+                end_time = course.endTime,
+                color_int = course.colorInt,
+                is_skipped = course.isSkipped,
+                date = course.date
+            )
+        }
+
+        // 直接通过构造函数创建快照对象
+        val snapshot = WidgetSnapshot(
+            current_week = currentWeek,
+            style = finalStyleToSync,
+            courses = courseProtoList
+        )
 
         // 4. 定义所有原生尺寸的映射列表
         val appWidgetManager = AppWidgetManager.getInstance(context)

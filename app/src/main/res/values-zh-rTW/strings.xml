@@ -26,6 +26,7 @@
     <string name="label_recent_visit">最近訪問</string>
     
     <!-- 主介面及今日課表 -->
+    <string name="action_reset">重置</string>
     <string name="nav_today_schedule">今日課表</string>
     <string name="nav_course_schedule">課表</string>
     <string name="nav_settings">我的</string>
@@ -70,11 +71,12 @@
     <string name="label_end_time">結束時間</string>
 
     <!-- 課程相關 -->
+    <string name="label_remark">備註</string>
     <string name="course_time_description">時間: 第%1$s-%2$s節 (%3$s-%4$s)</string>
     <string name="course_position_prefix">地點: %1$s</string>
     <string name="course_teacher_prefix">老師: %1$s</string>
     <string name="title_course_overlap">重疊課程列表</string>
-    <string name="label_overlap">（重疊）</string>
+    <string name="label_courses_overlap">%d門重疊</string>
     <string name="course_time_sections_count">(%1$s節)</string>
     <string name="title_select_week">選擇週次</string>
     <string name="title_current_week">第 %1$s 週</string>
@@ -125,11 +127,11 @@
     <string name="widget_vacation_expecting">期待新學期</string>
     <string name="widget_remaining_courses_format_today">今日還有 %1$d 節課</string>
     <string name="widget_remaining_courses_format_tomorrow">明天有 %1$d 節課</string>
-    <string name="widget_date_dayofweek_format">%1$s %2$s</string>
     <string name="widget_title_today">今天</string>
     <string name="widget_title_tomorrow">明天</string>
     
     <!-- 通知設定 -->
+    <string name="widget_course_total_count">共有 %1$d 節</string>
     <string name="title_course_notification_settings">課程提醒設定</string>
     <string name="section_title_general">一般</string>
     <string name="section_title_advanced">進階</string>
@@ -197,7 +199,6 @@
     <string name="item_current_week">目前週數</string>
     <string name="desc_current_week_manual">手動調整目前週數</string>
     <string name="status_set_start_date_first">請設定開始日期</string>
-    <string name="status_on_vacation">假期中</string>
     <string name="status_current_week_format">第 %1$d 週</string>
     <string name="item_first_day_of_week">設定每週起始日</string>
     <string name="desc_first_day_of_week">設定一週從哪天開始計算和顯示</string>
@@ -218,7 +219,6 @@
     <string name="dialog_title_select_total_weeks">選擇總週數</string>
     <string name="dialog_title_manual_set_week">手動設定目前週數</string>
     <string name="dialog_title_set_first_day_of_week">設定每週起始日</string>
-    <string name="dialog_option_on_vacation">假期中</string>
     <string name="text_no_course_tables">目前沒有課表可選擇</string>
     <string name="course_table_id_prefix">ID: %s</string>
     <string name="course_table_created_at_prefix">建立於: %s</string>
@@ -340,6 +340,8 @@
     <string name="tip_non_mandatory_update">提示：強制更新不會顯示此取消按鈕。</string>
     <string name="dialog_select_update_channel">選擇更新渠道</string>
     <string name="a11y_selected">已選中</string>
+    <string name="item_start_screen_settings">啟動頁面設置</string>
+    <string name="dialog_select_start_screen">選擇啟動時顯示的頁面</string>
 
     <!-- 課程調動 -->
     <string name="title_tweak_schedule">調課</string>
@@ -472,7 +474,6 @@
     <string name="label_opacity">不透明度</string>
     <string name="title_light_color_pool">淺色模式顏色池</string>
     <string name="title_dark_color_pool">深色模式顏色池</string>
-    <string name="label_color_overlap">重疊</string>
     <string name="preview_light_mode">淺色模式預覽\n固定深色文字</string>
     <string name="preview_dark_mode">深色模式預覽\n固定淺色文字</string>
     <string name="action_reset_style">恢復預設樣式設置</string>
@@ -488,6 +489,8 @@
     <string name="placeholder_input_value">請輸入數值</string>
 
     <!-- 快捷操作 -->
+    <string name="label_overlap_style_toggle">重疊課程塊樣式切換</string>
+    <string name="label_course_text_color">課程區塊文字顏色</string>
     <string name="item_quick_actions">快捷操作</string>
     <string name="desc_quick_actions">包含調課、課程臨時變動等功能</string>
     <string name="label_quick_action_category_schedule">課表調整</string>
@@ -508,5 +511,18 @@
     <string name="quick_delete_success">課表清理成功</string>
     <string name="error_load_failed">初始化失敗，請重試</string>
     <string name="error_op_failed">操作失敗: %1$s</string>
+    <string name="theme_follow_system">跟隨系統</string>
+    <string name="theme_light">淺色模式</string>
+    <string name="theme_dark">深色模式</string>
+    <string name="theme_settings_title">主題設置</string>
+    <string name="theme_mode_label">主題模式切換</string>
+    <string name="dynamic_color_title">動態取色 (Material You)</string>
+    <string name="dynamic_color_desc">基於系統桌布自動生成配色方案（僅支持 Android 12+）</string>
+    <string name="custom_color_title">自定義主色調</string>
+    <string name="light_primary_color">淺色模式主色</string>
+    <string name="dark_primary_color">深色模式主色</string>
+    <string name="theme_color_hint">說明：改變此顏色後，系統將作為種子色重新計算全應用配色方案。</string>
+    <string name="label_page_text_color">課表頁面文字顏色</string>
+    <string name="widget_course_remaining_count">剩餘 %1$d 節</string>
 
 </resources>

@@ -3,7 +3,6 @@ package com.xingheyuzhuan.shiguangschedule.ui.settings.style
 import android.content.Context
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xingheyuzhuan.shiguangschedule.data.db.main.Course
@@ -24,7 +23,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -51,9 +49,9 @@ class StyleSettingsViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val demoUiState: StateFlow<WeeklyScheduleUiState> = appSettingsRepository.getAppSettings()
         .flatMapLatest { settings ->
-            val configFlow = settings.currentCourseTableId?.let { tableId ->
+            val configFlow = settings.currentCourseTableId.let { tableId ->
                 appSettingsRepository.getCourseTableConfigFlow(tableId)
-            } ?: flowOf(null)
+            }
 
             combine(configFlow, styleRepository.styleFlow) { config, currentStyle ->
                 WeeklyScheduleUiState(
@@ -189,11 +187,10 @@ class StyleSettingsViewModel @Inject constructor(
         styleRepository.setShowStartTime(show)
     }
 
-    /** 重叠课程的背景颜色 */
-    fun updateOverlapColor(color: Color, isDark: Boolean) = viewModelScope.launch {
-        styleRepository.setOverlapCourseColorLong(color.toArgb().toLong(), isDark)
+    /** 切换重叠课程的显示样式 (层叠 vs 列表) */
+    fun updateOverlapStyleToggle(enabled: Boolean) = viewModelScope.launch {
+        styleRepository.setOverlapStyleToggle(enabled)
     }
-
     /** * 更新课程块字体的缩放比例
      * @param scale 缩放倍数，通常范围在 0.5 - 2.0 之间
      */
@@ -229,6 +226,16 @@ class StyleSettingsViewModel @Inject constructor(
     /** 更新课程块边框类型 (无/实线/虚线) */
     fun updateBorderType(type: BorderTypeProto) = viewModelScope.launch {
         styleRepository.setBorderType(type)
+    }
+
+    /** 更新页面网格文字颜色 */
+    fun updatePageTextColor(color: Color?) = viewModelScope.launch {
+        styleRepository.setPageTextColor(color)
+    }
+
+    /** 更新课程块内部文字颜色 */
+    fun updateCourseTextColor(color: Color?) = viewModelScope.launch {
+        styleRepository.setCourseTextColor(color)
     }
 
     /**
@@ -268,8 +275,6 @@ class StyleSettingsViewModel @Inject constructor(
         val slots = createDemoTimeSlots()
 
         /**
-         * 修正后的逻辑位置计算：
-         * 为了让预览界面和实际课表对齐，这里必须模拟 [timeToLogicalScale] 的计算结果。
          * startSection = (逻辑节次 - 1)
          */
         fun getLogicalPosition(timeStr: String): Float {
@@ -305,7 +310,7 @@ class StyleSettingsViewModel @Inject constructor(
 
         // 3. 冲突课程 (周三 1-2节)
         val courseC1 = Course(UUID.randomUUID().toString(), dummyTableId, "冲突课程 A", "王老师", "302", 3, 1, 2, false, null, null, 2)
-        val courseC2 = Course(UUID.randomUUID().toString(), dummyTableId, "冲突课程 B", "赵老师", "405", 3, 1, 2, false, null, null, 3)
+        val courseC2 = Course(UUID.randomUUID().toString(), dummyTableId, "冲突课程 B", "赵老师", "405", 3, 1, 2, false, null, null, 10)
 
         return listOf(
             // 普通课程：第 1 节起(0.0)，第 2 节止(2.0)

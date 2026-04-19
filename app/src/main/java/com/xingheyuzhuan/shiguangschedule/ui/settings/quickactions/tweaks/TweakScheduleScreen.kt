@@ -51,7 +51,6 @@ import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.navigation.NavController
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseTableRepository.TweakMode
@@ -66,7 +65,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TweakScheduleScreen(
-    navController: NavController,
+    onBack: () -> Unit,
     viewModel: TweakScheduleViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -108,7 +107,7 @@ fun TweakScheduleScreen(
             TopAppBar(
                 title = { Text(titleTweakSchedule) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = a11yBack
@@ -282,7 +281,7 @@ private fun getTweakModeDisplayInfo(mode: TweakMode): Pair<ImageVector, String> 
     return when (mode) {
         TweakMode.MERGE -> Icons.AutoMirrored.Filled.ArrowForward to stringResource(R.string.tweak_mode_merge)
         TweakMode.OVERWRITE -> Icons.Default.DoubleArrow to stringResource(R.string.tweak_mode_overwrite)
-        TweakMode.EXCHANGE -> Icons.Default.SyncAlt to stringResource(R.string.tweak_mode_exchange) // 改用 SyncAlt
+        TweakMode.EXCHANGE -> Icons.Default.SyncAlt to stringResource(R.string.tweak_mode_exchange)
     }
 }
 

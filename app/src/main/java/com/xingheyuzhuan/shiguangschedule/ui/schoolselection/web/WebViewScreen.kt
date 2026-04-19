@@ -11,6 +11,7 @@ import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -64,26 +65,25 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.navigation.NavController
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.xingheyuzhuan.shiguangschedule.BuildConfig
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.ui.components.CourseTablePickerDialog
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import java.io.File
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WebViewScreen(
-    navController: NavController,
+    onNavigate: (Destination) -> Unit,
+    onBack: () -> Unit,
     initialUrl: String?,
     assetJsPath: String?,
-    courseScheduleRoute: String,
     viewModel: WebViewModel = hiltViewModel()
 ) {
     val courseConversionRepository = viewModel.courseConversionRepository
-    val timeSlotRepository = viewModel.timeSlotRepository
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -154,16 +154,21 @@ fun WebViewScreen(
                 webView = this,
                 uiEventChannel = uiEventChannel,
                 courseConversionRepository = courseConversionRepository,
-                timeSlotRepository = timeSlotRepository,
                 onTaskCompleted = {
                     Toast.makeText(context, toastImportFinished, Toast.LENGTH_LONG).show()
-                    navController.popBackStack(
-                        route = courseScheduleRoute,
-                        inclusive = false
-                    )
+                    onNavigate(Destination.CourseSchedule)
                 }
             )
             addJavascriptInterface(androidBridge!!, "AndroidBridge")
+        }
+    }
+
+    // 处理系统返回键
+    BackHandler(enabled = !isEditingUrl) {
+        if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            onBack()
         }
     }
 
@@ -252,7 +257,7 @@ fun WebViewScreen(
                             inputUrl = if (rawUrl.isNullOrBlank() || rawUrl == "about:blank") "" else rawUrl
                             keyboardController?.hide()
                         } else {
-                            navController.popBackStack()
+                            onBack()
                         }
                     }) {
                         Icon(

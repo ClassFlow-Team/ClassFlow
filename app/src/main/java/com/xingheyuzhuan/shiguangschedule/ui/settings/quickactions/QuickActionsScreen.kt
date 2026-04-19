@@ -30,10 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavHostController
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
-import com.xingheyuzhuan.shiguangschedule.navigateSafe
 
 /**
  * 快捷操作二级页面
@@ -42,14 +40,15 @@ import com.xingheyuzhuan.shiguangschedule.navigateSafe
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuickActionsScreen(
-    navController: NavHostController
+    onNavigate: (Destination) -> Unit,
+    onBack: () -> Unit
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.item_quick_actions)) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.a11y_back)
@@ -93,7 +92,7 @@ fun QuickActionsScreen(
                     QuickActionItem(
                         title = stringResource(R.string.item_schedule_tweak),
                         subtitle = stringResource(R.string.desc_schedule_tweak),
-                        onClick = { navController.navigateSafe(Screen.TweakSchedule.route) }
+                        onClick = { onNavigate(Destination.TweakSchedule) }
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -102,7 +101,7 @@ fun QuickActionsScreen(
                     QuickActionItem(
                         title = stringResource(R.string.item_quick_delete),
                         subtitle = stringResource(R.string.quick_delete_subtitle),
-                        onClick = { navController.navigateSafe(Screen.QuickDelete.route) }
+                        onClick = { onNavigate(Destination.QuickDelete) }
                     )
                 }
             }
@@ -112,7 +111,6 @@ fun QuickActionsScreen(
 
 /**
  * 快捷操作单项组件
- * 布局复用设置页逻辑：左侧标题+描述，右侧导航箭头
  */
 @Composable
 private fun QuickActionItem(

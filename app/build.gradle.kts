@@ -1,12 +1,11 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.aboutLibraries)
-    alias(libs.plugins.protobuf)
     alias(libs.plugins.hilt.android)
+    alias(libs.plugins.wire)
 }
 
 android {
@@ -17,10 +16,14 @@ android {
         applicationId = "com.xingheyuzhuan.shiguangschedule"
         minSdk = 26
         targetSdk = 36
-        versionCode = 29
-        versionName = "1.2.1"
+        versionCode = 30
+        versionName = "1.2.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ksp {
+            arg("room.schemaLocation", "$projectDir/schemas")
+        }
     }
 
     buildTypes {
@@ -92,15 +95,6 @@ android {
             include("armeabi-v7a", "arm64-v8a", "x86_64")
         }
     }
-    sourceSets {
-        getByName("main") {
-            withGroovyBuilder {
-                "proto" {
-                    "srcDir"("src/main/proto")
-                }
-            }
-        }
-    }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -127,30 +121,42 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
-    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.navigation3.runtime)
+    implementation(libs.androidx.navigation3.ui)
+    implementation(libs.androidx.lifecycle.viewmodel.navigation3)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.datastore.core)
     implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.retrofit)
     implementation(libs.okhttp)
-    implementation(libs.retrofit.converter.kotlinx.serialization)
-    debugImplementation(libs.okhttp.logging.interceptor)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
-    implementation(libs.jgit)
+    implementation(libs.jgit) {
+        exclude(group = "org.apache.httpcomponents", module = "httpclient")
+        exclude(group = "com.googlecode.javaewah", module = "JavaEWAH")
+        exclude(group = "org.slf4j", module = "slf4j-api")
+    }
     implementation(libs.slf4j.api)
+    implementation(libs.slf4j.android)
     implementation(libs.androidx.compose.animation)
     implementation(libs.coil.compose)
-    implementation(libs.protobuf.kotlin.lite)
-    implementation(libs.protobuf.java.lite)
     implementation(libs.javax.inject)
     implementation(libs.androidx.appcompat)
-    ksp(libs.androidx.room.compiler)
     implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.hilt.work)
     implementation(libs.aboutlibraries.compose)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.okhttp)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.client.logging)
+    implementation(libs.wire.runtime)
+
+
+    debugImplementation(libs.okhttp.logging.interceptor)
+
+    ksp(libs.hilt.compiler)
+    ksp(libs.androidx.room.compiler)
     ksp(libs.androidx.hilt.compiler)
 
     testImplementation(libs.junit)
@@ -162,23 +168,14 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 }
 
-protobuf {
-    protoc {
-        // 从版本目录中获取 protoc 编译器
-        artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
+wire {
+    sourcePath {
+        srcDir("src/main/proto")
     }
 
-    // 配置代码生成任务
-    generateProtoTasks {
-        all().forEach { task ->
-            task.builtins {
-                create("java") {
-                    option("lite")
-                }
-                create("kotlin") {
-                    option("lite")
-                }
-            }
-        }
+    kotlin {
+        escapeKotlinKeywords = true
+        enumMode = "enum_class"
+        rpcRole = "none"
     }
 }

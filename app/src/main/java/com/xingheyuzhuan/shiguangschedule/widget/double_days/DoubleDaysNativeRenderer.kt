@@ -33,7 +33,7 @@ object DoubleDaysNativeRenderer {
         rv.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
 
         // 全局状态判断
-        val currentWeek = if (snapshot.currentWeek <= 0) null else snapshot.currentWeek
+        val currentWeek = if (snapshot.current_week <= 0) null else snapshot.current_week
 
         if (currentWeek == null) {
             rv.setViewVisibility(R.id.inner_content_card, View.GONE)
@@ -50,32 +50,32 @@ object DoubleDaysNativeRenderer {
         val now = LocalTime.now()
         val today = LocalDate.now()
         val tomorrow = today.plusDays(1)
-        val allCourses = snapshot.coursesList
+        val allCourses = snapshot.courses
 
         // 渲染左侧：今日
         val todayCourses = allCourses.filter { it.date == today.toString() || it.date.isBlank() }
         val remainingToday = todayCourses.filter {
-            !it.isSkipped && try { LocalTime.parse(it.endTime) > now } catch (e: Exception) { true }
-        }.sortedBy { it.startTime }
+            !it.is_skipped && try { LocalTime.parse(it.end_time) > now } catch (_: Exception) { true }
+        }.sortedBy { it.start_time }
 
         renderColumn(
             context, rv,
             R.id.container_today, R.id.tv_today_date, R.id.tv_today_footer,
             R.id.empty_today_container,
-            today, remainingToday.take(2), remainingToday.size,
-            R.string.widget_remaining_courses_format_today, snapshot
+            today, remainingToday, remainingToday.size,
+            true, snapshot
         )
 
         // 渲染右侧：明日
         val tomorrowCourses = allCourses.filter { it.date == tomorrow.toString() }
-        val effectiveTomorrow = tomorrowCourses.filter { !it.isSkipped }.sortedBy { it.startTime }
+        val effectiveTomorrow = tomorrowCourses.filter { (!it.is_skipped) }.sortedBy { it.start_time }
 
         renderColumn(
             context, rv,
             R.id.container_tomorrow, R.id.tv_tomorrow_date, R.id.tv_tomorrow_footer,
             R.id.empty_tomorrow_container,
-            tomorrow, effectiveTomorrow.take(2), effectiveTomorrow.size,
-            R.string.widget_remaining_courses_format_tomorrow, snapshot
+            tomorrow, effectiveTomorrow, effectiveTomorrow.size,
+            false, snapshot
         )
 
         return rv
@@ -100,10 +100,11 @@ object DoubleDaysNativeRenderer {
         date: LocalDate,
         displayCourses: List<WidgetCourseProto>,
         totalCount: Int,
-        footerResId: Int,
+        isToday: Boolean,
         snapshot: WidgetSnapshot
     ) {
-        val prefix = if (date == LocalDate.now()) {
+        // 设置日期标题
+        val prefix = if (isToday) {
             context.getString(R.string.widget_title_today)
         } else {
             context.getString(R.string.widget_title_tomorrow)
@@ -112,24 +113,28 @@ object DoubleDaysNativeRenderer {
         rootRv.setTextViewText(dateId, "$prefix $datePattern")
 
         if (totalCount == 0) {
-            // 无课：隐藏课程容器和页脚，显示居中容器
             rootRv.setViewVisibility(containerId, View.GONE)
             rootRv.setViewVisibility(emptyContainerId, View.VISIBLE)
             rootRv.setViewVisibility(footerId, View.GONE)
-            val emptyTextViewId = if (date == LocalDate.now()) R.id.empty_today else R.id.empty_tomorrow
+            val emptyTextViewId = if (isToday) R.id.empty_today else R.id.empty_tomorrow
             rootRv.setTextViewText(emptyTextViewId, context.getString(R.string.text_no_course))
         } else {
-            // 有课：显示课程容器和页脚，隐藏居中容器
             rootRv.setViewVisibility(containerId, View.VISIBLE)
             rootRv.setViewVisibility(emptyContainerId, View.GONE)
             rootRv.setViewVisibility(footerId, View.VISIBLE)
-            rootRv.setTextViewText(footerId, context.getString(footerResId, totalCount))
 
+            // 设置统计文案：今日显示“剩余”，其他显示“共有”
+            val countRes = if (isToday) R.string.widget_course_remaining_count else R.string.widget_course_total_count
+            rootRv.setTextViewText(footerId, context.getString(countRes, totalCount))
+
+            // 循环渲染所有课程
             displayCourses.forEachIndexed { index, course ->
                 val itemRv = RemoteViews(context.packageName, R.layout.widget_item_course_common)
                 itemRv.setTextViewText(R.id.tv_course_name, course.name)
                 itemRv.setTextViewText(R.id.tv_course_position, course.position)
-                itemRv.setTextViewText(R.id.tv_course_time, "${course.startTime.take(5)}-${course.endTime.take(5)}")
+
+                val timeRange = "${course.start_time.take(5)}-${course.end_time.take(5)}"
+                itemRv.setTextViewText(R.id.tv_course_time, timeRange)
 
                 if (course.teacher.isNotBlank()) {
                     itemRv.setViewVisibility(R.id.tv_course_teacher, View.VISIBLE)
@@ -139,15 +144,21 @@ object DoubleDaysNativeRenderer {
                 }
 
                 val style = snapshot.style
-                if (course.colorInt < style.courseColorMapsCount) {
-                    val colorPair = style.getCourseColorMaps(course.colorInt)
-                    itemRv.setInt(R.id.course_indicator, "setColorFilter", colorPair.lightColor.toInt())
-                    itemRv.setInt(R.id.course_indicator_dark, "setColorFilter", colorPair.darkColor.toInt())
+                val colorInt = course.color_int
+                if (style != null && colorInt < style.course_color_maps.size) {
+                    val colorPair = style.course_color_maps[colorInt]
+                    itemRv.setInt(R.id.course_indicator, "setColorFilter",
+                        colorPair.light_color.toInt()
+                    )
+                    itemRv.setInt(R.id.course_indicator_dark, "setColorFilter",
+                        colorPair.dark_color.toInt()
+                    )
                 }
 
                 rootRv.addView(containerId, itemRv)
 
-                if (index == 0 && displayCourses.size > 1) {
+                // 无限显示逻辑：只要不是最后一项，就添加横向分割线
+                if (index < displayCourses.size - 1) {
                     rootRv.addView(containerId, RemoteViews(context.packageName, R.layout.widget_divider_horizontal))
                 }
             }

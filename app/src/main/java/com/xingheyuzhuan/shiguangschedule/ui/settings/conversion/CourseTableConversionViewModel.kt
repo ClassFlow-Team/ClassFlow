@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.charset.Charset
@@ -82,7 +81,7 @@ class CourseTableConversionViewModel @Inject constructor(
                 if (_uiState.value.exportType == ExportType.JSON) {
                     val jsonModel = courseConversionRepository.exportCourseTableToJson(tableId)
                     if (jsonModel != null) {
-                        val jsonString = Json.encodeToString(jsonModel)
+                        val jsonString = CourseImportExport.json.encodeToString(CourseImportExport.CourseTableExportModel.serializer(), jsonModel)
                         _events.send(ConversionEvent.LaunchExportFileCreator(jsonString))
                     } else {
                         val message = context.getString(R.string.error_export_table_not_found)
@@ -107,7 +106,7 @@ class CourseTableConversionViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
                 val jsonString = inputStream.bufferedReader(Charset.forName("UTF-8")).use { it.readText() }
-                val importModel = Json.decodeFromString<CourseImportExport.CourseTableImportModel>(jsonString)
+                val importModel = CourseImportExport.json.decodeFromString<CourseImportExport.CourseTableImportModel>(jsonString)
                 courseConversionRepository.importCourseTableFromJson(tableId, importModel)
 
                 val message = context.getString(R.string.toast_import_success)

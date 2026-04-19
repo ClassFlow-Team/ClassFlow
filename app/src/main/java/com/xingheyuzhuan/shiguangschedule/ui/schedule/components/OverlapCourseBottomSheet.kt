@@ -2,7 +2,6 @@ package com.xingheyuzhuan.shiguangschedule.ui.schedule.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,6 +18,7 @@ import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import androidx.compose.ui.res.stringResource
 import com.xingheyuzhuan.shiguangschedule.R
 import androidx.compose.ui.draw.drawBehind
+import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
 
 /**
  * 重叠课程列表底部动作条。
@@ -34,14 +34,8 @@ fun OverlapCourseBottomSheet(
     onCourseClicked: (CourseWithWeeks) -> Unit,
     onDismissRequest: () -> Unit
 ) {
-    val isDarkTheme = isSystemInDarkTheme()
+    val isDarkTheme = LocalIsDarkTheme.current
 
-    // 标题颜色适配
-    val overlapTitleColor = if (isDarkTheme) {
-        style.overlapCourseColorDark
-    } else {
-        style.overlapCourseColor
-    }
 
     val fallbackColorAdapted = if (isDarkTheme) {
         style.courseColorMaps.first().dark
@@ -64,7 +58,7 @@ fun OverlapCourseBottomSheet(
                 text = stringResource(R.string.title_course_overlap),
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(16.dp),
-                color = overlapTitleColor
+                color = MaterialTheme.colorScheme.onSurface
             )
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
@@ -89,8 +83,8 @@ fun OverlapCourseBottomSheet(
                         if (isDarkTheme) dualColor.dark else dualColor.light
                     } ?: fallbackColorAdapted
 
-                    // 保持用户定义的透明度设置
-                    val cardColor = cardBaseColor.copy(alpha = style.courseBlockAlpha)
+                    // 移除透明度调节，始终为 1
+                    val cardColor = cardBaseColor
                     val textColor = MaterialTheme.colorScheme.onSurface
 
                     Card(

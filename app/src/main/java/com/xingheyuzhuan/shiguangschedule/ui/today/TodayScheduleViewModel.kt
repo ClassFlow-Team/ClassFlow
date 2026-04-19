@@ -1,97 +1,132 @@
 package com.xingheyuzhuan.shiguangschedule.ui.today
 
-import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetAppSettings
-import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetCourse
+import com.xingheyuzhuan.shiguangschedule.data.db.main.Course
+import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
+import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.model.ScheduleGridStyle
+import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
+import com.xingheyuzhuan.shiguangschedule.data.repository.CourseTableRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.StyleSettingsRepository
-import com.xingheyuzhuan.shiguangschedule.data.repository.WidgetRepository
+import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 
 @HiltViewModel
 class TodayScheduleViewModel @Inject constructor(
-    private val application: Application,
-    private val widgetRepository: WidgetRepository,
-    private val styleSettingsRepository: StyleSettingsRepository
+    private val appSettingsRepository: AppSettingsRepository,
+    private val courseTableRepository: CourseTableRepository,
+    private val styleSettingsRepository: StyleSettingsRepository,
+    private val timeSlotRepository: TimeSlotRepository
 ) : ViewModel() {
 
-    private val widgetSettingsFlow: Flow<WidgetAppSettings?> = widgetRepository.getAppSettingsFlow()
-
     val gridStyle: StateFlow<ScheduleGridStyle> = styleSettingsRepository.styleFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ScheduleGridStyle.DEFAULT
-        )
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ScheduleGridStyle())
 
-    private fun getString(resId: Int, vararg formatArgs: Any): String {
-        return application.getString(resId, *formatArgs)
-    }
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<TodayUiState> = appSettingsRepository.getAppSettings()
+        .flatMapLatest { settings ->
+            val tableId = settings.currentCourseTableId
+            val today = LocalDate.now()
+            val todayStr = today.toString()
+            val dayOfWeek = today.dayOfWeek.value
 
-    val semesterStatus: StateFlow<String> = widgetSettingsFlow.map { widgetSettings ->
-        val semesterStartDateStr = widgetSettings?.semesterStartDate
-        val totalWeeks = widgetSettings?.semesterTotalWeeks ?: 20
-        val semesterStartDate: LocalDate? = try {
-            semesterStartDateStr?.let { LocalDate.parse(it) }
-        } catch (e: Exception) { null }
-        val today = LocalDate.now()
+            combine(
+                appSettingsRepository.calculateCurrentWeekFromDb(),
+                appSettingsRepository.getCourseTableConfigFlow(tableId),
+                timeSlotRepository.getTimeSlotsByCourseTableId(tableId)
+            ) { weekIndex: Int?, config: CourseTableConfig?, timeSlots: List<TimeSlot> ->
 
-        when {
-            semesterStartDate == null -> getString(R.string.title_semester_not_set)
-            today.isBefore(semesterStartDate) -> {
-                val daysUntilStart = ChronoUnit.DAYS.between(today, semesterStartDate)
-                getString(R.string.title_vacation_until_start, daysUntilStart.toString())
-            }
-            else -> {
-                val currentWeek = ChronoUnit.WEEKS.between(semesterStartDate, today).toInt() + 1
-                if (currentWeek in 1..totalWeeks) {
-                    getString(R.string.title_current_week, currentWeek.toString())
-                } else if (currentWeek > totalWeeks) {
-                    val weeksOver = currentWeek - totalWeeks
-                    getString(R.string.status_semester_ended, weeksOver.toString())
-                } else getString(R.string.status_week_calc_error)
+                val startDate = config?.semesterStartDate?.let {
+                    try { LocalDate.parse(it) } catch (e: Exception) { null }
+                }
+
+                // 判定今天是否在跳过日期集合中
+                val isSkippedDay = settings.skippedDates.contains(todayStr)
+
+                val status = when {
+                    config?.semesterStartDate == null -> TodayStatus.NoSemesterConfig
+                    startDate != null && today.isBefore(startDate) -> TodayStatus.Vacation
+                    weekIndex == null -> TodayStatus.SemesterEnded
+                    else -> TodayStatus.Normal
+                }
+
+                // 仅在 ViewModel 内部快照中记录是否跳过
+                DataSnapshot(status, weekIndex, timeSlots, startDate, isSkippedDay)
+            }.flatMapLatest { snapshot ->
+                // 只有 Normal 状态且不是跳过日期时才查询数据库
+                if (snapshot.status == TodayStatus.Normal && snapshot.weekIndex != null && !snapshot.isSkippedDay) {
+                    courseTableRepository.getCoursesForDay(tableId, snapshot.weekIndex, dayOfWeek).map { courses ->
+                        createSuccessState(courses, snapshot, today)
+                    }
+                } else {
+                    // 如果是跳过日期，直接返回空课程列表
+                    // UI 层收到空列表会根据原有逻辑自动显示“今日无课”
+                    flowOf(createSuccessState(emptyList(), snapshot, today))
+                }
             }
         }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.Lazily,
-        initialValue = getString(R.string.title_loading)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TodayUiState.Loading)
+
+    /**
+     * 内部辅助快照类
+     */
+    private data class DataSnapshot(
+        val status: TodayStatus,
+        val weekIndex: Int?,
+        val timeSlots: List<TimeSlot>,
+        val startDate: LocalDate?,
+        val isSkippedDay: Boolean
     )
 
-    private val _todayCourses = MutableStateFlow<List<WidgetCourse>>(emptyList())
-    val todayCourses: StateFlow<List<WidgetCourse>> = _todayCourses.asStateFlow()
+    private fun createSuccessState(
+        courses: List<com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks>,
+        snapshot: DataSnapshot,
+        today: LocalDate
+    ): TodayUiState.Success {
+        val slotMap = snapshot.timeSlots.associateBy { it.number }
 
-    init {
-        loadTodayCourses()
-        viewModelScope.launch {
-            widgetRepository.dataUpdatedFlow.collect {
-                loadTodayCourses()
-            }
-        }
-    }
+        val displayModels = courses.map { item ->
+            val startSlot = slotMap[item.course.startSection]
+            val endSlot = slotMap[item.course.endSection]
+            CourseDisplayModel(
+                course = item.course,
+                startTime = item.course.customStartTime ?: startSlot?.startTime,
+                endTime = item.course.customEndTime ?: endSlot?.endTime
+            )
+        }.sortedBy { it.startTime ?: "99:99" }
 
-    private fun loadTodayCourses() {
-        viewModelScope.launch {
-            val today = LocalDate.now()
-            val todayString = today.format(DateTimeFormatter.ISO_LOCAL_DATE)
-            widgetRepository.getWidgetCoursesByDateRange(todayString, todayString).collect { courses ->
-                _todayCourses.value = courses
-            }
-        }
+        return TodayUiState.Success(
+            courses = displayModels,
+            weekIndex = snapshot.weekIndex ?: 0,
+            today = today,
+            status = snapshot.status,
+            startDate = snapshot.startDate
+        )
     }
+}
+
+data class CourseDisplayModel(val course: Course, val startTime: String?, val endTime: String?)
+
+enum class TodayStatus { Normal, NoSemesterConfig, SemesterEnded, Vacation }
+
+sealed class TodayUiState {
+    data object Loading : TodayUiState()
+    data class Success(
+        val courses: List<CourseDisplayModel>,
+        val weekIndex: Int,
+        val today: LocalDate,
+        val status: TodayStatus,
+        val startDate: LocalDate?
+    ) : TodayUiState()
 }

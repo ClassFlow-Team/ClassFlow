@@ -33,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -42,14 +43,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavController
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.model.DualColor
-import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import com.xingheyuzhuan.shiguangschedule.navigation.AddEditCourseChannel
 import com.xingheyuzhuan.shiguangschedule.navigation.PresetCourseData
+import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
 import kotlinx.coroutines.launch
 
 
@@ -57,17 +57,20 @@ import kotlinx.coroutines.launch
  * 二级页面：展示特定课程名称下的所有实例，使用两列网格 (Detail View)。
  * @param courseName 从导航参数中接收，用于 ViewModel 过滤。
  * @param onNavigateBack 导航回上一级
- * @param navController 用于在 Composable 内部处理 FAB 和卡片点击时的导航。
+ * @param onNavigate 用于在 Composable 内部处理 FAB 和卡片点击时的导航。
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun CourseInstanceListScreen(
     courseName: String,
     onNavigateBack: () -> Unit,
-    navController: NavController,
+    onNavigate: (Destination) -> Unit,
     viewModel: CourseInstanceListViewModel = hiltViewModel()
 ) {
-    // 使用 collectAsStateWithLifecycle 观察 UI 状态（包含颜色列表）
+    LaunchedEffect(courseName) {
+        viewModel.initCourseName(courseName)
+    }
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val courseInstances by viewModel.courseInstances.collectAsStateWithLifecycle()
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
@@ -76,34 +79,24 @@ fun CourseInstanceListScreen(
 
     val onNavigateToAddNewCourse: () -> Unit = {
         scope.launch {
-            // 修正 Argument type mismatch：显式将 Int 传入 PresetCourseData
             val presetData = PresetCourseData(
                 name = courseName,
                 startSection = 1,
                 endSection = 2
             )
-
-            // 2. 发送数据到 Channel，用于 AddEditCourseViewModel 接收预设名称
             AddEditCourseChannel.sendEvent(presetData)
-
-            // 3. 执行导航到新增课程页面
-            val route = Screen.AddEditCourse.createRouteForNewCourse()
-            navController.navigateSafe(route)
+            onNavigate(Destination.AddEditCourse(courseId = null))
         }
     }
 
-    /**
-     * 处理编辑课程（通过卡片点击），通过路由参数传递 courseId。
-     */
+    // 编辑课程逻辑
     val onNavigateToEditCourse: (courseId: String) -> Unit = { courseId ->
-        val route = Screen.AddEditCourse.createRouteWithCourseId(courseId)
-        navController.navigateSafe(route)
+        onNavigate(Destination.AddEditCourse(courseId = courseId))
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                // 标题根据模式切换
                 title = {
                     Text(
                         if (isSelectionMode) {
@@ -114,73 +107,53 @@ fun CourseInstanceListScreen(
                     )
                 },
                 navigationIcon = {
-                    // 导航图标根据模式切换：返回 <-> 取消选择
                     IconButton(onClick = if (isSelectionMode) viewModel::toggleSelectionMode else onNavigateBack) {
                         Icon(
                             if (isSelectionMode) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = if (isSelectionMode) stringResource(R.string.action_cancel) else stringResource(R.string.a11y_back)
+                            contentDescription = null
                         )
                     }
                 },
                 actions = {
-                    // 1. 如果处于选择模式，显示 全选 和 删除 按钮
                     if (isSelectionMode) {
                         val totalCount = courseInstances.size
                         val selectedCount = selectedCourseIds.size
                         val isAllSelected = totalCount > 0 && selectedCount == totalCount
 
-                        // 全选/全不选 按钮
                         IconButton(onClick = viewModel::toggleSelectAll, enabled = totalCount > 0) {
                             val selectAllStringRes = if (isAllSelected) R.string.action_deselect_all else R.string.action_select_all
-                            Icon(
-                                imageVector = Icons.Filled.Check,
-                                contentDescription = stringResource(selectAllStringRes)
-                            )
+                            Icon(Icons.Filled.Check, contentDescription = stringResource(selectAllStringRes))
                         }
 
-                        // 删除按钮
                         IconButton(onClick = {
                             scope.launch { viewModel.deleteSelectedCourses() }
                         }, enabled = selectedCount > 0) {
-                            Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.a11y_delete))
+                            Icon(Icons.Filled.Delete, contentDescription = null)
                         }
                     }
 
-                    // 2. 切换多选模式按钮
                     IconButton(
                         onClick = viewModel::toggleSelectionMode,
                         enabled = courseInstances.isNotEmpty() || isSelectionMode
                     ) {
-                        val descriptionRes = if (isSelectionMode) {
-                            R.string.a11y_exit_selection_mode
-                        } else {
-                            R.string.a11y_enter_selection_mode
-                        }
-
-                        Icon(
-                            Icons.AutoMirrored.Filled.MenuOpen,
-                            contentDescription = stringResource(descriptionRes)
-                        )
+                        val descriptionRes = if (isSelectionMode) R.string.a11y_exit_selection_mode else R.string.a11y_enter_selection_mode
+                        Icon(Icons.AutoMirrored.Filled.MenuOpen, contentDescription = stringResource(descriptionRes))
                     }
                 }
             )
         },
-        // 添加课程的 FAB
         floatingActionButton = {
             if (!isSelectionMode) {
-                FloatingActionButton(
-                    onClick = onNavigateToAddNewCourse
-                ) {
+                FloatingActionButton(onClick = onNavigateToAddNewCourse) {
                     Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.action_add))
                 }
             }
         }
-    ){ paddingValues ->
+    ) { paddingValues ->
+        // 列表部分保持原样，仅将 onNavigateToEditCourse 回调传入卡片
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
+            modifier = Modifier.fillMaxSize().padding(paddingValues),
             contentPadding = PaddingValues(16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -193,18 +166,13 @@ fun CourseInstanceListScreen(
                     colorMaps = uiState.courseColorMaps,
                     onCourseClick = { courseId ->
                         if (isSelectionMode) {
-                            // 选择模式下，点击切换选择状态
                             viewModel.toggleCourseSelection(courseId)
                         } else {
-                            // 非选择模式下，点击进入编辑
                             onNavigateToEditCourse(courseId)
                         }
                     },
                     onCourseLongClick = { courseId ->
-                        // 长按进入选择模式，并选中当前项
-                        if (!isSelectionMode) {
-                            viewModel.toggleSelectionMode()
-                        }
+                        if (!isSelectionMode) viewModel.toggleSelectionMode()
                         viewModel.toggleCourseSelection(courseId)
                     }
                 )
@@ -228,7 +196,7 @@ fun CourseInstanceCard(
     val course = courseWithWeeks.course
     val courseId = course.id
 
-    val isDarkTheme = isSystemInDarkTheme()
+    val isDarkTheme = LocalIsDarkTheme.current
 
     // 如果索引不存在，则取列表第一项；如果列表为空，则使用 MaterialTheme 的 SurfaceVariant 颜色兜底
     val fallbackColor = DualColor(

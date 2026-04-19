@@ -2,7 +2,6 @@ package com.xingheyuzhuan.shiguangschedule.ui.schedule
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
@@ -41,6 +40,7 @@ data class MergedCourseBlock(
     val endSection: Float,
     val courses: List<CourseWithWeeks>,
     val isConflict: Boolean = false,
+    val hasNonCurrentWeekCourses: Boolean = false,
     val needsProportionalRendering: Boolean = false,
     val isVisualDemoted: Boolean = false
 )
@@ -56,10 +56,10 @@ data class WeeklyScheduleUiState(
     val semesterStartDate: LocalDate? = null,
     val firstDayOfWeek: Int = DayOfWeek.MONDAY.value,
     val weekIndexInPager: Int? = null,
-    val weekTitle: String = "",
     val currentWeekNumber: Int? = null,
     val pagerMondayDate: LocalDate = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)),
-    val currentSectionIndex: Int = -1
+    val currentSectionIndex: Int = -1,
+    val daysUntilStart: Long = 0
 )
 
 /**
@@ -131,8 +131,15 @@ class WeeklyScheduleViewModel @Inject constructor(
 
                 val isWithinSemester = pageWeekNum != null && pageWeekNum in 1..config.semesterTotalWeeks
 
+                // 获取数据流
                 val coursesFlow = if (settings.showNonCurrentWeekCourses && isWithinSemester) {
-                    courseTableRepository.getCoursesWithWeeksByTableId(tableId)
+                    // 读取全部课程，然后在 map 中进行过滤
+                    courseTableRepository.getCoursesWithWeeksByTableId(tableId).map { allCourses ->
+                        allCourses.filter { cw ->
+                            // 仅保留包含当前页周数或更大周数的课程（即尚未结束的课程）
+                            cw.weeks.any { it.weekNumber >= pageWeekNum }
+                        }
+                    }
                 } else {
                     courseTableRepository.getCoursesWithWeeksByDate(tableId, day, config)
                 }
@@ -146,22 +153,15 @@ class WeeklyScheduleViewModel @Inject constructor(
         }
     }.flatMapLatest { it }
 
-    private val _stringProviderFlow = MutableStateFlow<((Int, Array<out Any>) -> String)?>(null)
-
-    fun setStringProvider(provider: (Int, Array<out Any>) -> String) {
-        _stringProviderFlow.value = provider
-    }
-
     init {
         viewModelScope.launch {
             val configAndTimeFlow = combine(
                 appSettingsFlow,
                 courseTableConfigFlow,
                 styleFlow,
-                _pagerMondayDate,
-                _stringProviderFlow
-            ) { settings, config, style, mondayDate, provider ->
-                ScheduleConfigPackage(settings, config, style, mondayDate, provider)
+                _pagerMondayDate
+            ) { settings, config, style, mondayDate ->
+                ScheduleConfigPackage(settings, config, style, mondayDate)
             }
 
             combine(configAndTimeFlow, currentCoursesFlow, timeSlotsFlow) { configPkg, cache, timeSlots ->
@@ -169,9 +169,10 @@ class WeeklyScheduleViewModel @Inject constructor(
                 val startDate = config?.semesterStartDate?.let { LocalDate.parse(it) }
                 val firstDayOfWeekInt = config?.firstDayOfWeek ?: DayOfWeek.MONDAY.value
                 val totalWeeks = config?.semesterTotalWeeks ?: 20
+                val today = LocalDate.now()
 
                 val currentWeekNum = appSettingsRepository.getWeekIndexAtDate(
-                    targetDate = LocalDate.now(),
+                    targetDate = today,
                     startDateStr = config?.semesterStartDate,
                     firstDayOfWeekInt = firstDayOfWeekInt
                 )
@@ -183,6 +184,11 @@ class WeeklyScheduleViewModel @Inject constructor(
                 )
 
                 val currentSectionIndex = calculateCurrentSectionIndex(timeSlots)
+
+                // 计算距离开学天数
+                val daysUntil = if (startDate != null && today.isBefore(startDate)) {
+                    ChronoUnit.DAYS.between(today, startDate)
+                } else 0L
 
                 // 修正颜色（仅针对本周课程做检查以减小负担）
                 val currentWeekCourses = cache[configPkg.mondayDate.toString()] ?: emptyList()
@@ -199,28 +205,12 @@ class WeeklyScheduleViewModel @Inject constructor(
                     semesterStartDate = startDate,
                     firstDayOfWeek = firstDayOfWeekInt,
                     weekIndexInPager = weekIndex,
-                    weekTitle = generateTitle(weekIndex, startDate, totalWeeks, configPkg.provider),
                     currentWeekNumber = currentWeekNum,
                     pagerMondayDate = configPkg.mondayDate,
-                    currentSectionIndex = currentSectionIndex
+                    currentSectionIndex = currentSectionIndex,
+                    daysUntilStart = daysUntil
                 )
             }.collect { _uiState.value = it }
-        }
-    }
-
-    private fun generateTitle(
-        weekIndex: Int?,
-        startDate: LocalDate?,
-        totalWeeks: Int,
-        provider: ((Int, Array<out Any>) -> String)?
-    ): String {
-        val today = LocalDate.now()
-        val p = provider ?: return "..."
-        return when {
-            startDate == null -> p(R.string.title_semester_not_set, emptyArray())
-            today.isBefore(startDate) -> p(R.string.title_vacation_until_start, arrayOf(ChronoUnit.DAYS.between(today, startDate).toString()))
-            weekIndex != null && weekIndex in 1..totalWeeks -> p(R.string.title_current_week, arrayOf(weekIndex.toString()))
-            else -> p(R.string.title_vacation, emptyArray())
         }
     }
 
@@ -312,29 +302,22 @@ class WeeklyScheduleViewModel @Inject constructor(
                     start to (end + 1f)
                 }
 
-                // 特例处理：如果整个时间段都在课表底部之后，将其视为在底部向上吸附
                 if (s >= limit) {
                     e = limit
                     s = limit - minSafeHeight
-                }
-                // 特例处理：如果整个时间段都在课表顶部之前，将其视为在顶部向下吸附
-                else if (e <= 1.0f) {
+                } else if (e <= 1.0f) {
                     s = 1.0f
                     e = 1.0f + minSafeHeight
                 }
 
-                // 智能保底高度计算
                 if (e - s < minSafeHeight) {
                     if (e + minSafeHeight <= limit) {
-                        // 优先向下延伸
                         e = s + minSafeHeight
                     } else {
-                        // 如果向下会超出边界，则向上延伸
                         s = e - minSafeHeight
                     }
                 }
 
-                // 最终严格裁剪，防止极端数据溢出
                 NormalizedCourse(cw, s.coerceIn(1.0f, limit - 0.1f), e.coerceIn(1.0f + 0.1f, limit))
             } catch (e: Exception) { null }
         }
@@ -377,12 +360,13 @@ class WeeklyScheduleViewModel @Inject constructor(
             }
         })
 
-        // 视觉降级判断：第一个课程是否属于本周
-        val isVisualDemoted = if (sortedCourses.isNotEmpty()) {
-            !sortedCourses.first().weeks.any { it.weekNumber == currentWeek }
-        } else {
-            false
-        }
+        val currentWeekCoursesCount = sortedCourses.count { cw -> cw.weeks.any { it.weekNumber == currentWeek } }
+        val totalCoursesCount = sortedCourses.size
+        val hasNonCurrentWeekCoursesExist = sortedCourses.any { cw -> !cw.weeks.any { it.weekNumber == currentWeek } }
+
+        val isConflict = currentWeekCoursesCount > 1
+        val isVisualDemoted = currentWeekCoursesCount == 0
+        val hasNonCurrentWeekCourses = hasNonCurrentWeekCoursesExist && totalCoursesCount > 1
 
         val minS = group.minOf { it.start }
         val maxE = group.maxOf { it.end }
@@ -392,7 +376,8 @@ class WeeklyScheduleViewModel @Inject constructor(
             startSection = (minS - 1f).coerceIn(0f, totalSlots.toFloat()),
             endSection = (maxE - 1f).coerceIn(0f, totalSlots.toFloat()),
             courses = sortedCourses,
-            isConflict = sortedCourses.size > 1,
+            isConflict = isConflict,
+            hasNonCurrentWeekCourses = hasNonCurrentWeekCourses,
             needsProportionalRendering = group.any { it.raw.course.isCustomTime },
             isVisualDemoted = isVisualDemoted
         )
@@ -403,6 +388,5 @@ private data class ScheduleConfigPackage(
     val settings: AppSettingsModel,
     val config: CourseTableConfig?,
     val style: ScheduleGridStyle,
-    val mondayDate: LocalDate,
-    val provider: ((Int, Array<out Any>) -> String)?
+    val mondayDate: LocalDate
 )

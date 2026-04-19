@@ -1,25 +1,24 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.update
 
+import android.app.Application
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.CreationExtras
 import com.xingheyuzhuan.shiguangschedule.data.model.RepositoryInfo
 import com.xingheyuzhuan.shiguangschedule.data.model.RepoType
-import com.xingheyuzhuan.shiguangschedule.data.repository.GitRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.GitRepositoryImpl
-import com.xingheyuzhuan.shiguangschedule.tool.GitUpdater
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import java.io.InputStream
 
-open class UpdateRepoViewModel(
-    private val gitRepository: GitRepository,
-    private val jsonInputStream: InputStream
+@HiltViewModel
+open class UpdateRepoViewModel @Inject constructor(
+    private val gitRepository: GitRepositoryImpl,
+    private val application: Application
 ) : ViewModel() {
 
     // UI状态，包含可供选择的仓库列表、当前选择的仓库和日志
@@ -49,6 +48,7 @@ open class UpdateRepoViewModel(
     private fun loadRepositories() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                val jsonInputStream = application.assets.open("git_repos.json")
                 val jsonString = jsonInputStream.reader().use { it.readText() }
                 val repos = Json.decodeFromString<List<RepositoryInfo>>(jsonString)
                 val defaultRepo = repos.firstOrNull() // 默认选中的仓库
@@ -151,21 +151,5 @@ open class UpdateRepoViewModel(
 
             _uiState.value = _uiState.value.copy(isUpdating = false)
         }
-    }
-}
-
-object UpdateRepoViewModelFactory : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-        val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
-
-        if (modelClass.isAssignableFrom(UpdateRepoViewModel::class.java)) {
-            val gitUpdater = GitUpdater(application.applicationContext)
-            val gitRepository: GitRepository = GitRepositoryImpl(gitUpdater)
-            val jsonInputStream: InputStream = application.assets.open("git_repos.json")
-
-            @Suppress("UNCHECKED_CAST")
-            return UpdateRepoViewModel(gitRepository, jsonInputStream) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

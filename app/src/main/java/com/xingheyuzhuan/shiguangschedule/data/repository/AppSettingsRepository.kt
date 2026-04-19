@@ -9,6 +9,7 @@ import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableDao
 import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -81,6 +82,11 @@ class AppSettingsRepository @Inject constructor(
             prefs[AppSettingsModel.KEY_AUTO_CONTROL_MODE] = newSettings.autoControlMode.value
             prefs[AppSettingsModel.KEY_COMPAT_WEARABLE_SYNC] = newSettings.compatWearableSync
             prefs[AppSettingsModel.KEY_SHOW_NON_CURRENT_WEEK_COURSES] = newSettings.showNonCurrentWeekCourses
+            prefs[AppSettingsModel.KEY_START_SCREEN] = newSettings.startScreen.value
+            prefs[AppSettingsModel.KEY_THEME_MODE] = newSettings.themeMode.value
+            prefs[AppSettingsModel.KEY_USE_DYNAMIC_COLOR] = newSettings.useDynamicColor
+            prefs[AppSettingsModel.KEY_CUSTOM_LIGHT_PRIMARY] = newSettings.customLightPrimary
+            prefs[AppSettingsModel.KEY_CUSTOM_DARK_PRIMARY] = newSettings.customDarkPrimary
         }
     }
 
@@ -143,25 +149,27 @@ class AppSettingsRepository @Inject constructor(
     /**
      * 基于当前数据库/DataStore状态计算当前自然周次。
      */
-    suspend fun calculateCurrentWeekFromDb(): Int? {
-        val appSettings = getAppSettingsOnce() ?: return null
-        val currentCourseId = appSettings.currentCourseTableId.ifEmpty { return null }
-        val config = courseTableConfigDao.getConfigOnce(currentCourseId) ?: return null
-
-        val rawWeek = getWeekIndexAtDate(
-            targetDate = LocalDate.now(),
-            startDateStr = config.semesterStartDate,
-            firstDayOfWeekInt = config.firstDayOfWeek
-        ) ?: return null
-
-        return if (rawWeek in 1..config.semesterTotalWeeks) rawWeek else null
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun calculateCurrentWeekFromDb(): Flow<Int?> = getAppSettings().flatMapLatest { appSettings ->
+        val currentCourseId = appSettings.currentCourseTableId.ifEmpty {
+            return@flatMapLatest kotlinx.coroutines.flow.flowOf(null)
+        }
+        courseTableConfigDao.getConfigById(currentCourseId).map { config ->
+            if (config == null) return@map null
+            val rawWeek = getWeekIndexAtDate(
+                targetDate = LocalDate.now(),
+                startDateStr = config.semesterStartDate,
+                firstDayOfWeekInt = config.firstDayOfWeek
+            ) ?: return@map null
+            if (rawWeek in 1..config.semesterTotalWeeks) rawWeek else null
+        }
     }
 
     /**
      * 根据目标周数反推开学日期。
      */
     suspend fun setSemesterStartDateFromWeek(week: Int?) {
-        val appSettings = getAppSettingsOnce() ?: return
+        val appSettings = getAppSettingsOnce()
         val currentCourseId = appSettings.currentCourseTableId.ifEmpty { return }
 
         val currentConfig = courseTableConfigDao.getConfigOnce(currentCourseId)

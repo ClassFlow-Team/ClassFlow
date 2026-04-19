@@ -31,8 +31,6 @@ data class ScheduleGridStyleComposed(
     val fontScale: Float,
 
     // 颜色 (Color)
-    val overlapCourseColor: Color,
-    val overlapCourseColorDark: Color,
     val courseColorMaps: List<DualColor>,
 
     // UI 渲染开关
@@ -47,7 +45,11 @@ data class ScheduleGridStyleComposed(
 
     val textAlignCenterHorizontal: Boolean, // 文字水平居中
     val textAlignCenterVertical: Boolean,   // 文字垂直居中
-    val borderType: BorderTypeProto         // 边框类型 (NONE/SOLID/DASHED)
+    val borderType: BorderTypeProto,        // 边框类型 (NONE/SOLID/DASHED)
+    val overlapStyleToggle: Boolean,         // 重叠样式切换
+
+    val pageTextColor: Color?, // 页面字符颜色
+    val courseTextColor: Color?, // 课程块文字颜色
 ) {
     companion object {
         /**
@@ -62,8 +64,6 @@ data class ScheduleGridStyleComposed(
                 courseBlockOuterPadding = this.courseBlockOuterPaddingDp.dp,
                 courseBlockInnerPadding = this.courseBlockInnerPaddingDp.dp,
                 courseBlockAlpha = this.courseBlockAlphaFloat,
-                overlapCourseColor = Color(this.overlapCourseColorLong.toInt()),
-                overlapCourseColorDark = Color(this.overlapCourseColorDarkLong.toInt()),
                 fontScale = this.courseBlockFontScale,
                 courseColorMaps = this.courseColorMaps.map { dual ->
                     DualColor(
@@ -81,7 +81,10 @@ data class ScheduleGridStyleComposed(
                 backgroundImagePath = this.backgroundImagePath ?: "",
                 textAlignCenterHorizontal = this.textAlignCenterHorizontal,
                 textAlignCenterVertical = this.textAlignCenterVertical,
-                borderType = this.borderType
+                borderType = this.borderType,
+                overlapStyleToggle = this.overlapStyleToggle,
+                pageTextColor = this.pageTextColorLong?.let { Color(it) },
+                courseTextColor = this.courseTextColorLong?.let { Color(it) },
             )
         }
     }

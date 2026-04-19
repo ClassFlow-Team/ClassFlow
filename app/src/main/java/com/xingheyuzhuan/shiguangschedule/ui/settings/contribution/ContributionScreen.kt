@@ -2,7 +2,6 @@ package com.xingheyuzhuan.shiguangschedule.ui.settings.contribution
 
 import android.content.Context
 import android.content.Intent
-import androidx.core.net.toUri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,9 +18,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavHostController
-import coil.compose.AsyncImage
+import androidx.core.net.toUri
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import coil3.compose.AsyncImage
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.model.ContributionList
 
@@ -31,8 +30,8 @@ private typealias Contributor = ContributionList.Contributor
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContributionScreen(
-    navController: NavHostController,
-    viewModel: ContributionViewModel = viewModel()
+    onBack: () -> Unit,
+    viewModel: ContributionViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val selectedTabIndex by viewModel.selectedTabIndex.collectAsState()
@@ -43,7 +42,7 @@ fun ContributionScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.title_contribution_list)) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = onBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.a11y_back_to_previous)
@@ -94,8 +93,6 @@ fun ContributionScreen(
     }
 }
 
-// 选项卡 Composable
-// PrimaryTabRow 目前在 Material 3 中仍标记为实验性 API
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContributionTabs(selectedTabIndex: Int, onTabSelected: (Int) -> Unit) {

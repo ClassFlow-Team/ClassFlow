@@ -6,13 +6,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -49,11 +49,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.navigation.NavController
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
 import com.xingheyuzhuan.shiguangschedule.data.model.SchoolHistoryModel
-import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import com.xingheyuzhuan.shiguangschedule.ui.components.AlphabetIndexerList
 import kotlinx.coroutines.launch
 import school_index.AdapterCategory
@@ -65,7 +63,8 @@ import school_index.School
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SchoolSelectionListScreen(
-    navController: NavController,
+    onNavigate: (Destination) -> Unit,
+    onBack: () -> Unit,
     viewModel: SchoolSelectionViewModel = hiltViewModel()
 ) {
     // 观察 ViewModel 状态
@@ -85,7 +84,7 @@ fun SchoolSelectionListScreen(
     Scaffold(
         topBar = {
             SearchBarWithTitle(
-                navController = navController,
+                onBack = onBack, // 使用传入的 onBack
                 searchQuery = searchQuery,
                 onQueryChange = viewModel::updateSearchQuery,
                 searchActive = isSearchActive,
@@ -98,19 +97,20 @@ fun SchoolSelectionListScreen(
                 placeholderText = placeholderText,
                 titleText = titleText,
                 filteredSchools = filteredSchools,
-            ) { selectedSchool ->
-                viewModel.saveLastSchool(selectedSchool)
-                navController.navigateSafe(
-                    Screen.AdapterSelection.createRoute(
-                        selectedSchool.id,
-                        selectedSchool.name,
-                        selectedCategory.number,
-                        selectedSchool.resourceFolder
+                onSchoolSelected = { selectedSchool ->
+                    viewModel.saveLastSchool(selectedSchool)
+                    onNavigate(
+                        Destination.AdapterSelection(
+                            schoolId = selectedSchool.id,
+                            schoolName = selectedSchool.name,
+                            categoryNumber = selectedCategory.value,
+                            resourceFolder = selectedSchool.resource_folder
+                        )
                     )
-                )
-                isSearchActive = false
-                viewModel.updateSearchQuery("")
-            }
+                    isSearchActive = false
+                    viewModel.updateSearchQuery("")
+                }
+            )
         }
     ) { paddingValues ->
         if (!isSearchActive) {
@@ -137,19 +137,21 @@ fun SchoolSelectionListScreen(
                     onClearHistory = { viewModel.clearHistory(it) },
                     onSchoolSelected = { school, category ->
                         viewModel.saveLastSchool(school)
-                        navController.navigateSafe(
-                            Screen.AdapterSelection.createRoute(
-                                school.id,
-                                school.name,
-                                category.number,
-                                school.resourceFolder
+                        // 列表点击跳转
+                        onNavigate(
+                            Destination.AdapterSelection(
+                                schoolId = school.id,
+                                schoolName = school.name,
+                                categoryNumber = category.value,
+                                resourceFolder = school.resource_folder
                             )
                         )
                     }
                 )
             }
         } else {
-            Spacer(modifier = Modifier.padding(paddingValues))
+            // 搜索激活时，SearchBar 内部会处理全屏显示，这里留空防止 padding 重叠
+            Box(modifier = Modifier.padding(paddingValues))
         }
     }
 }
@@ -295,7 +297,7 @@ fun CategoryTabs(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchBarWithTitle(
-    navController: NavController,
+    onBack: () -> Unit,
     searchQuery: String,
     onQueryChange: (String) -> Unit,
     searchActive: Boolean,
@@ -321,7 +323,7 @@ fun SearchBarWithTitle(
                             onSearchActiveChange(false)
                             onQueryChange("")
                         } else {
-                            navController.popBackStack()
+                            onBack()
                         }
                     }) {
                         Icon(
@@ -363,10 +365,8 @@ fun SearchBarWithTitle(
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                filteredSchools.forEach { school ->
-                    item {
-                        SchoolItem(school = school) { onSchoolSelected(it) }
-                    }
+                items(filteredSchools) { school ->
+                    SchoolItem(school = school) { onSchoolSelected(it) }
                 }
             }
         }

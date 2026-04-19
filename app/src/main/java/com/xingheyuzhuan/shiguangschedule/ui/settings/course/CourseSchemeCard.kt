@@ -3,6 +3,7 @@ package com.xingheyuzhuan.shiguangschedule.ui.settings.course
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.StickyNote2
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
@@ -30,6 +31,7 @@ fun CourseSchemeCard(
     courseColorMaps: List<DualColor>,
     onTeacherChange: (String) -> Unit,
     onPositionChange: (String) -> Unit,
+    onRemarkChange: (String) -> Unit,
     onColorClick: () -> Unit,
     onTimeClick: () -> Unit,
     onWeeksClick: () -> Unit,
@@ -98,6 +100,30 @@ fun CourseSchemeCard(
                     leadingIcon = { Icon(Icons.Default.LocationOn, null, Modifier.size(18.dp)) },
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 备注输入
+                OutlinedTextField(
+                    value = scheme.remark,
+                    onValueChange = onRemarkChange,
+                    placeholder = { Text(stringResource(R.string.label_remark)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = { Icon(imageVector = Icons.AutoMirrored.Filled.StickyNote2, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    minLines = 1,
+                    maxLines = 5,
+                    supportingText = {
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = "${scheme.remark.length} / 300",
+                                modifier = Modifier.align(Alignment.CenterEnd),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    textStyle = MaterialTheme.typography.bodyMedium
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))

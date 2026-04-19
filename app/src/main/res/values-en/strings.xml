@@ -26,12 +26,13 @@
     <string name="label_recent_visit">Recent Visit</string>
     
     <!-- Main Interface and Today's Schedule -->
+    <string name="action_reset">Reset</string>
     <string name="nav_today_schedule">Today</string>
     <string name="nav_course_schedule">Schedule</string>
     <string name="nav_settings">Settings</string>
     <string name="title_today_schedule">Today\'s schedule</string>
     <string name="text_no_courses_today">No courses today</string>
-    <string name="title_vacation_until_start">On vacation (%1$s days until semester starts)</string>
+    <string name="title_vacation_until_start">Vacation (%1$s days left)</string>
     <string name="title_semester_not_set">Please set semester start date</string>
     <string name="date_format_year_month_day">MMM d, yyyy</string>
 
@@ -70,11 +71,12 @@
     <string name="label_end_time">End Time</string>
 
     <!-- Course Related -->
+    <string name="label_remark">Remark</string>
     <string name="course_time_description">Time: Period %1$s-%2$s (%3$s-%4$s)</string>
     <string name="course_position_prefix">Location: %1$s</string>
     <string name="course_teacher_prefix">Instructor: %1$s</string>
     <string name="title_course_overlap">Overlapping Courses</string>
-    <string name="label_overlap">(Overlap)</string>
+    <string name="label_courses_overlap">%d overlapping</string>
     <string name="course_time_sections_count">(%1$s periods)</string>
     <string name="title_select_week">Select week</string>
     <string name="title_current_week">Week %1$s</string>
@@ -125,11 +127,11 @@
     <string name="widget_vacation_expecting">Looking forward to new semester</string>
     <string name="widget_remaining_courses_format_today">%1$d courses left today</string>
     <string name="widget_remaining_courses_format_tomorrow">%1$d courses tomorrow</string>
-    <string name="widget_date_dayofweek_format">%1$s %2$s</string>
     <string name="widget_title_today">Today</string>
     <string name="widget_title_tomorrow">Tomorrow</string>
     
     <!-- Notification Settings -->
+    <string name="widget_course_total_count">%1$d total</string>
     <string name="title_course_notification_settings">Course reminder settings</string>
     <string name="section_title_general">General</string>
     <string name="section_title_advanced">Advanced</string>
@@ -197,7 +199,6 @@
     <string name="item_current_week">Current week</string>
     <string name="desc_current_week_manual">Manually adjust current week</string>
     <string name="status_set_start_date_first">Please set start date first</string>
-    <string name="status_on_vacation">On vacation</string>
     <string name="status_current_week_format">Week %1$d</string>
     <string name="item_first_day_of_week">Week starts on</string>
     <string name="desc_first_day_of_week">Set which day the week starts on</string>
@@ -218,7 +219,6 @@
     <string name="dialog_title_select_total_weeks">Select total weeks</string>
     <string name="dialog_title_manual_set_week">Manually set current week</string>
     <string name="dialog_title_set_first_day_of_week">Set week start day</string>
-    <string name="dialog_option_on_vacation">On vacation</string>
     <string name="text_no_course_tables">No schedules available</string>
     <string name="course_table_id_prefix">ID: %s</string>
     <string name="course_table_created_at_prefix">Created: %s</string>
@@ -340,6 +340,8 @@
     <string name="tip_non_mandatory_update">Tip: The cancel button is not shown for mandatory updates.</string>
     <string name="dialog_select_update_channel">Select update channel</string>
     <string name="a11y_selected">Selected</string>
+    <string name="item_start_screen_settings">Startup Page Settings</string>
+    <string name="dialog_select_start_screen">Select default startup page</string>
     
     <!-- Schedule Adjustment -->
     <string name="title_tweak_schedule">Schedule adjustment</string>
@@ -472,7 +474,6 @@
     <string name="label_opacity">Opacity</string>
     <string name="title_light_color_pool">Light Mode Color Pool</string>
     <string name="title_dark_color_pool">Dark Mode Color Pool</string>
-    <string name="label_color_overlap">Overlap</string>
     <string name="preview_light_mode">Light Mode Preview\nFixed dark text</string>
     <string name="preview_dark_mode">Dark Mode Preview\nFixed light text</string>
     <string name="action_reset_style">Reset to default style</string>
@@ -488,6 +489,8 @@
     <string name="placeholder_input_value">Enter value</string>
 
     <!-- Quick Actions -->
+    <string name="label_overlap_style_toggle">Toggle overlapping style</string>
+    <string name="label_course_text_color">Course block text color</string>
     <string name="item_quick_actions">Quick Actions</string>
     <string name="desc_quick_actions">Includes schedule tweaks, temporary changes, etc.</string>
     <string name="label_quick_action_category_schedule">Schedule Adjustments</string>
@@ -508,5 +511,18 @@
     <string name="quick_delete_success">Schedule cleared successfully</string>
     <string name="error_load_failed">Failed to initialize, please try again</string>
     <string name="error_op_failed">Operation failed: %1$s</string>
+    <string name="theme_follow_system">Follow System</string>
+    <string name="theme_light">Light Mode</string>
+    <string name="theme_dark">Dark Mode</string>
+    <string name="theme_settings_title">Theme Settings</string>
+    <string name="theme_mode_label">Theme Mode</string>
+    <string name="dynamic_color_title">Dynamic Color (Material You)</string>
+    <string name="dynamic_color_desc">Generate color schemes based on system wallpaper (Android 12+ only)</string>
+    <string name="custom_color_title">Custom Primary Color</string>
+    <string name="light_primary_color">Light Primary Color</string>
+    <string name="dark_primary_color">Dark Primary Color</string>
+    <string name="theme_color_hint">Note: After changing this color, the system will use it as a seed color to recalculate the entire app\\\'s color scheme.</string>
+    <string name="label_page_text_color">Schedule text color</string>
+    <string name="widget_course_remaining_count">%1$d left</string>
 
 </resources>

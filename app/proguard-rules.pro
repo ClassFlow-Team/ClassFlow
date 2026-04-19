@@ -1,133 +1,100 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
-
-# ProGuard / R8 混淆规则文件
-# 该文件解决了所有数据模型（Gson/Protobuf/枚举/Kotlinx.Serialization）和组件（Glance/Worker/WebView）的混淆问题。
-
 # -------------------------------------------------------------------------
-# 1. 基础全局设置 (保留必要的调试和反射元数据)
+# R8/ProGuard 混淆配置文件
 # -------------------------------------------------------------------------
 
-# 保留源代码文件和行号，用于在 Release 版崩溃时还原堆栈
+# --- 1. 基础全局设置 ---
 -keepattributes SourceFile,LineNumberTable,Signature,InnerClasses,EnclosingMethod,AnnotationDefault
 
-# -------------------------------------------------------------------------
-# 2. 原生小组件 (Native Widget) 规则
-# -------------------------------------------------------------------------
+# --- 2. 依赖注入 (Hilt/Jakarta) ---
+-keepclassmembers class * {
+    @jakarta.inject.Inject <init>(...);
+    @javax.inject.Inject <init>(...);
+}
 
-# 保留所有小组件 Provider (确保系统能实例化它们)
+# --- 3. 原生组件与 WorkManager ---
 -keep public class * extends android.appwidget.AppWidgetProvider {
     public void *(android.content.Context, android.content.Intent);
     <init>();
 }
-
-# 保留小组件渲染和业务逻辑包
 -keep class com.xingheyuzhuan.shiguangschedule.widget.** { *; }
-
-# -------------------------------------------------------------------------
-# 3. WorkManager 规则 (确保同步任务不失效)
-# -------------------------------------------------------------------------
-
-# 保留所有 Worker 的类名和构造函数，供 WorkManager 反射调用
 -keep class * extends androidx.work.ListenableWorker {
     public <init>(android.content.Context, androidx.work.WorkerParameters);
 }
 
-# -------------------------------------------------------------------------
-# 4. Retrofit 3 & OkHttp 规则 (官方推荐方案)
-# -------------------------------------------------------------------------
-
-# Retrofit 3 已经很好地适配了 R8，但为了保险，保留接口上的注解
--dontwarn retrofit2.**
--keep class retrofit2.** { *; }
--keepclassmembers,allowobfuscation interface * {
-    @retrofit2.http.* <methods>;
-}
-
-# OkHttp 混淆规避
+# --- 4. 网络库 (Ktor/OkHttp) ---
 -dontwarn okhttp3.**
 -dontwarn okio.**
 -keep class okhttp3.** { *; }
+-dontwarn io.ktor.**
 
-# -------------------------------------------------------------------------
-# 5. JGit & SLF4J 优化规则 (深度瘦身)
-# -------------------------------------------------------------------------
-
-# 忽略 JGit 一些在 Android 上不存在的 Java 管理库警告
+# --- 5. JGit 深度瘦身与安全 ---
+-dontwarn com.googlecode.javaewah.**
+-dontwarn org.apache.http.**
+-dontwarn org.slf4j.**
 -dontwarn java.lang.management.**
 -dontwarn javax.management.**
 -dontwarn org.ietf.jgss.**
 -dontwarn org.apache.commons.compress.**
+-dontwarn org.eclipse.jgit.internal.storage.dfs.**
 
-# 保留 JGit 核心类
--keep class org.eclipse.jgit.** { *; }
+# 允许混淆 JGit 类名以减小体积，但保留核心配置
+-keepnames class org.eclipse.jgit.**
+-keep class org.eclipse.jgit.lib.CoreConfig { <methods>; }
+-keep class org.eclipse.jgit.internal.JGitText { *; }
 
-# SLF4J Android 桥接保留
+# 保护 GitUpdater 核心 API 及协议/凭证逻辑
+-keepclassmembers class org.eclipse.jgit.api.Git {
+    public static *** cloneRepository();
+    public static *** lsRemoteRepository();
+    public *** fetch();
+    public *** reset();
+}
+-keep class org.eclipse.jgit.transport.TransportHttp { *; }
+-keep class org.eclipse.jgit.transport.HttpTransport { *; }
+-keep class org.eclipse.jgit.transport.CredentialsProvider { *; }
+-keep class org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider { *; }
+-keep class org.eclipse.jgit.transport.CredentialItem** { *; }
+
+# --- 6. 日志与极致优化 ---
 -keep class org.slf4j.impl.** { *; }
--dontwarn org.slf4j.**
+# 移除 JGit 内部海量字符串计算
+-assumenosideeffects class org.eclipse.jgit.internal.JGitText {
+    public static *** get();
+}
+# 移除 Android 系统调试日志 (v/d/i/w)
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+    public static int w(...);
+}
 
-# -------------------------------------------------------------------------
-# 6. Protobuf Lite 规则 (防止 NoSuchFieldException)
-# -------------------------------------------------------------------------
-
--keep class * extends com.google.protobuf.GeneratedMessageLite {
+# --- 7. 数据解析 (Wire Protobuf/Serialization) ---
+-keep class * implements com.squareup.wire.Message {
     <fields>;
     <methods>;
 }
-
--keep enum * implements com.google.protobuf.Internal$EnumLite {
-    *;
+-keep class * implements com.squareup.wire.WireEnum { *; }
+-keepclassmembers class * implements com.squareup.wire.Message {
+    public static *** ADAPTER;
 }
+-keep class * extends com.squareup.wire.ProtoAdapter { *; }
 
-# -------------------------------------------------------------------------
-# 7. Kotlinx Serialization 规则 (核心逻辑)
-# -------------------------------------------------------------------------
 
-# Kotlinx Serialization 核心规则
 -keepattributes *Annotation*
 -keep class kotlin.Metadata { *; }
-
-# 自动保留 Serializable 类及其 Companion
--keep @kotlinx.serialization.Serializable class * {
-    ** Companion;
-}
-
-# 保留编译器生成的序列化器核心方法
--keepclassmembers class * {
-    *** write$Self(...);
-    <init>(int, ...);
-}
-
-# 保留自动生成的序列化器类
+-keep @kotlinx.serialization.Serializable class * { ** Companion; }
+-keepclassmembers class * { *** write$Self(...); <init>(int, ...); }
 -keep class **$$serializer { *; }
 
-# -------------------------------------------------------------------------
-# 8. WebView & AndroidBridge
-# -------------------------------------------------------------------------
-
-# 严禁混淆 JavaScript 接口方法名
+# --- 8. WebView & JS 交互 ---
 -keep class com.xingheyuzhuan.shiguangschedule.ui.schoolselection.web.AndroidBridge { *; }
 -keepclassmembers class com.xingheyuzhuan.shiguangschedule.ui.schoolselection.web.AndroidBridge {
     @android.webkit.JavascriptInterface <methods>;
 }
 
-# -------------------------------------------------------------------------
-# 9. 数据模型 & 数据库 (Room)
-# -------------------------------------------------------------------------
-
-# 彻底删除了 Gson 规则。
-# 保留 Room 实体类和 Data Model，防止数据库字段解析失败
+# --- 9. 数据模型与数据库 (Room) ---
 -keep class com.xingheyuzhuan.shiguangschedule.data.db.** { *; }
 -keep class com.xingheyuzhuan.shiguangschedule.data.model.** { *; }
-
-# -------------------------------------------------------------------------
-# 10. 极简优化：Release 版本自动删除所有 Log.d (调试日志)
-# -------------------------------------------------------------------------
--assumenosideeffects class android.util.Log {
-    public static int d(...);
-    public static int v(...);
-}
+-keep @androidx.room.Entity class * { *; }
+-keep class * extends androidx.room.RoomDatabase { *; }

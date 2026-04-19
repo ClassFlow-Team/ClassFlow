@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -19,7 +20,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,8 +30,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -44,7 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.navigation.NavHostController
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTable
 import java.text.SimpleDateFormat
@@ -54,13 +54,14 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ManageCourseTablesScreen(
-    navController: NavHostController,
+    onNavigate: (Destination) -> Unit,
+    onBack: () -> Unit,
     viewModel: ManageCourseTablesViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-
     val uiState by viewModel.uiState.collectAsState()
 
+    // --- 对话框状态管理 ---
     var showAddTableDialog by remember { mutableStateOf(false) }
     var newTableName by remember { mutableStateOf("") }
 
@@ -71,6 +72,7 @@ fun ManageCourseTablesScreen(
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var tableToDelete by remember { mutableStateOf<CourseTable?>(null) }
 
+    // --- 资源字符串 ---
     val titleManageTables = stringResource(R.string.title_manage_course_tables)
     val a11yBack = stringResource(R.string.a11y_back)
     val a11yAddNewTable = stringResource(R.string.a11y_add_new_table)
@@ -87,7 +89,7 @@ fun ManageCourseTablesScreen(
     val toastEditSuccess = stringResource(R.string.toast_edit_table_success)
     val dialogTitleConfirmDelete = stringResource(R.string.confirm_delete)
     val dialogTextConfirmDelete = stringResource(R.string.dialog_text_confirm_delete)
-    val actionDelete = stringResource(R.string.a11y_delete) // 复用 a11y_delete 作为按钮文本
+    val actionDelete = stringResource(R.string.a11y_delete)
     val toastDeleteSuccess = stringResource(R.string.toast_delete_table_success)
     val toastDeleteLastFailed = stringResource(R.string.toast_delete_last_table_failed)
 
@@ -96,15 +98,11 @@ fun ManageCourseTablesScreen(
             TopAppBar(
                 title = { Text(titleManageTables) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = onBack) { // 使用传入的 onBack
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = a11yBack)
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
-                )
+                }
+                // 移除了硬编码的颜色，建议跟随系统主题或在 Theme 中定义
             )
         },
         floatingActionButton = {
@@ -121,20 +119,16 @@ fun ManageCourseTablesScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (uiState.courseTables.isEmpty()) {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(text = textNoTablesHint, style = MaterialTheme.typography.bodyLarge)
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 8.dp),
+                    contentPadding = PaddingValues(vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(uiState.courseTables) { tableInfo ->
+                    items(uiState.courseTables, key = { it.id }) { tableInfo ->
                         val isSelected = tableInfo.id == uiState.currentActiveTableId
                         CourseTableCard(
                             tableInfo = tableInfo,
@@ -158,9 +152,13 @@ fun ManageCourseTablesScreen(
             }
         }
 
+        // --- Add Dialog ---
         if (showAddTableDialog) {
             AlertDialog(
-                onDismissRequest = { showAddTableDialog = false; newTableName = "" },
+                onDismissRequest = {
+                    showAddTableDialog = false
+                    newTableName = ""
+                },
                 title = { Text(dialogTitleAddTable) },
                 text = {
                     OutlinedTextField(
@@ -172,33 +170,34 @@ fun ManageCourseTablesScreen(
                     )
                 },
                 confirmButton = {
-                    Button(
-                        onClick = {
-                            if (newTableName.isNotBlank()) {
-                                // 直接将字符串名称传递给 ViewModel
-                                viewModel.createNewCourseTable(newTableName)
-                                Toast.makeText(context, toastAddSuccess.format(newTableName), Toast.LENGTH_SHORT).show()
-                                showAddTableDialog = false
-                                newTableName = ""
-                            } else {
-                                Toast.makeText(context, toastNameEmpty, Toast.LENGTH_SHORT).show()
-                            }
+                    TextButton(onClick = { // 建议使用 TextButton 符合 M3 设计
+                        if (newTableName.isNotBlank()) {
+                            viewModel.createNewCourseTable(newTableName)
+                            Toast.makeText(context, toastAddSuccess.format(newTableName), Toast.LENGTH_SHORT).show()
+                            showAddTableDialog = false
+                            newTableName = ""
+                        } else {
+                            Toast.makeText(context, toastNameEmpty, Toast.LENGTH_SHORT).show()
                         }
-                    ) {
-                        Text(actionAdd)
-                    }
+                    }) { Text(actionAdd) }
                 },
                 dismissButton = {
-                    Button(onClick = { showAddTableDialog = false; newTableName = "" }) {
-                        Text(actionCancel)
-                    }
+                    TextButton(onClick = {
+                        showAddTableDialog = false
+                        newTableName = ""
+                    }) { Text(actionCancel) }
                 }
             )
         }
 
+        // --- Edit Dialog ---
         if (showEditTableDialog && editingTableInfo != null) {
             AlertDialog(
-                onDismissRequest = { showEditTableDialog = false; editingTableInfo = null; editedTableName = "" },
+                onDismissRequest = {
+                    showEditTableDialog = false
+                    editingTableInfo = null
+                    editedTableName = ""
+                },
                 title = { Text(dialogTitleEditTable) },
                 text = {
                     OutlinedTextField(
@@ -210,62 +209,62 @@ fun ManageCourseTablesScreen(
                     )
                 },
                 confirmButton = {
-                    Button(
-                        onClick = {
-                            if (editedTableName.isNotBlank()) {
-                                editingTableInfo?.let { tableToEdit ->
-                                    val updatedTable = tableToEdit.copy(name = editedTableName)
-                                    viewModel.updateCourseTable(updatedTable)
-                                    Toast.makeText(context, toastEditSuccess, Toast.LENGTH_SHORT).show()
-                                    showEditTableDialog = false
-                                    editingTableInfo = null
-                                    editedTableName = ""
-                                }
-                            } else {
-                                Toast.makeText(context, toastNameEmpty, Toast.LENGTH_SHORT).show()
+                    TextButton(onClick = {
+                        if (editedTableName.isNotBlank()) {
+                            editingTableInfo?.let { tableToEdit ->
+                                viewModel.updateCourseTable(tableToEdit.copy(name = editedTableName))
+                                Toast.makeText(context, toastEditSuccess, Toast.LENGTH_SHORT).show()
+                                showEditTableDialog = false
+                                editingTableInfo = null
+                                editedTableName = ""
                             }
+                        } else {
+                            Toast.makeText(context, toastNameEmpty, Toast.LENGTH_SHORT).show()
                         }
-                    ) {
-                        Text(a11ySave)
-                    }
+                    }) { Text(a11ySave) }
                 },
                 dismissButton = {
-                    Button(onClick = { showEditTableDialog = false; editingTableInfo = null; editedTableName = "" }) {
-                        Text(actionCancel)
-                    }
+                    TextButton(onClick = {
+                        showEditTableDialog = false
+                        editingTableInfo = null
+                        editedTableName = ""
+                    }) { Text(actionCancel) }
                 }
             )
         }
 
+        // --- Delete Dialog ---
         if (showDeleteConfirmDialog && tableToDelete != null) {
             AlertDialog(
-                onDismissRequest = { showDeleteConfirmDialog = false; tableToDelete = null },
+                onDismissRequest = {
+                    showDeleteConfirmDialog = false
+                    tableToDelete = null
+                },
                 title = { Text(dialogTitleConfirmDelete) },
                 text = { Text(dialogTextConfirmDelete.format(tableToDelete?.name ?: "")) },
                 confirmButton = {
-                    Button(
-                        onClick = {
-                            if (uiState.courseTables.size > 1) { // 使用 ViewModel 的数据进行检查
-                                tableToDelete?.let {
-                                    viewModel.deleteCourseTable(it)
-                                    Toast.makeText(context, toastDeleteSuccess.format(it.name), Toast.LENGTH_SHORT).show()
-                                }
-                                showDeleteConfirmDialog = false
-                                tableToDelete = null
-                            } else {
-                                Toast.makeText(context, toastDeleteLastFailed, Toast.LENGTH_SHORT).show()
-                                showDeleteConfirmDialog = false
-                                tableToDelete = null
+                    TextButton(onClick = {
+                        if (uiState.courseTables.size > 1) {
+                            tableToDelete?.let {
+                                viewModel.deleteCourseTable(it)
+                                Toast.makeText(context, toastDeleteSuccess.format(it.name), Toast.LENGTH_SHORT).show()
                             }
+                            showDeleteConfirmDialog = false
+                            tableToDelete = null
+                        } else {
+                            Toast.makeText(context, toastDeleteLastFailed, Toast.LENGTH_SHORT).show()
+                            showDeleteConfirmDialog = false
+                            tableToDelete = null
                         }
-                    ) {
-                        Text(actionDelete)
+                    }) {
+                        Text(actionDelete, color = MaterialTheme.colorScheme.error) // 删采用警告色
                     }
                 },
                 dismissButton = {
-                    Button(onClick = { showDeleteConfirmDialog = false; tableToDelete = null }) {
-                        Text(actionCancel)
-                    }
+                    TextButton(onClick = {
+                        showDeleteConfirmDialog = false
+                        tableToDelete = null
+                    }) { Text(actionCancel) }
                 }
             )
         }

@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.xingheyuzhuan.shiguangschedule.R
+import kotlinx.coroutines.delay
 
 /**
  * 颜色选择器功能配置
@@ -58,6 +59,127 @@ private object ColorInternalUtils {
 
     fun colorToHex(color: Color): String {
         return String.format("#%08X", color.toArgb())
+    }
+}
+
+@Composable
+fun AdvancedColorPicker(
+    initialColor: Color,
+    onColorChanged: (Color) -> Unit,
+    config: ColorPickerConfig = ColorPickerConfig(),
+    previewContent: @Composable (() -> Unit)? = null
+) {
+    val initialHsv = remember(initialColor) { ColorInternalUtils.colorToHsv(initialColor) }
+    var h by remember { mutableFloatStateOf(initialHsv[0]) }
+    var s by remember { mutableFloatStateOf(initialHsv[1]) }
+    var v by remember { mutableFloatStateOf(initialHsv[2]) }
+    var a by remember { mutableFloatStateOf(initialColor.alpha) }
+
+    var isUserInteracting by remember { mutableStateOf(false) }
+
+    LaunchedEffect(initialColor) {
+        if (!isUserInteracting) {
+            val currentLocalColor = ColorInternalUtils.hsvToColor(h, s, v, a)
+            if (initialColor.toArgb() != currentLocalColor.toArgb()) {
+                val hsv = ColorInternalUtils.colorToHsv(initialColor)
+
+                if (hsv[2] > 0.01f) {
+                    h = hsv[0]
+                    s = hsv[1]
+                }
+                v = hsv[2]
+                a = initialColor.alpha
+            }
+        }
+    }
+
+    var isInputMode by remember { mutableStateOf(false) }
+    val currentColor = remember(h, s, v, a) { ColorInternalUtils.hsvToColor(h, s, v, a) }
+
+    LaunchedEffect(currentColor) {
+        if (isUserInteracting) {
+            onColorChanged(currentColor)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        previewContent?.let { Box(modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp)) { it() } }
+
+        // 标题与切换按钮
+        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+            Column {
+                Text(
+                    text = if (isInputMode) stringResource(R.string.color_picker_title_precise)
+                    else stringResource(R.string.color_picker_title_edit),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = if (isInputMode) stringResource(R.string.color_picker_mode_input)
+                    else stringResource(R.string.color_picker_mode_visual),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            if (config.showInputMode) {
+                IconButton(onClick = { isInputMode = !isInputMode }) {
+                    Icon(
+                        imageVector = if (isInputMode) Icons.Default.Tune else Icons.Default.Settings,
+                        contentDescription = stringResource(R.string.a11y_switch_color_mode)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (!isInputMode) {
+            val updateHsv = { nh: Float, ns: Float, nv: Float, na: Float ->
+                isUserInteracting = true
+                h = nh; s = ns; v = nv; a = na
+            }
+            LaunchedEffect(isUserInteracting) {
+                if (isUserInteracting) {
+                    delay(500)
+                    isUserInteracting = false
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (config.showHue) {
+                    ColorLabel(stringResource(R.string.color_picker_label_hue), "${h.toInt()}°")
+                    InternalGradientSlider(h, { updateHsv(it, s, v, a) }, 0f..360f, Brush.horizontalGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)))
+                }
+                if (config.showSaturation) {
+                    ColorLabel(stringResource(R.string.color_picker_label_saturation), "${(s * 100).toInt()}%")
+                    InternalGradientSlider(s, { updateHsv(h, it, v, a) }, 0f..1f, Brush.horizontalGradient(listOf(ColorInternalUtils.hsvToColor(h, 0f, v), ColorInternalUtils.hsvToColor(h, 1f, v))))
+                }
+                if (config.showValue) {
+                    ColorLabel(stringResource(R.string.color_picker_label_value), "${(v * 100).toInt()}%")
+                    InternalGradientSlider(v, { updateHsv(h, s, it, a) }, 0f..1f, Brush.horizontalGradient(listOf(Color.Black, ColorInternalUtils.hsvToColor(h, s, 1f))))
+                }
+                if (config.showAlpha) {
+                    ColorLabel(stringResource(R.string.color_picker_label_alpha), "${(a * 100).toInt()}%")
+                    InternalGradientSlider(a, { updateHsv(h, s, v, it) }, 0f..1f, Brush.horizontalGradient(listOf(Color.Transparent, ColorInternalUtils.hsvToColor(h, s, v, 1f))))
+                }
+            }
+        } else {
+            RgbInputSection(currentColor, config.showAlpha) { newColor ->
+                isUserInteracting = true
+                val newHsv = ColorInternalUtils.colorToHsv(newColor)
+                h = newHsv[0]; s = newHsv[1]; v = newHsv[2]
+                a = newColor.alpha
+            }
+        }
+
+        if (config.showHex) {
+            Spacer(modifier = Modifier.height(24.dp))
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(12.dp)) {
+                    Text(text = ColorInternalUtils.colorToHex(currentColor), modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }
 
@@ -111,93 +233,6 @@ private fun InternalGradientSlider(
             drawCircle(Color.Black.copy(alpha = 0.2f), radius = thumbRadiusOuter, center = Offset(thumbX, centerY))
             drawCircle(Color.White, radius = thumbRadiusInner, center = Offset(thumbX, centerY))
             drawCircle(Color.Gray.copy(alpha = 0.8f), radius = thumbRadiusInner, center = Offset(thumbX, centerY), style = Stroke(width = strokeWidthPx))
-        }
-    }
-}
-
-@Composable
-fun AdvancedColorPicker(
-    initialColor: Color,
-    onColorChanged: (Color) -> Unit,
-    config: ColorPickerConfig = ColorPickerConfig(),
-    previewContent: @Composable (() -> Unit)? = null
-) {
-    val initialHsv = remember(initialColor) { ColorInternalUtils.colorToHsv(initialColor) }
-    var h by remember { mutableFloatStateOf(initialHsv[0]) }
-    var s by remember { mutableFloatStateOf(initialHsv[1]) }
-    var v by remember { mutableFloatStateOf(initialHsv[2]) }
-    var a by remember { mutableFloatStateOf(if (config.showAlpha) initialColor.alpha else 1f) }
-
-    var isInputMode by remember { mutableStateOf(false) }
-    val currentColor = remember(h, s, v, a) { ColorInternalUtils.hsvToColor(h, s, v, a) }
-
-    LaunchedEffect(currentColor) { onColorChanged(currentColor) }
-
-    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-        previewContent?.let { Box(modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp)) { it() } }
-
-        // 标题与切换按钮
-        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-            Column {
-                Text(
-                    text = if (isInputMode) stringResource(R.string.color_picker_title_precise)
-                    else stringResource(R.string.color_picker_title_edit),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = if (isInputMode) stringResource(R.string.color_picker_mode_input)
-                    else stringResource(R.string.color_picker_mode_visual),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            if (config.showInputMode) {
-                IconButton(onClick = { isInputMode = !isInputMode }) {
-                    Icon(
-                        imageVector = if (isInputMode) Icons.Default.Tune else Icons.Default.Settings,
-                        contentDescription = stringResource(R.string.a11y_switch_color_mode)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        if (!isInputMode) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (config.showHue) {
-                    ColorLabel(stringResource(R.string.color_picker_label_hue), "${h.toInt()}°")
-                    InternalGradientSlider(h, { h = it }, 0f..360f, Brush.horizontalGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)))
-                }
-                if (config.showSaturation) {
-                    ColorLabel(stringResource(R.string.color_picker_label_saturation), "${(s * 100).toInt()}%")
-                    InternalGradientSlider(s, { s = it }, 0f..1f, Brush.horizontalGradient(listOf(ColorInternalUtils.hsvToColor(h, 0f, v), ColorInternalUtils.hsvToColor(h, 1f, v))))
-                }
-                if (config.showValue) {
-                    ColorLabel(stringResource(R.string.color_picker_label_value), "${(v * 100).toInt()}%")
-                    InternalGradientSlider(v, { v = it }, 0f..1f, Brush.horizontalGradient(listOf(Color.Black, ColorInternalUtils.hsvToColor(h, s, 1f))))
-                }
-                if (config.showAlpha) {
-                    ColorLabel(stringResource(R.string.color_picker_label_alpha), "${(a * 100).toInt()}%")
-                    InternalGradientSlider(a, { a = it }, 0f..1f, Brush.horizontalGradient(listOf(Color.Transparent, ColorInternalUtils.hsvToColor(h, s, v, 1f))))
-                }
-            }
-        } else {
-            RgbInputSection(currentColor, config.showAlpha) { newColor ->
-                val newHsv = ColorInternalUtils.colorToHsv(newColor)
-                h = newHsv[0]; s = newHsv[1]; v = newHsv[2]
-                a = if (config.showAlpha) newColor.alpha else 1f
-            }
-        }
-
-        if (config.showHex) {
-            Spacer(modifier = Modifier.height(24.dp))
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(12.dp)) {
-                    Text(text = ColorInternalUtils.colorToHex(currentColor), modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                }
-            }
         }
     }
 }

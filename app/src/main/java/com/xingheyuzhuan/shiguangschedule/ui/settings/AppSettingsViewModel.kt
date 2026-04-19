@@ -1,9 +1,13 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
 import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
+import com.xingheyuzhuan.shiguangschedule.data.model.AppThemeMode
+import com.xingheyuzhuan.shiguangschedule.data.model.StartScreen
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -147,6 +151,71 @@ class SettingsViewModel @Inject constructor(
             uiState.value.courseConfig?.let { currentConfig ->
                 appSettingsRepository.insertOrUpdateCourseConfig(currentConfig.copy(firstDayOfWeek = dayOfWeekInt))
             }
+        }
+    }
+
+    /**
+     * 更新应用启动时的默认主页
+     */
+    fun onStartScreenChanged(newScreen: StartScreen) {
+        viewModelScope.launch {
+            val currentSettings = uiState.value.appSettings
+            val updatedSettings = currentSettings.copy(startScreen = newScreen)
+            appSettingsRepository.insertOrUpdateAppSettings(updatedSettings)
+        }
+    }
+
+    /**
+     * 主题模式 (跟随系统/亮色/深色)
+     */
+    fun onThemeModeChanged(newMode: AppThemeMode) {
+        viewModelScope.launch {
+            val currentSettings = uiState.value.appSettings
+            val updatedSettings = currentSettings.copy(themeMode = newMode)
+            appSettingsRepository.insertOrUpdateAppSettings(updatedSettings)
+        }
+    }
+
+    /**
+     * 动态取色开关 (Material You)
+     */
+    fun onUseDynamicColorChanged(enabled: Boolean) {
+        viewModelScope.launch {
+            val currentSettings = uiState.value.appSettings
+            val updatedSettings = currentSettings.copy(useDynamicColor = enabled)
+            appSettingsRepository.insertOrUpdateAppSettings(updatedSettings)
+        }
+    }
+
+    /**
+     * 自定义浅色模式种子色（传 Color 则修改，传 null 则重置）
+     */
+    fun onCustomLightPrimaryChanged(color: Color? = null) {
+        viewModelScope.launch {
+            val currentSettings = uiState.value.appSettings
+            val newColorArgb = color?.toArgb()?.toLong()
+                ?: AppSettingsModel().customLightPrimary
+
+            val updatedSettings = currentSettings.copy(
+                customLightPrimary = newColorArgb
+            )
+            appSettingsRepository.insertOrUpdateAppSettings(updatedSettings)
+        }
+    }
+
+    /**
+     * 自定义深色模式种子色（传 Color 则修改，传 null 则重置）
+     */
+    fun onCustomDarkPrimaryChanged(color: Color? = null) {
+        viewModelScope.launch {
+            val currentSettings = uiState.value.appSettings
+            val newColorArgb = color?.toArgb()?.toLong()
+                ?: AppSettingsModel().customDarkPrimary
+
+            val updatedSettings = currentSettings.copy(
+                customDarkPrimary = newColorArgb
+            )
+            appSettingsRepository.insertOrUpdateAppSettings(updatedSettings)
         }
     }
 }

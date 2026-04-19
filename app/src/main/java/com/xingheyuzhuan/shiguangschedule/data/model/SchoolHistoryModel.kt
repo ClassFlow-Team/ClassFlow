@@ -2,11 +2,12 @@ package com.xingheyuzhuan.shiguangschedule.data.model
 
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import school_index.AdapterCategory
 import school_index.School
 
 /**
- * 单个学校的选择记录模型
- * 包含跳转到适配器选择页面所需的核心字段
+ * 单个学校的选择记录业务模型
+ * 包含跳转到适配器选择页面所需的核心字段。
  */
 data class CategoryLastSchool(
     val id: String = "",
@@ -14,20 +15,18 @@ data class CategoryLastSchool(
     val resourceFolder: String = ""
 ) {
     /** * 判断该记录是否为空（即该分类下从未选择过学校）
-     * 只有当 id 不为空时，才认为有有效的历史记录
      */
     val isEmpty: Boolean get() = id.isBlank()
 
     /**
-     * 辅助方法：将保存的记录转换回 Protobuf 的 School 对象
-     * 方便 UI 直接复用现有的 SchoolItem 组件
+     * 将业务模型转换回 Wire 生成的 School 对象
      */
     fun toSchool(): School {
-        return School.newBuilder()
-            .setId(id)
-            .setName(name)
-            .setResourceFolder(resourceFolder)
-            .build()
+        return School(
+            id = id,
+            name = name,
+            resource_folder = resourceFolder
+        )
     }
 }
 
@@ -41,25 +40,25 @@ data class SchoolHistoryModel(
     val general: CategoryLastSchool = CategoryLastSchool()
 ) {
     companion object {
-        // --- DataStore 存储键定义 ---
+        // --- Preferences DataStore 存储键定义 ---
 
         // 本科/专科分类
-        val KEY_BACHELOR_ID = stringPreferencesKey("last_school_bachelor_id")
-        val KEY_BACHELOR_NAME = stringPreferencesKey("last_school_bachelor_name")
-        val KEY_BACHELOR_FOLDER = stringPreferencesKey("last_school_bachelor_folder")
+        private val KEY_BACHELOR_ID = stringPreferencesKey("last_school_bachelor_id")
+        private val KEY_BACHELOR_NAME = stringPreferencesKey("last_school_bachelor_name")
+        private val KEY_BACHELOR_FOLDER = stringPreferencesKey("last_school_bachelor_folder")
 
         // 研究生分类
-        val KEY_POSTGRAD_ID = stringPreferencesKey("last_school_postgrad_id")
-        val KEY_POSTGRAD_NAME = stringPreferencesKey("last_school_postgrad_name")
-        val KEY_POSTGRAD_FOLDER = stringPreferencesKey("last_school_postgrad_folder")
+        private val KEY_POSTGRAD_ID = stringPreferencesKey("last_school_postgrad_id")
+        private val KEY_POSTGRAD_NAME = stringPreferencesKey("last_school_postgrad_name")
+        private val KEY_POSTGRAD_FOLDER = stringPreferencesKey("last_school_postgrad_folder")
 
         // 通用工具分类
-        val KEY_GENERAL_ID = stringPreferencesKey("last_school_general_id")
-        val KEY_GENERAL_NAME = stringPreferencesKey("last_school_general_name")
-        val KEY_GENERAL_FOLDER = stringPreferencesKey("last_school_general_folder")
+        private val KEY_GENERAL_ID = stringPreferencesKey("last_school_general_id")
+        private val KEY_GENERAL_NAME = stringPreferencesKey("last_school_general_name")
+        private val KEY_GENERAL_FOLDER = stringPreferencesKey("last_school_general_folder")
 
         /**
-         * 从 DataStore 的 Preferences 对象中解析出完整的 SchoolHistoryModel
+         * 从 DataStore 的 Preferences 对象中解析出完整的业务模型
          */
         fun fromPreferences(prefs: Preferences): SchoolHistoryModel {
             return SchoolHistoryModel(
@@ -83,18 +82,20 @@ data class SchoolHistoryModel(
 
         /**
          * 辅助方法：根据类别返回对应的一组 DataStore Keys
+         * 由于开启了 enumMode = "enum_class"，可以直接进行类型安全的匹配
          */
-        fun getKeysForCategory(category: school_index.AdapterCategory): Triple<Preferences.Key<String>, Preferences.Key<String>, Preferences.Key<String>> {
+        fun getKeysForCategory(category: AdapterCategory): Triple<Preferences.Key<String>, Preferences.Key<String>, Preferences.Key<String>> {
             return when (category) {
-                school_index.AdapterCategory.BACHELOR_AND_ASSOCIATE ->
+                AdapterCategory.BACHELOR_AND_ASSOCIATE ->
                     Triple(KEY_BACHELOR_ID, KEY_BACHELOR_NAME, KEY_BACHELOR_FOLDER)
 
-                school_index.AdapterCategory.POSTGRADUATE ->
+                AdapterCategory.POSTGRADUATE ->
                     Triple(KEY_POSTGRAD_ID, KEY_POSTGRAD_NAME, KEY_POSTGRAD_FOLDER)
 
-                school_index.AdapterCategory.GENERAL_TOOL ->
+                AdapterCategory.GENERAL_TOOL ->
                     Triple(KEY_GENERAL_ID, KEY_GENERAL_NAME, KEY_GENERAL_FOLDER)
 
+                // 处理未定义或未知情况
                 else -> Triple(KEY_BACHELOR_ID, KEY_BACHELOR_NAME, KEY_BACHELOR_FOLDER)
             }
         }

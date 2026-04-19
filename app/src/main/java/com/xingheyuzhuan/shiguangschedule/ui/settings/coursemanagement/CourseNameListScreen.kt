@@ -50,10 +50,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.navigation.NavController
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
-import com.xingheyuzhuan.shiguangschedule.navigateSafe
 import com.xingheyuzhuan.shiguangschedule.navigation.AddEditCourseChannel
 import com.xingheyuzhuan.shiguangschedule.navigation.PresetCourseData
 import kotlinx.coroutines.launch
@@ -66,18 +64,16 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun CourseNameListScreen(
-    navController: NavController,
+    onNavigate: (Destination) -> Unit,
+    onBack: () -> Unit,
     viewModel: CourseNameListViewModel = hiltViewModel()
 ) {
     val uniqueCourseNames by viewModel.uniqueCourseNames.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
-    // 状态 1：是否处于多选模式
     var isSelectionMode by remember { mutableStateOf(false) }
-    // 状态 2：选中的课程名称列表
     val selectedCourseNames = remember { mutableStateListOf<String>() }
 
-    // 退出多选模式并清空选中列表的函数
     val exitSelectionMode: () -> Unit = {
         isSelectionMode = false
         selectedCourseNames.clear()
@@ -99,11 +95,9 @@ fun CourseNameListScreen(
                     IconButton(
                         onClick = {
                             if (isSelectionMode) {
-                                // 在多选模式下点击导航图标是取消/退出
                                 exitSelectionMode()
                             } else {
-                                // 在正常模式下是返回
-                                navController.popBackStack()
+                                onBack()
                             }
                         }
                     ) {
@@ -137,11 +131,7 @@ fun CourseNameListScreen(
                             enabled = totalCount > 0
                         ) {
                             val selectAllStringRes = if (isAllSelected) R.string.action_deselect_all else R.string.action_select_all
-
-                            Icon(
-                                imageVector = Icons.Filled.Check,
-                                contentDescription = stringResource(selectAllStringRes)
-                            )
+                            Icon(Icons.Filled.Check, contentDescription = stringResource(selectAllStringRes))
                         }
                     }
 
@@ -203,9 +193,7 @@ fun CourseNameListScreen(
                             // 2. 发送数据到 Channel，解除 AddEditCourseViewModel 的阻塞
                             AddEditCourseChannel.sendEvent(defaultPresetData)
 
-                            // 3. 执行导航
-                            val route = Screen.AddEditCourse.createRouteForNewCourse()
-                            navController.navigateSafe(route)
+                            onNavigate(Destination.AddEditCourse(courseId = null))
                         }
                     }
                 ) {
@@ -216,9 +204,7 @@ fun CourseNameListScreen(
     ) { paddingValues ->
         if (uniqueCourseNames.isEmpty()) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
+                modifier = Modifier.fillMaxSize().padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) {
                 Text(stringResource(R.string.text_no_unique_courses_hint), style = MaterialTheme.typography.bodyLarge)
@@ -226,40 +212,33 @@ fun CourseNameListScreen(
         } else {
             // LazyVerticalGrid 实现两列网格布局
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2), // 行显示两个课程名称卡片
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.fillMaxSize().padding(paddingValues),
                 contentPadding = PaddingValues(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 遍历 uniqueCourseNames，它现在是 List<CourseNameCount> 类型
                 items(uniqueCourseNames, key = { it.name }) { item ->
                     val isSelected = item.name in selectedCourseNames
 
                     CourseNameCard(
                         name = item.name,
                         instanceCount = item.count,
-                        isSelected = isSelected, // 传入选中状态
-                        isSelectionMode = isSelectionMode, // 传入多选模式状态
+                        isSelected = isSelected,
+                        isSelectionMode = isSelectionMode,
                         onCourseClick = { clickedName ->
                             if (isSelectionMode) {
-                                // 多选模式：点击切换选中状态
                                 if (selectedCourseNames.contains(clickedName)) {
                                     selectedCourseNames.remove(clickedName)
                                 } else {
                                     selectedCourseNames.add(clickedName)
                                 }
                             } else {
-                                // 正常模式：点击导航到详情页
-                                val route = Screen.CourseManagementDetail.createRoute(clickedName)
-                                navController.navigateSafe(route)
+                                onNavigate(Destination.CourseManagementDetail(courseName = clickedName))
                             }
                         },
                         onCourseLongClick = { clickedName ->
                             if (!isSelectionMode) {
-                                // 正常模式：长按进入多选模式并选中当前项
                                 isSelectionMode = true
                                 selectedCourseNames.add(clickedName)
                             }

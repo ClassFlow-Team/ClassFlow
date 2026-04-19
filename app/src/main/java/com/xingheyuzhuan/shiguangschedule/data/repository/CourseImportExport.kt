@@ -1,9 +1,22 @@
 package com.xingheyuzhuan.shiguangschedule.data.repository
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 
 object CourseImportExport {
+
+
+    /**
+     * 自定义 Json 解析器
+     * ignoreUnknownKeys = true: 确保旧版 App 遇到新加的字段（如 remark）时能跳过而不崩溃
+     * encodeDefaults = true: 导出时即使字段是默认值也会包含在 JSON 中
+     */
+    val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+        coerceInputValues = true
+    }
 
 
 
@@ -21,7 +34,7 @@ object CourseImportExport {
     @Serializable
     data class CourseTableImportModel(
         val courses: List<ImportCourseJsonModel>,
-        val timeSlots: List<TimeSlotJsonModel>,
+        val timeSlots: List<TimeSlotJsonModel>? = emptyList(),
         val config: CourseConfigJsonModel? = null
     )
 
@@ -38,7 +51,8 @@ object CourseImportExport {
         val isCustomTime: Boolean = false,
         val customStartTime: String? = null,
         val customEndTime: String? = null,
-        val color: Int? = null
+        val color: Int? = null,
+        val remark: String? = null
     )
 
     // 导出时使用的 JSON 模型
@@ -62,7 +76,8 @@ object CourseImportExport {
         val weeks: List<Int>,
         val isCustomTime: Boolean = false,
         val customStartTime: String? = null,
-        val customEndTime: String? = null
+        val customEndTime: String? = null,
+        val remark: String?
     )
 
     // 导入和导出都通用的时间段模型

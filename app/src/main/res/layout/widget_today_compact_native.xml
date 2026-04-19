@@ -13,9 +13,12 @@
         android:orientation="vertical"
         android:padding="14dp">
 
-        <RelativeLayout
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
             <TextView
                 android:id="@+id/tv_header_title"
                 android:layout_width="wrap_content"
@@ -24,15 +27,34 @@
                 android:textSize="11dp"
                 android:textStyle="bold"
                 tools:text="周三" />
+
+            <LinearLayout
+                android:layout_width="8dp"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+
+            <TextView
+                android:id="@+id/tv_footer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/widget_text_hint"
+                android:textSize="8dp"
+                tools:text="剩余 3 节" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:orientation="horizontal" />
+
             <TextView
                 android:id="@+id/tv_current_week"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_alignParentEnd="true"
                 android:textColor="@color/widget_text_secondary"
                 android:textSize="10dp"
                 tools:text="第 18 周" />
-        </RelativeLayout>
+        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/container_courses"
@@ -41,24 +63,9 @@
             android:layout_marginTop="8dp"
             android:orientation="vertical">
             <include layout="@layout/widget_item_course_common" />
-            <include layout="@layout/widget_divider_horizontal" />
             <include layout="@layout/widget_item_course_common" />
         </LinearLayout>
 
-        <FrameLayout
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
-
-        <TextView
-            android:id="@+id/tv_footer"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:gravity="center"
-            android:textColor="@color/widget_text_hint"
-            android:textSize="8dp"
-            tools:text="今日还有 3 节课" />
     </LinearLayout>
 
     <LinearLayout
