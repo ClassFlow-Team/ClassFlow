@@ -33,7 +33,7 @@ object DoubleDaysNativeRenderer {
         rv.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
 
         // 全局状态判断
-        val currentWeek = if (snapshot.currentWeek <= 0) null else snapshot.currentWeek
+        val currentWeek = if (snapshot.current_week <= 0) null else snapshot.current_week
 
         if (currentWeek == null) {
             rv.setViewVisibility(R.id.inner_content_card, View.GONE)
@@ -50,13 +50,13 @@ object DoubleDaysNativeRenderer {
         val now = LocalTime.now()
         val today = LocalDate.now()
         val tomorrow = today.plusDays(1)
-        val allCourses = snapshot.coursesList
+        val allCourses = snapshot.courses
 
         // 渲染左侧：今日
         val todayCourses = allCourses.filter { it.date == today.toString() || it.date.isBlank() }
         val remainingToday = todayCourses.filter {
-            !it.isSkipped && try { LocalTime.parse(it.endTime) > now } catch (_: Exception) { true }
-        }.sortedBy { it.startTime }
+            !it.is_skipped && try { LocalTime.parse(it.end_time) > now } catch (_: Exception) { true }
+        }.sortedBy { it.start_time }
 
         renderColumn(
             context, rv,
@@ -68,7 +68,7 @@ object DoubleDaysNativeRenderer {
 
         // 渲染右侧：明日
         val tomorrowCourses = allCourses.filter { it.date == tomorrow.toString() }
-        val effectiveTomorrow = tomorrowCourses.filter { !it.isSkipped }.sortedBy { it.startTime }
+        val effectiveTomorrow = tomorrowCourses.filter { (!it.is_skipped) }.sortedBy { it.start_time }
 
         renderColumn(
             context, rv,
@@ -132,7 +132,9 @@ object DoubleDaysNativeRenderer {
                 val itemRv = RemoteViews(context.packageName, R.layout.widget_item_course_common)
                 itemRv.setTextViewText(R.id.tv_course_name, course.name)
                 itemRv.setTextViewText(R.id.tv_course_position, course.position)
-                itemRv.setTextViewText(R.id.tv_course_time, "${course.startTime.take(5)}-${course.endTime.take(5)}")
+
+                val timeRange = "${course.start_time.take(5)}-${course.end_time.take(5)}"
+                itemRv.setTextViewText(R.id.tv_course_time, timeRange)
 
                 if (course.teacher.isNotBlank()) {
                     itemRv.setViewVisibility(R.id.tv_course_teacher, View.VISIBLE)
@@ -142,10 +144,15 @@ object DoubleDaysNativeRenderer {
                 }
 
                 val style = snapshot.style
-                if (course.colorInt < style.courseColorMapsCount) {
-                    val colorPair = style.getCourseColorMaps(course.colorInt)
-                    itemRv.setInt(R.id.course_indicator, "setColorFilter", colorPair.lightColor.toInt())
-                    itemRv.setInt(R.id.course_indicator_dark, "setColorFilter", colorPair.darkColor.toInt())
+                val colorInt = course.color_int
+                if (style != null && colorInt < style.course_color_maps.size) {
+                    val colorPair = style.course_color_maps[colorInt]
+                    itemRv.setInt(R.id.course_indicator, "setColorFilter",
+                        colorPair.light_color.toInt()
+                    )
+                    itemRv.setInt(R.id.course_indicator_dark, "setColorFilter",
+                        colorPair.dark_color.toInt()
+                    )
                 }
 
                 rootRv.addView(containerId, itemRv)

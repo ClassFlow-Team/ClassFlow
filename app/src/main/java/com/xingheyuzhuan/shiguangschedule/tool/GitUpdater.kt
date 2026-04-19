@@ -12,8 +12,8 @@ import school_index.SchoolIndex
 import java.io.File
 import com.xingheyuzhuan.shiguangschedule.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
-import jakarta.inject.Inject
-import jakarta.inject.Singleton
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * GitUpdater
@@ -55,7 +55,7 @@ class GitUpdater @Inject constructor(
         if (!file.exists()) return null
         return try {
             file.inputStream().use { stream ->
-                SchoolIndex.parseFrom(stream)
+                SchoolIndex.ADAPTER.decode(stream)
             }
         } catch (e: Exception) {
             null
@@ -70,7 +70,7 @@ class GitUpdater @Inject constructor(
         if (newVersionId.isNullOrBlank()) return false
         if (localVersionId.isNullOrBlank()) return true
 
-        return newVersionId.compareTo(localVersionId) > 0
+        return newVersionId > localVersionId
     }
 
     // --- Git 辅助逻辑 ---
@@ -295,8 +295,9 @@ class GitUpdater @Inject constructor(
             }
 
             // A. 校验协议版本：远程 > 客户端视为致命错误
-            if (remoteIndex.protocolVersion > CLIENT_PROTOCOL_VERSION) {
-                onLog("致命错误：远程索引协议版本 (${remoteIndex.protocolVersion}) 高于客户端支持版本 ($CLIENT_PROTOCOL_VERSION)。")
+            val remoteProtocol = remoteIndex.protocol_version
+            if (remoteProtocol > CLIENT_PROTOCOL_VERSION) {
+                onLog("致命错误：远程索引协议版本 (${remoteProtocol}) 高于客户端支持版本 ($CLIENT_PROTOCOL_VERSION)。")
                 onLog("操作：更新被中止。请提示用户更新软件版本以兼容新协议。")
                 result.isFatalIndexError = true
                 return
@@ -304,20 +305,20 @@ class GitUpdater @Inject constructor(
 
             // B. 校验数据版本 (时间戳)
             val localIndex = readSchoolIndex(File(indexFileTargetDir, INDEX_FILE_NAME))
-            val localVersionId = localIndex?.versionId
+            val localVersionId = localIndex?.version_id
 
-            onLog("远程数据版本ID: ${remoteIndex.versionId}")
+            onLog("远程数据版本ID: ${remoteIndex.version_id}")
             onLog("本地数据版本ID: ${localVersionId ?: "N/A"}")
 
-            if (isNewerVersionId(remoteIndex.versionId, localVersionId)) {
+            if (isNewerVersionId(remoteIndex.version_id, localVersionId)) {
                 onLog("结果：远程版本更新，将执行索引文件写入。")
                 // 暂存文件内容和版本ID
                 result.indexFileContent = sourceFile.readBytes()
-                result.indexRemoteVersionId = remoteIndex.versionId
-            } else if (remoteIndex.versionId == localVersionId) {
+                result.indexRemoteVersionId = remoteIndex.version_id
+            } else if (remoteIndex.version_id == localVersionId) {
                 onLog("结果：当前索引已经是最新版本。跳过索引文件写入。")
             } else {
-                onLog("致命错误：远程仓库索引时间戳 (${remoteIndex.versionId}) 更旧。检查远程仓库是否正确。")
+                onLog("致命错误：远程仓库索引时间戳 (${remoteIndex.version_id}) 更旧。检查远程仓库是否正确。")
                 onLog("操作：为保证数据一致性，终止全部文件写入。")
                 result.isFatalIndexError = true // 标记致命错误
                 return

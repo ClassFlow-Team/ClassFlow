@@ -28,8 +28,8 @@ object TinyNativeRenderer {
         rv.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
 
         // 数据准备
-        val allCourses = snapshot.coursesList
-        val currentWeek = if (snapshot.currentWeek <= 0) null else snapshot.currentWeek
+        val allCourses = snapshot.courses
+        val currentWeek = if (snapshot.current_week <= 0) null else snapshot.current_week
         val now = LocalTime.now()
         val todayStr = LocalDate.now().toString()
 
@@ -44,7 +44,9 @@ object TinyNativeRenderer {
         // 情况 B：开学期间数据过滤
         val todayAllCourses = allCourses.filter { it.date == todayStr || it.date.isBlank() }
         val nextCourse = todayAllCourses.firstOrNull {
-            !it.isSkipped && try { LocalTime.parse(it.endTime) > now } catch (e: Exception) { true }
+            !it.is_skipped && try {
+                LocalTime.parse(it.end_time) > now
+            } catch (_: Exception) { true }
         }
 
         if (nextCourse != null) {
@@ -54,20 +56,23 @@ object TinyNativeRenderer {
             rv.setViewVisibility(R.id.container_status, View.GONE)
 
             rv.setTextViewText(R.id.tv_course_name, nextCourse.name)
-            rv.setTextViewText(R.id.tv_course_time, "${nextCourse.startTime.take(5)} - ${nextCourse.endTime.take(5)}")
+
+            val timeText = "${nextCourse.start_time.take(5)} - ${nextCourse.end_time.take(5)}"
+            rv.setTextViewText(R.id.tv_course_time, timeText)
             rv.setTextViewText(R.id.tv_course_position, nextCourse.position)
 
-            // 剩余课程数统计
+            // 剩余课程数统计 (基于原始列表索引)
             val nextCourseIndex = todayAllCourses.indexOf(nextCourse)
             val remainingCount = todayAllCourses.size - nextCourseIndex
             rv.setTextViewText(R.id.tv_remaining_count, remainingCount.toString())
 
             // 颜色渲染
             val style = snapshot.style
-            if (nextCourse.colorInt < style.courseColorMapsCount) {
-                val colorPair = style.getCourseColorMaps(nextCourse.colorInt)
-                rv.setInt(R.id.bubble_bg_image, "setColorFilter", colorPair.lightColor.toInt())
-                rv.setInt(R.id.bubble_bg_image_dark, "setColorFilter", colorPair.darkColor.toInt())
+            val colorInt = nextCourse.color_int
+            if (style != null && colorInt < style.course_color_maps.size) {
+                val colorPair = style.course_color_maps[colorInt]
+                rv.setInt(R.id.bubble_bg_image, "setColorFilter", colorPair.light_color.toInt())
+                rv.setInt(R.id.bubble_bg_image_dark, "setColorFilter", colorPair.dark_color.toInt())
             }
         } else {
             // 无课状态

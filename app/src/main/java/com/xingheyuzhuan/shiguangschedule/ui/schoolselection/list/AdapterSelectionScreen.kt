@@ -67,7 +67,7 @@ fun AdapterSelectionScreen(
 
     // 从传入的 number 计算当前的 AdapterCategory
     val currentCategory = remember(categoryNumber) {
-        AdapterCategory.forNumber(categoryNumber) ?: AdapterCategory.BACHELOR_AND_ASSOCIATE
+        AdapterCategory.fromValue(categoryNumber) ?: AdapterCategory.BACHELOR_AND_ASSOCIATE
     }
 
     @Composable
@@ -130,18 +130,18 @@ fun AdapterSelectionScreen(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(adapters, key = { it.adapterId }) { adapter ->
+                        items(adapters, key = { it.adapter_id }) { adapter ->
                             AdapterCard(
                                 adapter = adapter,
                                 onClick = { selectedAdapter ->
-                                    val initialUrl = selectedAdapter.importUrl.ifBlank { "about:blank" }
-                                    val jsFileName = selectedAdapter.assetJsPath
+                                    val initialUrl = (selectedAdapter.import_url ?: "").ifBlank { "about:blank" }
+                                    val jsFileName = selectedAdapter.asset_js_path
 
                                     // 构建正确的 JS 路径
                                     val assetJsPath = if (jsFileName.isNotBlank()) {
                                         "$resourceFolder/$jsFileName"
                                     } else {
-                                        "$resourceFolder/${selectedAdapter.adapterId}.js"
+                                        "$resourceFolder/${selectedAdapter.adapter_id}.js"
                                     }
                                     onNavigate(
                                         Destination.WebView(
@@ -183,7 +183,7 @@ fun AdapterCard(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = adapter.adapterName,
+                    text = adapter.adapter_name,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.fillMaxWidth()

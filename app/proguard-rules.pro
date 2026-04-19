@@ -69,9 +69,17 @@
     public static int w(...);
 }
 
-# --- 7. 数据解析 (Protobuf/Serialization) ---
--keep class * extends com.google.protobuf.GeneratedMessageLite { <fields>; <methods>; }
--keep enum * implements com.google.protobuf.Internal$EnumLite { *; }
+# --- 7. 数据解析 (Wire Protobuf/Serialization) ---
+-keep class * implements com.squareup.wire.Message {
+    <fields>;
+    <methods>;
+}
+-keep class * implements com.squareup.wire.WireEnum { *; }
+-keepclassmembers class * implements com.squareup.wire.Message {
+    public static *** ADAPTER;
+}
+-keep class * extends com.squareup.wire.ProtoAdapter { *; }
+
 
 -keepattributes *Annotation*
 -keep class kotlin.Metadata { *; }
@@ -88,3 +96,5 @@
 # --- 9. 数据模型与数据库 (Room) ---
 -keep class com.xingheyuzhuan.shiguangschedule.data.db.** { *; }
 -keep class com.xingheyuzhuan.shiguangschedule.data.model.** { *; }
+-keep @androidx.room.Entity class * { *; }
+-keep class * extends androidx.room.RoomDatabase { *; }

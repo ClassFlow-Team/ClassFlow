@@ -36,8 +36,8 @@ object CompactNativeRenderer {
         val now = LocalTime.now()
         val today = LocalDate.now()
         val tomorrow = today.plusDays(1)
-        val allCourses = snapshot.coursesList
-        val currentWeek = if (snapshot.currentWeek <= 0) null else snapshot.currentWeek
+        val allCourses = snapshot.courses
+        val currentWeek = if (snapshot.current_week <= 0) null else snapshot.current_week
 
         // 头部基础信息渲染
         val dateFormatter = DateTimeFormatter.ofPattern("E", Locale.getDefault())
@@ -62,11 +62,10 @@ object CompactNativeRenderer {
         val tomorrowStr = tomorrow.toString()
 
         val todayRemaining = allCourses.filter {
-            (it.date == todayStr || it.date.isBlank()) && !it.isSkipped &&
-                    try { LocalTime.parse(it.endTime) > now } catch (e: Exception) { true }
-        }.sortedBy { it.startTime }
+            (it.date == todayStr || it.date.isBlank()) && !it.is_skipped && try { LocalTime.parse(it.end_time) > now } catch (e: Exception) { true }
+        }.sortedBy { it.start_time }
 
-        val tomorrowCourses = allCourses.filter { it.date == tomorrowStr && !it.isSkipped }.sortedBy { it.startTime }
+        val tomorrowCourses = allCourses.filter { it.date == tomorrowStr && !it.is_skipped }.sortedBy { it.start_time }
 
         // 决定渲染路径
         when {
@@ -118,9 +117,9 @@ object CompactNativeRenderer {
             val itemRv = RemoteViews(context.packageName, R.layout.widget_item_course_common)
             itemRv.setTextViewText(R.id.tv_course_name, course.name)
             itemRv.setTextViewText(R.id.tv_course_position, course.position)
-            itemRv.setTextViewText(R.id.tv_course_time, "${course.startTime.take(5)}-${course.endTime.take(5)}")
+            itemRv.setTextViewText(R.id.tv_course_time, "${course.start_time.take(5)}-${course.end_time.take(5)}")
 
-            if (course.teacher.isNotBlank()) {
+            if (!(course.teacher.isBlank())) {
                 itemRv.setViewVisibility(R.id.tv_course_teacher, View.VISIBLE)
                 itemRv.setTextViewText(R.id.tv_course_teacher, course.teacher)
             } else {
@@ -129,10 +128,15 @@ object CompactNativeRenderer {
 
             // 颜色处理
             val style = snapshot.style
-            if (course.colorInt < style.courseColorMapsCount) {
-                val colorPair = style.getCourseColorMaps(course.colorInt)
-                itemRv.setInt(R.id.course_indicator, "setColorFilter", colorPair.lightColor.toInt())
-                itemRv.setInt(R.id.course_indicator_dark, "setColorFilter", colorPair.darkColor.toInt())
+            val colorInt = course.color_int
+            if (style != null && colorInt < style.course_color_maps.size) {
+                val colorPair = style.course_color_maps[colorInt]
+                itemRv.setInt(R.id.course_indicator, "setColorFilter",
+                    colorPair.light_color.toInt()
+                )
+                itemRv.setInt(R.id.course_indicator_dark, "setColorFilter",
+                    colorPair.dark_color.toInt()
+                )
             }
 
             rv.addView(R.id.container_courses, itemRv)

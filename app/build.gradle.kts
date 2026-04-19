@@ -5,8 +5,8 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.aboutLibraries)
-    alias(libs.plugins.protobuf)
     alias(libs.plugins.hilt.android)
+    alias(libs.plugins.wire)
 }
 
 android {
@@ -96,15 +96,6 @@ android {
             include("armeabi-v7a", "arm64-v8a", "x86_64")
         }
     }
-    sourceSets {
-        getByName("main") {
-            withGroovyBuilder {
-                "proto" {
-                    "srcDir"("src/main/proto")
-                }
-            }
-        }
-    }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -149,8 +140,6 @@ dependencies {
     implementation(libs.slf4j.android)
     implementation(libs.androidx.compose.animation)
     implementation(libs.coil.compose)
-    implementation(libs.protobuf.kotlin.lite)
-    implementation(libs.protobuf.java.lite)
     implementation(libs.javax.inject)
     implementation(libs.androidx.appcompat)
     implementation(libs.hilt.android)
@@ -162,6 +151,7 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.ktor.client.logging)
+    implementation(libs.wire.runtime)
 
 
     debugImplementation(libs.okhttp.logging.interceptor)
@@ -179,23 +169,14 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 }
 
-protobuf {
-    protoc {
-        // 从版本目录中获取 protoc 编译器
-        artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
+wire {
+    sourcePath {
+        srcDir("src/main/proto")
     }
 
-    // 配置代码生成任务
-    generateProtoTasks {
-        all().forEach { task ->
-            task.builtins {
-                create("java") {
-                    option("lite")
-                }
-                create("kotlin") {
-                    option("lite")
-                }
-            }
-        }
+    kotlin {
+        escapeKotlinKeywords = true
+        enumMode = "enum_class"
+        rpcRole = "none"
     }
 }

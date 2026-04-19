@@ -59,7 +59,7 @@ class SchoolSelectionViewModel @Inject constructor(
         _selectedCategory
     ) { allSchools, query, category ->
         val categoryFiltered = allSchools.filter { school ->
-            school.adaptersList.any { adapter -> adapter.category == category }
+            school.adapters.any { adapter -> adapter.category == category }
         }
 
         if (query.isBlank()) {

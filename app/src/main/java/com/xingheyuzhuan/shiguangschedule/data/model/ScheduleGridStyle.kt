@@ -119,17 +119,19 @@ data class ScheduleGridStyle(
 // 2. Proto ⇔ Compose 转换扩展函数
 
 fun DualColorProto.toCompose(): DualColor {
+    // Wire 中属性是直接访问的，long 类型不需要 toInt (除非颜色存储逻辑需要)
     return DualColor(
-        light = Color(this.lightColor.toInt()),
-        dark = Color(this.darkColor.toInt())
+        light = Color(this.light_color), // Wire 属性名是下划线风格
+        dark = Color(this.dark_color)
     )
 }
 
 fun DualColor.toProto(): DualColorProto {
-    return DualColorProto.newBuilder()
-        .setLightColor(this.light.toArgb().toLong())
-        .setDarkColor(this.dark.toArgb().toLong())
-        .build()
+    // Wire 不使用 Builder，而是直接构造类或使用 copy()
+    return DualColorProto(
+        light_color = this.light.toArgb().toLong(),
+        dark_color = this.dark.toArgb().toLong()
+    )
 }
 
 /**
@@ -139,42 +141,43 @@ fun ScheduleGridStyleProto.toCompose(): ScheduleGridStyle {
     val d = ScheduleGridStyle.DEFAULT
 
     return ScheduleGridStyle(
-        // 1. 基础布局尺寸
-        timeColumnWidthDp = if (hasTimeColumnWidthDp()) timeColumnWidthDp else d.timeColumnWidthDp,
-        dayHeaderHeightDp = if (hasDayHeaderHeightDp()) dayHeaderHeightDp else d.dayHeaderHeightDp,
-        sectionHeightDp = if (hasSectionHeightDp()) sectionHeightDp else d.sectionHeightDp,
+        // Wire 中不使用 hasXXX() 判定，而是直接判定是否为 null 或默认值 (Proto3)
+        // 1. 基础布局尺寸 (Wire 生成的是可空或带默认值的属性)
+        timeColumnWidthDp = this.time_column_width_dp ?: d.timeColumnWidthDp,
+        dayHeaderHeightDp = this.day_header_height_dp ?: d.dayHeaderHeightDp,
+        sectionHeightDp = this.section_height_dp ?: d.sectionHeightDp,
 
         // 2. 课程块外观
-        courseBlockCornerRadiusDp = if (hasCourseBlockCornerRadiusDp()) courseBlockCornerRadiusDp else d.courseBlockCornerRadiusDp,
-        courseBlockOuterPaddingDp = if (hasCourseBlockOuterPaddingDp()) courseBlockOuterPaddingDp else d.courseBlockOuterPaddingDp,
-        courseBlockInnerPaddingDp = if (hasCourseBlockInnerPaddingDp()) courseBlockInnerPaddingDp else d.courseBlockInnerPaddingDp,
+        courseBlockCornerRadiusDp = this.course_block_corner_radius_dp ?: d.courseBlockCornerRadiusDp,
+        courseBlockOuterPaddingDp = this.course_block_outer_padding_dp ?: d.courseBlockOuterPaddingDp,
+        courseBlockInnerPaddingDp = this.course_block_inner_padding_dp ?: d.courseBlockInnerPaddingDp,
 
         // 3. 透明度与缩放
-        courseBlockAlphaFloat = if (hasCourseBlockAlphaFloat()) courseBlockAlphaFloat else d.courseBlockAlphaFloat,
-        courseBlockFontScale = if (hasCourseBlockFontScale()) courseBlockFontScale else d.courseBlockFontScale,
+        courseBlockAlphaFloat = this.course_block_alpha_float ?: d.courseBlockAlphaFloat,
+        courseBlockFontScale = this.course_block_font_scale ?: d.courseBlockFontScale,
 
-        // 5. 列表转换
-        courseColorMaps = if (this.courseColorMapsList.isEmpty()) d.courseColorMaps else this.courseColorMapsList.map { it.toCompose() },
+        // 5. 列表转换 (Wire 中 List 不会是 null，为空则是 EmptyList)
+        courseColorMaps = if (this.course_color_maps.isEmpty()) d.courseColorMaps else this.course_color_maps.map { it.toCompose() },
 
         // 6. 开关映射
-        hideGridLines = if (hasHideGridLines()) hideGridLines else d.hideGridLines,
-        hideSectionTime = if (hasHideSectionTime()) hideSectionTime else d.hideSectionTime,
-        hideDateUnderDay = if (hasHideDateUnderDay()) hideDateUnderDay else d.hideDateUnderDay,
-        showStartTime = if (hasShowStartTime()) showStartTime else d.showStartTime,
-        hideLocation = if (hasHideLocation()) hideLocation else d.hideLocation,
-        hideTeacher = if (hasHideTeacher()) hideTeacher else d.hideTeacher,
-        removeLocationAt = if (hasRemoveLocationAt()) removeLocationAt else d.removeLocationAt,
-        pageTextColorLong = if (hasPageTextColorLong()) pageTextColorLong else null,
-        courseTextColorLong = if (hasCourseTextColorLong()) courseTextColorLong else null,
+        hideGridLines = this.hide_grid_lines ?: d.hideGridLines,
+        hideSectionTime = this.hide_section_time ?: d.hideSectionTime,
+        hideDateUnderDay = this.hide_date_under_day ?: d.hideDateUnderDay,
+        showStartTime = this.show_start_time ?: d.showStartTime,
+        hideLocation = this.hide_location ?: d.hideLocation,
+        hideTeacher = this.hide_teacher ?: d.hideTeacher,
+        removeLocationAt = this.remove_location_at ?: d.removeLocationAt,
+        pageTextColorLong = this.page_text_color_long,
+        courseTextColorLong = this.course_text_color_long,
 
         // 7. 对齐与边框
-        textAlignCenterHorizontal = if (hasTextAlignCenterHorizontal()) textAlignCenterHorizontal else d.textAlignCenterHorizontal,
-        textAlignCenterVertical = if (hasTextAlignCenterVertical()) textAlignCenterVertical else d.textAlignCenterVertical,
-        borderType = if (hasBorderType()) borderType else d.borderType,
-        overlapStyleToggle = if (hasOverlapStyleToggle()) overlapStyleToggle else d.overlapStyleToggle,
+        textAlignCenterHorizontal = this.text_align_center_horizontal ?: d.textAlignCenterHorizontal,
+        textAlignCenterVertical = this.text_align_center_vertical ?: d.textAlignCenterVertical,
+        borderType = this.border_type ?: d.borderType,
+        overlapStyleToggle = this.overlap_style_toggle ?: d.overlapStyleToggle,
 
         // 8. 背景图路径映射
-        backgroundImagePath = if (hasBackgroundImagePath() && backgroundImagePath.isNotEmpty()) backgroundImagePath else null
+        backgroundImagePath = if (!this.background_image_path.isNullOrEmpty()) this.background_image_path else null
     )
 }
 
@@ -182,33 +185,29 @@ fun ScheduleGridStyleProto.toCompose(): ScheduleGridStyle {
  * ScheduleGridStyle -> Protobuf 转换 (用于写入)
  */
 fun ScheduleGridStyle.toProto(): ScheduleGridStyleProto {
-    return ScheduleGridStyleProto.newBuilder().apply {
-        timeColumnWidthDp = this@toProto.timeColumnWidthDp
-        dayHeaderHeightDp = this@toProto.dayHeaderHeightDp
-        sectionHeightDp = this@toProto.sectionHeightDp
-        courseBlockCornerRadiusDp = this@toProto.courseBlockCornerRadiusDp
-        courseBlockOuterPaddingDp = this@toProto.courseBlockOuterPaddingDp
-        courseBlockInnerPaddingDp = this@toProto.courseBlockInnerPaddingDp
-        courseBlockAlphaFloat = this@toProto.courseBlockAlphaFloat
-        courseBlockFontScale = this@toProto.courseBlockFontScale
-
-        addAllCourseColorMaps(this@toProto.courseColorMaps.map { it.toProto() })
-
-        hideGridLines = this@toProto.hideGridLines
-        hideSectionTime = this@toProto.hideSectionTime
-        hideDateUnderDay = this@toProto.hideDateUnderDay
-        showStartTime = this@toProto.showStartTime
-        hideLocation = this@toProto.hideLocation
-        hideTeacher = this@toProto.hideTeacher
-        removeLocationAt = this@toProto.removeLocationAt
-        textAlignCenterHorizontal = this@toProto.textAlignCenterHorizontal
-        textAlignCenterVertical = this@toProto.textAlignCenterVertical
-        borderType = this@toProto.borderType
-        overlapStyleToggle = this@toProto.overlapStyleToggle
-        this@toProto.pageTextColorLong?.let { pageTextColorLong = it }
-        this@toProto.courseTextColorLong?.let { courseTextColorLong = it }
-
-        // 路径映射
-        backgroundImagePath = this@toProto.backgroundImagePath ?: ""
-    }.build()
+    return ScheduleGridStyleProto(
+        time_column_width_dp = this.timeColumnWidthDp,
+        day_header_height_dp = this.dayHeaderHeightDp,
+        section_height_dp = this.sectionHeightDp,
+        course_block_corner_radius_dp = this.courseBlockCornerRadiusDp,
+        course_block_outer_padding_dp = this.courseBlockOuterPaddingDp,
+        course_block_inner_padding_dp = this.courseBlockInnerPaddingDp,
+        course_block_alpha_float = this.courseBlockAlphaFloat,
+        course_block_font_scale = this.courseBlockFontScale,
+        course_color_maps = this.courseColorMaps.map { it.toProto() },
+        hide_grid_lines = this.hideGridLines,
+        hide_section_time = this.hideSectionTime,
+        hide_date_under_day = this.hideDateUnderDay,
+        show_start_time = this.showStartTime,
+        hide_location = this.hideLocation,
+        hide_teacher = this.hideTeacher,
+        remove_location_at = this.removeLocationAt,
+        text_align_center_horizontal = this.textAlignCenterHorizontal,
+        text_align_center_vertical = this.textAlignCenterVertical,
+        border_type = this.borderType,
+        overlap_style_toggle = this.overlapStyleToggle,
+        page_text_color_long = this.pageTextColorLong,
+        course_text_color_long = this.courseTextColorLong,
+        background_image_path = this.backgroundImagePath ?: ""
+    )
 }

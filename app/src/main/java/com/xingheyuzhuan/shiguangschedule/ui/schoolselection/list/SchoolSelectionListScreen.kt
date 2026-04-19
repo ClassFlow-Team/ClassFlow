@@ -103,8 +103,8 @@ fun SchoolSelectionListScreen(
                         Destination.AdapterSelection(
                             schoolId = selectedSchool.id,
                             schoolName = selectedSchool.name,
-                            categoryNumber = selectedCategory.number,
-                            resourceFolder = selectedSchool.resourceFolder
+                            categoryNumber = selectedCategory.value,
+                            resourceFolder = selectedSchool.resource_folder
                         )
                     )
                     isSearchActive = false
@@ -142,8 +142,8 @@ fun SchoolSelectionListScreen(
                             Destination.AdapterSelection(
                                 schoolId = school.id,
                                 schoolName = school.name,
-                                categoryNumber = category.number,
-                                resourceFolder = school.resourceFolder
+                                categoryNumber = category.value,
+                                resourceFolder = school.resource_folder
                             )
                         )
                     }
