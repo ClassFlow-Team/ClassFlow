@@ -6,10 +6,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.webkit.JavascriptInterface
-import android.webkit.ValueCallback
 import android.webkit.WebView
 import android.widget.Toast
-import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseConversionRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport
 import kotlinx.coroutines.CoroutineScope
@@ -18,20 +16,8 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
 
 private const val TAG = "AndroidBridge"
-
-
-// JS 端传来的时间段 JSON 模型
-@Serializable
-data class TimeSlotJsonModel(
-    val number: Int,
-    val startTime: String,
-    val endTime: String
-)
 
 /**
  * AndroidBridge：处理 WebView 与 Native 代码的通信。
@@ -43,15 +29,9 @@ class AndroidBridge(
     private val webView: WebView,
     private val uiEventChannel: Channel<WebUiEvent>,
     private val courseConversionRepository: CourseConversionRepository,
-    private val timeSlotRepository: TimeSlotRepository,
     private val onTaskCompleted: () -> Unit
 ) {
-    private val json = Json {
-        prettyPrint = true
-        ignoreUnknownKeys = true
-        isLenient = true
-    }
-
+    private val json = CourseImportExport.json
     private val handler = Handler(Looper.getMainLooper())
     private var importTableId: String? = null
     private var currentToast: Toast? = null
@@ -134,10 +114,14 @@ class AndroidBridge(
                     val jsScript = "javascript: ${data.validatorJsFunction}('${input.replace("'", "\\'")}')"
 
                     // 执行 JS 验证
-                    webView.evaluateJavascript(jsScript, ValueCallback { result ->
+                    webView.evaluateJavascript(jsScript) { result ->
                         val validationResult = result?.trim('\"')
 
-                        if (validationResult.isNullOrEmpty() || validationResult.equals("false", ignoreCase = true)) {
+                        if (validationResult.isNullOrEmpty() || validationResult.equals(
+                                "false",
+                                ignoreCase = true
+                            )
+                        ) {
                             // 验证成功：解决 Promise
                             val escapedInput = input.replace("'", "\\'")
                             resolveJsPromise(promiseId, "'$escapedInput'")
@@ -147,7 +131,7 @@ class AndroidBridge(
                                 errorFlow.emit(validationResult)
                             }
                         }
-                    })
+                    }
                 }
             }
 
@@ -214,9 +198,10 @@ class AndroidBridge(
                 }
 
                 val importedCoursesList = json.decodeFromString<List<CourseImportExport.ImportCourseJsonModel>>(coursesJsonString)
+                // 调用仓库层 Web 导入专用方法，强制生成新 ID 并处理备注截断
                 courseConversionRepository.importCoursesFromList(tableId, importedCoursesList)
 
-                Toast.makeText(context, "课程导入成功！课表已更新。", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "课程导入成功！课表已更新。", Toast.LENGTH_SHORT).show()
                 resolveJsPromise(promiseId, "true")
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -252,7 +237,7 @@ class AndroidBridge(
                 // 该方法会处理配置的合并逻辑（例如保留 showWeekends）
                 courseConversionRepository.importCourseConfig(tableId, importedConfig)
 
-                Toast.makeText(context, "课表配置导入成功！", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "课表配置导入成功！", Toast.LENGTH_SHORT).show()
                 resolveJsPromise(promiseId, "true")
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -276,20 +261,10 @@ class AndroidBridge(
                     return@launch
                 }
 
-                val importedTimeSlotsJson = json.decodeFromString<List<TimeSlotJsonModel>>(timeSlotsJsonString)
+                val importedTimeSlotsJson = json.decodeFromString<List<CourseImportExport.TimeSlotJsonModel>>(timeSlotsJsonString)
+                courseConversionRepository.importTimeSlots(tableId, importedTimeSlotsJson)
 
-                val timeSlotEntities = importedTimeSlotsJson.map { jsonModel ->
-                    TimeSlot(
-                        number = jsonModel.number,
-                        startTime = jsonModel.startTime,
-                        endTime = jsonModel.endTime,
-                        courseTableId = tableId
-                    )
-                }
-
-                timeSlotRepository.replaceAllForCourseTable(tableId, timeSlotEntities)
-
-                Toast.makeText(context, "预设时间段导入成功！", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "预设时间段导入成功！", Toast.LENGTH_SHORT).show()
                 resolveJsPromise(promiseId, "true")
             } catch (e: Exception) {
                 e.printStackTrace()

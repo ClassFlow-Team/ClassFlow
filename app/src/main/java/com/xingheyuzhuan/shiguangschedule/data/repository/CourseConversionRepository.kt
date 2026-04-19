@@ -74,9 +74,7 @@ class CourseConversionRepository @Inject constructor(
         val courseEntities = ArrayList<Course>(coursesJsonModel.size)
         val courseWeekEntities = mutableListOf<CourseWeek>()
 
-        // 维护名称到颜色的映射，实现同名同色
         val nameToColorMap = mutableMapOf<String, Int>()
-        // 随机起始偏移量，确保每次导入不会总是从同一种颜色开始
         var colorOffset = if (colorSize > 0) Random.nextInt(colorSize) else 0
 
         coursesJsonModel.forEach { jsonCourse ->
@@ -106,7 +104,8 @@ class CourseConversionRepository @Inject constructor(
                     isCustomTime = jsonCourse.isCustomTime,
                     customStartTime = jsonCourse.customStartTime,
                     customEndTime = jsonCourse.customEndTime,
-                    colorInt = courseIndex
+                    colorInt = courseIndex,
+                    remark = null
                 )
             )
 
@@ -123,6 +122,10 @@ class CourseConversionRepository @Inject constructor(
 
     /**
      * 从一个完整的 JSON 模型导入课表数据。
+     * 逻辑说明：
+     * 1. 课程数据（courses）：始终清空并重新导入。
+     * 2. 时间段数据（timeSlots）：仅在 JSON 包含有效数据时覆盖，否则保留本地现状。
+     * 3. 配置信息（config）：仅在 JSON 包含有效数据时覆盖，且会保留本地的 showWeekends 设置。
      */
     @Transaction
     suspend fun importCourseTableFromJson(
@@ -132,19 +135,17 @@ class CourseConversionRepository @Inject constructor(
         val currentStyle = styleSettingsRepository.styleFlow.first()
         val colorSize = currentStyle.courseColorMaps.size
 
+        // 处理课程数据（始终清空原有课程） ---
         courseDao.deleteCoursesByTableId(tableId)
-        timeSlotDao.deleteAllTimeSlotsByCourseTableId(tableId)
 
         val courseEntities = ArrayList<Course>(courseTableJsonModel.courses.size)
         val courseWeekEntities = mutableListOf<CourseWeek>()
-        val timeSlotEntities = mutableListOf<TimeSlot>()
 
-        // 维护名称到颜色的映射，实现同名同色
         val nameToColorMap = mutableMapOf<String, Int>()
-        // 随机起始偏移量
         var colorOffset = if (colorSize > 0) Random.nextInt(colorSize) else 0
 
         courseTableJsonModel.courses.forEach { jsonCourse ->
+            // 如果 JSON 中没给 ID，则生成新的 UUID
             val courseId = jsonCourse.id ?: UUID.randomUUID().toString()
 
             val courseIndex = getOrAssignColorByName(
@@ -171,7 +172,8 @@ class CourseConversionRepository @Inject constructor(
                     isCustomTime = jsonCourse.isCustomTime,
                     customStartTime = jsonCourse.customStartTime,
                     customEndTime = jsonCourse.customEndTime,
-                    colorInt = courseIndex
+                    colorInt = courseIndex,
+                    remark = jsonCourse.remark?.take(300)
                 )
             )
 
@@ -182,21 +184,29 @@ class CourseConversionRepository @Inject constructor(
             }
         }
 
-        courseTableJsonModel.timeSlots.forEach { jsonTimeSlot ->
-            timeSlotEntities.add(
+        // 处理时间段数据（仅在有数据时覆盖） ---
+        // 如果 timeSlots 为 null 或空，则完全不触动数据库中的 time_slot 表
+        val jsonTimeSlots = courseTableJsonModel.timeSlots
+        if (!jsonTimeSlots.isNullOrEmpty()) {
+            // 只有确定要导入新时间段时，才删除旧数据
+            timeSlotDao.deleteAllTimeSlotsByCourseTableId(tableId)
+
+            val timeSlotEntities = jsonTimeSlots.map { jsonTimeSlot ->
                 TimeSlot(
                     number = jsonTimeSlot.number,
                     startTime = jsonTimeSlot.startTime,
                     endTime = jsonTimeSlot.endTime,
                     courseTableId = tableId
                 )
-            )
+            }
+            timeSlotDao.insertAll(timeSlotEntities)
         }
 
+        // 统一执行课程数据插入
         if (courseEntities.isNotEmpty()) courseDao.insertAll(courseEntities)
         if (courseWeekEntities.isNotEmpty()) courseWeekDao.insertAll(courseWeekEntities)
-        if (timeSlotEntities.isNotEmpty()) timeSlotDao.insertAll(timeSlotEntities)
 
+        // 处理配置数据
         val configJson = courseTableJsonModel.config
         if (configJson != null) {
             val currentConfig = appSettingsRepository.getCourseConfigOnce(tableId)
@@ -214,11 +224,29 @@ class CourseConversionRepository @Inject constructor(
     }
 
     /**
+     * 导入预设时间段
+     */
+    @Transaction
+    suspend fun importTimeSlots(
+        tableId: String,
+        timeSlots: List<TimeSlotJsonModel>
+    ) {
+        val timeSlotEntities = timeSlots.map { jsonModel ->
+            TimeSlot(
+                number = jsonModel.number,
+                startTime = jsonModel.startTime,
+                endTime = jsonModel.endTime,
+                courseTableId = tableId
+            )
+        }
+        timeSlotDao.deleteAllTimeSlotsByCourseTableId(tableId)
+        if (timeSlotEntities.isNotEmpty()) {
+            timeSlotDao.insertAll(timeSlotEntities)
+        }
+    }
+
+    /**
      * 从 JSON 模型更新指定课表的配置。
-     * 该函数用于独立导入配置，例如通过 JS 桥接单独设置配置项。
-     *
-     * @param tableId 课表的 ID。
-     * @param configJsonModel 包含配置数据的 JSON 模型（CourseConfigJsonModel）。
      */
     @Transaction
     suspend fun importCourseConfig(
@@ -227,7 +255,6 @@ class CourseConversionRepository @Inject constructor(
     ) {
         val currentConfig = appSettingsRepository.getCourseConfigOnce(tableId)
 
-        // 2. 构造新的配置实体
         val updatedConfig = CourseTableConfig(
             courseTableId = tableId,
             showWeekends = currentConfig?.showWeekends ?: false,
@@ -238,7 +265,6 @@ class CourseConversionRepository @Inject constructor(
             firstDayOfWeek = configJsonModel.firstDayOfWeek
         )
 
-        // 3. 插入或更新配置到数据库
         appSettingsRepository.insertOrUpdateCourseConfig(updatedConfig)
     }
 
@@ -249,9 +275,14 @@ class CourseConversionRepository @Inject constructor(
      * @param tableId 要导出的课表的 ID。
      * @return 包含课程和时间段的完整 JSON 模型。
      */
-    suspend fun exportCourseTableToJson(tableId: String): CourseTableExportModel {
+    suspend fun exportCourseTableToJson(tableId: String): CourseTableExportModel? {
 
         val coursesWithWeeks = courseDao.getCoursesWithWeeksByTableId(tableId).first()
+        // 如果找不到课表，直接返回 null
+        if (coursesWithWeeks.isEmpty() && appSettingsRepository.getCourseConfigOnce(tableId) == null) {
+            return null
+        }
+
         val exportCourses = coursesWithWeeks.map { courseWithWeeks ->
             val course = courseWithWeeks.course
             val weeks = courseWithWeeks.weeks.map { it.weekNumber }
@@ -269,7 +300,8 @@ class CourseConversionRepository @Inject constructor(
                 weeks = weeks,
                 isCustomTime = course.isCustomTime,
                 customStartTime = course.customStartTime,
-                customEndTime = course.customEndTime
+                customEndTime = course.customEndTime,
+                remark = course.remark
             )
         }
 
@@ -295,7 +327,6 @@ class CourseConversionRepository @Inject constructor(
             defaultBreakDuration = configToExport.defaultBreakDuration,
             firstDayOfWeek = configToExport.firstDayOfWeek
         )
-
 
         return CourseTableExportModel(
             courses = exportCourses,

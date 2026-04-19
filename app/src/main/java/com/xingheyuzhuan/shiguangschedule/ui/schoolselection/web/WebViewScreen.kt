@@ -84,7 +84,6 @@ fun WebViewScreen(
     viewModel: WebViewModel = hiltViewModel()
 ) {
     val courseConversionRepository = viewModel.courseConversionRepository
-    val timeSlotRepository = viewModel.timeSlotRepository
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -155,7 +154,6 @@ fun WebViewScreen(
                 webView = this,
                 uiEventChannel = uiEventChannel,
                 courseConversionRepository = courseConversionRepository,
-                timeSlotRepository = timeSlotRepository,
                 onTaskCompleted = {
                     Toast.makeText(context, toastImportFinished, Toast.LENGTH_LONG).show()
                     onNavigate(Destination.CourseSchedule)
