@@ -323,8 +323,26 @@ fun DayPicker(selectedDay: Int, onDaySelected: (Int) -> Unit, modifier: Modifier
 }
 
 @Composable
-fun SectionPicker(selectedSection: Int, onSectionSelected: (Int) -> Unit, timeSlots: List<TimeSlot>, modifier: Modifier = Modifier) {
-    val sectionNumbers = timeSlots.map { it.number }.sorted()
-    val validSelected = if (selectedSection in sectionNumbers) selectedSection else sectionNumbers.firstOrNull() ?: 1
-    NativeNumberPicker(values = sectionNumbers, selectedValue = validSelected, onValueChange = onSectionSelected, modifier = modifier)
+fun SectionPicker(
+    selectedSection: Int,
+    onSectionSelected: (Int) -> Unit,
+    timeSlots: List<TimeSlot>,
+    modifier: Modifier = Modifier
+) {
+    val sortedSlots = remember(timeSlots) {
+        timeSlots.sortedBy { it.number }
+    }
+    val displayValues = sortedSlots.map { it.alias ?: it.number.toString() }
+    val currentSlot = sortedSlots.find { it.number == selectedSection } ?: sortedSlots.firstOrNull()
+    val selectedValueText = currentSlot?.let { it.alias ?: it.number.toString() } ?: ""
+
+    NativeNumberPicker(
+        values = displayValues,
+        selectedValue = selectedValueText,
+        onValueChange = { newValueText ->
+            val pickedSlot = sortedSlots.find { (it.alias ?: it.number.toString()) == newValueText }
+            pickedSlot?.let { onSectionSelected(it.number) }
+        },
+        modifier = modifier
+    )
 }

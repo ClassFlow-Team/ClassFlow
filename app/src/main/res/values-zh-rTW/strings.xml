@@ -276,6 +276,7 @@
     <string name="toast_slot_added_unsaved">時間段已新增至清單，請點選儲存以更新資料庫</string>
 
     <!-- 課表匯入/匯出 -->
+    <string name="label_time_slot_alias">別名 (選填)</string>
     <string name="title_conversion">課表匯入/匯出</string>
     <string name="section_file_conversion">檔案匯入/匯出</string>
     <string name="item_import_course_file">課程檔案匯入</string>

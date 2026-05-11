@@ -149,9 +149,9 @@ class TimeSlotViewModel @Inject constructor(
                 updateBackupPoint(timeSlotsWithCorrectId, classDuration, breakDuration)
 
                 onSuccess()
-                Log.d("TimeSlotViewModel", "Settings saved successfully")
+                Log.d("TimeSlotViewModel", "设置保存成功")
             } else {
-                Log.e("TimeSlotViewModel", "Cannot save settings: Invalid table ID")
+                Log.e("TimeSlotViewModel", "无法保存设置：课表 ID 无效")
             }
         }
     }
