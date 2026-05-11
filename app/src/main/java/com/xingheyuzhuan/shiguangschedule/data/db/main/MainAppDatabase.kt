@@ -6,6 +6,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.AutoMigrationSpec
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,26 +21,26 @@ import kotlinx.coroutines.launch
         Course::class,
         CourseWeek::class,
         TimeSlot::class,
-        AppSettings::class, // 暂存用于迁移，版本 5 将物理移除
         CourseTableConfig::class
     ],
-    version = 4,
+    version = 5,
     autoMigrations = [
-        AutoMigration(from = 3, to = 4)
+        AutoMigration(from = 3, to = 4),
+        AutoMigration(from = 4, to = 5, spec = MainAppDatabase.RemoveAppSettingsSpec::class)
     ],
     exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class MainAppDatabase : RoomDatabase() {
 
+    @androidx.room.DeleteTable(tableName = "app_settings")
+    class RemoveAppSettingsSpec : AutoMigrationSpec
+
     abstract fun courseTableDao(): CourseTableDao
     abstract fun courseDao(): CourseDao
     abstract fun courseWeekDao(): CourseWeekDao
     abstract fun timeSlotDao(): TimeSlotDao
     abstract fun courseTableConfigDao(): CourseTableConfigDao
-
-    @Deprecated("设置已迁移至 DataStore，此 Dao 仅用于迁移逻辑。")
-    abstract fun appSettingsDao(): AppSettingsDao
 
     companion object {
         @Volatile
