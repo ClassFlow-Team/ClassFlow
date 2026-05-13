@@ -1,5 +1,6 @@
 # 拾光课程表
-#### 与我们交流和讨论 ![](https://img.shields.io/badge/QQ_频道-pd68794181-blue)  
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/XingHeYuZhuan/shiguangschedule/total)  ![GitHub License](https://img.shields.io/github/license/XingHeYuZhuan/shiguangschedule)  ![GitHub Repo stars](https://img.shields.io/github/stars/XingHeYuZhuan/shiguangschedule)
+#### 与我们交流和讨论 ![](https://img.shields.io/badge/QQ_频道-pd68794181-blue)
 
 本仓库为拾光课程表（shiguangschedule）项目的主仓库，包含软件的全部源代码及相关资源。项目采用开源模式，欢迎社区开发者参与贡献和适配。  
 
