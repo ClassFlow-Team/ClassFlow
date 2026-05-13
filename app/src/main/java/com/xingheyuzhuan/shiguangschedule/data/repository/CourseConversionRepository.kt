@@ -196,7 +196,8 @@ class CourseConversionRepository @Inject constructor(
                     number = jsonTimeSlot.number,
                     startTime = jsonTimeSlot.startTime,
                     endTime = jsonTimeSlot.endTime,
-                    courseTableId = tableId
+                    courseTableId = tableId,
+                    alias = jsonTimeSlot.alias
                 )
             }
             timeSlotDao.insertAll(timeSlotEntities)
@@ -310,7 +311,8 @@ class CourseConversionRepository @Inject constructor(
             TimeSlotJsonModel(
                 number = timeSlot.number,
                 startTime = timeSlot.startTime,
-                endTime = timeSlot.endTime
+                endTime = timeSlot.endTime,
+                alias = timeSlot.alias
             )
         }
 

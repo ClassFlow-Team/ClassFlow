@@ -22,6 +22,7 @@ import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.MergedCourseBlock
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 
@@ -218,13 +219,15 @@ private fun TimeColumn(
 
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(horizontal = 1.dp)
                 ) {
                     Text(
-                        text = slot.number.toString(),
-                        fontSize = if (h < 32.dp) 12.sp else 16.sp,
+                        text = slot.alias ?: slot.number.toString(),
+                        fontSize = if (h < 32.dp) 11.sp else 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = textColor
+                        color = textColor,
+                        overflow = TextOverflow.Ellipsis
                     )
                     if (!style.hideSectionTime) {
                         when {

@@ -85,7 +85,8 @@ object CourseImportExport {
     data class TimeSlotJsonModel(
         val number: Int,
         val startTime: String,
-        val endTime: String
+        val endTime: String,
+        val alias: String? = null
     )
 
 }

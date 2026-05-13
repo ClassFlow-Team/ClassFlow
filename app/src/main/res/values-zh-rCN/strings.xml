@@ -275,6 +275,7 @@
     <string name="toast_end_time_must_be_later">结束时间必须晚于开始时间</string>
     <string name="toast_slot_modified_unsaved">时间段已修改，请点击保存以更新数据库</string>
     <string name="toast_slot_added_unsaved">时间段已添加至列表，请点击保存以更新数据库</string>
+    <string name="label_time_slot_alias">别名(可选)</string>
 
     <!-- 课表导入/导出 -->
     <string name="title_conversion">课表导入/导出</string>

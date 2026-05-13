@@ -183,6 +183,7 @@ fun AddEditCourseScreen(
                 CourseSchemeCard(
                     scheme = scheme,
                     courseColorMaps = uiState.courseColorMaps,
+                    timeSlots = uiState.timeSlots,
                     onTeacherChange = { newTeacher ->
                         viewModel.updateScheme(scheme.id) { it.copy(teacher = newTeacher) }
                     },

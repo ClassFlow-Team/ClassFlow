@@ -250,10 +250,33 @@ private fun RgbInputSection(color: Color, showAlpha: Boolean, onColorChanged: (C
 }
 
 @Composable
-private fun RgbInputField(label: String, value: Int, modifier: Modifier, onValueChange: (Int) -> Unit) {
+private fun RgbInputField(
+    label: String,
+    value: Int,
+    modifier: Modifier,
+    onValueChange: (Int) -> Unit
+) {
+    var inputText by remember { mutableStateOf(value.toString()) }
+    LaunchedEffect(value) {
+        if (value.toString() != inputText) {
+            inputText = value.toString()
+        }
+    }
+
     OutlinedTextField(
-        value = value.toString(),
-        onValueChange = { text -> text.toIntOrNull()?.let { if (it in 0..255) onValueChange(it) } },
+        value = inputText,
+        onValueChange = { text ->
+            if (text.isEmpty()) {
+                inputText = ""
+                onValueChange(0)
+            } else if (text.all { it.isDigit() }) {
+                val parsed = text.toIntOrNull()
+                if (parsed != null && parsed in 0..255) {
+                    inputText = text
+                    onValueChange(parsed)
+                }
+            }
+        },
         label = { Text(label) },
         modifier = modifier,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

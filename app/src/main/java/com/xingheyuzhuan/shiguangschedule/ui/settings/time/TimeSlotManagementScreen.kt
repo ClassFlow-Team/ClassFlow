@@ -53,6 +53,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.xingheyuzhuan.shiguangschedule.Destination
@@ -235,14 +237,15 @@ fun TimeSlotManagementScreen(
                     initialNumber = editingTimeSlot?.number ?: (localTimeSlots.maxOfOrNull { it.number }?.plus(1) ?: 1),
                     initialStartTime = initialStart,
                     initialEndTime = initialEnd,
+                    initialAlias = editingTimeSlot?.alias,
                     isEditing = isEditing,
                     onDismiss = {
                         showEditBottomSheet = false
                         editingTimeSlot = null
                         editingIndex = null
-                        },
-                    onConfirm = { number, startTime, endTime ->
-                        val newOrUpdatedSlot = TimeSlot(number, startTime, endTime, courseTableId = "")
+                    },
+                    onConfirm = { number, startTime, endTime, alias ->
+                        val newOrUpdatedSlot = TimeSlot(number, startTime, endTime, courseTableId = "", alias = alias)
                         if (isEditing && editingIndex != null) {
                             localTimeSlots[editingIndex!!] = newOrUpdatedSlot
                             Toast.makeText(context, toastSlotModifiedUnsaved, Toast.LENGTH_SHORT).show()
@@ -254,6 +257,8 @@ fun TimeSlotManagementScreen(
                         localTimeSlots.clear()
                         localTimeSlots.addAll(finalSorted)
                         showEditBottomSheet = false
+                        editingTimeSlot = null
+                        editingIndex = null
                     }
                 )
             }
@@ -384,16 +389,30 @@ fun TimeSlotItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = timeSlotSectionNumber.format(timeSlot.number),
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.width(72.dp),
+                maxLines = 1
+            )
+            Text(
+                text = timeSlot.alias ?: "",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 4.dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = "${timeSlot.startTime} - ${timeSlot.endTime}",
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.End,
+                maxLines = 1,
+                softWrap = false
             )
             IconButton(onClick = onDeleteClick) {
                 Icon(Icons.Filled.Delete, contentDescription = a11yDeleteTimeSlot)
@@ -411,9 +430,10 @@ fun TimeSlotEditContent(
     initialNumber: Int,
     initialStartTime: String,
     initialEndTime: String,
+    initialAlias: String?,
     isEditing: Boolean,
     onDismiss: () -> Unit,
-    onConfirm: (number: Int, startTime: String, endTime: String) -> Unit
+    onConfirm: (number: Int, startTime: String, endTime: String, alias: String?) -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -425,6 +445,7 @@ fun TimeSlotEditContent(
     var startMinuteState by remember { mutableStateOf(initialStartMinute) }
     var endHourState by remember { mutableStateOf(initialEndHour) }
     var endMinuteState by remember { mutableStateOf(initialEndMinute) }
+    var aliasState by remember { mutableStateOf(initialAlias ?: "") }
 
     val hours = remember { (0..23).map { String.format(Locale.US, "%02d", it) } }
     val minutes = remember { (0..59).map { String.format(Locale.US, "%02d", it) } }
@@ -468,7 +489,24 @@ fun TimeSlotEditContent(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(
+            value = aliasState,
+            onValueChange = { if (it.length <= 5) aliasState = it },
+            label = { Text(stringResource(R.string.label_time_slot_alias)) },
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 8.dp),
+            supportingText = {
+                Text(
+                    text = "${aliasState.length}/5",
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.End
+                )
+            }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         Row(
             modifier = Modifier
@@ -548,7 +586,7 @@ fun TimeSlotEditContent(
                             val formatter = DateTimeFormatter.ofPattern("HH:mm")
                             val startTime = LocalTime.of(startHourState, startMinuteState).format(formatter)
                             val endTime = LocalTime.of(endHourState, endMinuteState).format(formatter)
-                            onConfirm(initialNumber, startTime, endTime)
+                            onConfirm(initialNumber, startTime, endTime, aliasState.ifBlank { null })
                         } else {
                             coroutineScope.launch { Toast.makeText(context, toastEndTimeMustBeLater, Toast.LENGTH_SHORT).show() }
                         }

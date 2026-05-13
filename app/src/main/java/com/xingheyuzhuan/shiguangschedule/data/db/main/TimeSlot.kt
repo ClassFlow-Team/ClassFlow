@@ -27,5 +27,6 @@ data class TimeSlot(
     val number: Int, // 节次编号作为主键的一部分
     val startTime: String, // 开始时间，例如 "08:00"
     val endTime: String, // 结束时间，例如 "08:45"
-    val courseTableId: String //对应的课表id
+    val courseTableId: String, //对应的课表id
+    val alias: String? = null // 时间段别名（可选）,如果为 null，则 UI 层面通常直接显示数字编号
 )

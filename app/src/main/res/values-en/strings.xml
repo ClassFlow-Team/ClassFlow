@@ -276,6 +276,7 @@
     <string name="toast_slot_added_unsaved">Time period added to list, tap save to update database</string>
 
     <!-- Import/Export Schedule -->
+    <string name="label_time_slot_alias">Alias (Optional)</string>
     <string name="title_conversion">Import/Export schedule</string>
     <string name="section_file_conversion">File import/export</string>
     <string name="item_import_course_file">Import course file</string>

@@ -18,6 +18,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.xingheyuzhuan.shiguangschedule.R
+import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.model.DualColor
 
 /**
@@ -29,6 +30,7 @@ import com.xingheyuzhuan.shiguangschedule.data.model.DualColor
 fun CourseSchemeCard(
     scheme: CourseScheme,
     courseColorMaps: List<DualColor>,
+    timeSlots: List<TimeSlot>,
     onTeacherChange: (String) -> Unit,
     onPositionChange: (String) -> Unit,
     onRemarkChange: (String) -> Unit,
@@ -155,9 +157,21 @@ fun CourseSchemeCard(
                         }
                     } else {
                         val dayNames = stringArrayResource(R.array.week_days_full_names)
+                        val startAlias = timeSlots.find { it.number == scheme.startSection }?.alias
+                        val endAlias = timeSlots.find { it.number == scheme.endSection }?.alias
+                        val startDisplay = startAlias ?: scheme.startSection.toString()
+                        val endDisplay = endAlias ?: scheme.endSection.toString()
+
+                        val sectionRangeSuffix = stringResource(R.string.label_section_range_suffix)
+                        val timeDesc = if (startDisplay == endDisplay) {
+                            "$startDisplay $sectionRangeSuffix"
+                        } else {
+                            "$startDisplay-$endDisplay $sectionRangeSuffix"
+                        }
+
                         TimeSection(
                             dayName = dayNames.getOrNull(scheme.day - 1) ?: "",
-                            timeDesc = "${scheme.startSection}-${scheme.endSection}${stringResource(R.string.label_section_range_suffix)}",
+                            timeDesc = timeDesc,
                             onClick = onTimeClick,
                             modifier = Modifier.weight(1f).fillMaxHeight()
                         )

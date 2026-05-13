@@ -1,16 +1,15 @@
 package com.xingheyuzhuan.shiguangschedule.data.di
 
 import android.content.Context
-import com.xingheyuzhuan.shiguangschedule.data.db.main.MainAppDatabase
-import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetDatabase
-import com.xingheyuzhuan.shiguangschedule.data.db.main.AppSettingsDao
-import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfigDao
-import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlotDao
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseDao
+import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfigDao
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableDao
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWeekDao
-import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetCourseDao
+import com.xingheyuzhuan.shiguangschedule.data.db.main.MainAppDatabase
+import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlotDao
 import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetAppSettingsDao
+import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetCourseDao
+import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -38,9 +37,6 @@ object DatabaseModule {
     }
 
     // --- 2. 提供主数据库 (MainAppDatabase) 的 DAO ---
-
-    @Provides
-    fun provideAppSettingsDao(db: MainAppDatabase): AppSettingsDao = db.appSettingsDao()
 
     @Provides
     fun provideCourseTableConfigDao(db: MainAppDatabase): CourseTableConfigDao = db.courseTableConfigDao()
