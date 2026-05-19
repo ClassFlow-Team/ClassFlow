@@ -42,7 +42,8 @@ data class MergedCourseBlock(
     val isConflict: Boolean = false,
     val hasNonCurrentWeekCourses: Boolean = false,
     val needsProportionalRendering: Boolean = false,
-    val isVisualDemoted: Boolean = false
+    val isVisualDemoted: Boolean = false,
+    val nonActiveRanges: List<Pair<Float, Float>> = emptyList()
 )
 
 data class WeeklyScheduleUiState(
@@ -379,6 +380,44 @@ class WeeklyScheduleViewModel @Inject constructor(
         val minS = group.minOf { it.start }
         val maxE = group.maxOf { it.end }
 
+        // 提取非本周课程的起止范围集合，用于 UI 局部遮罩绘制
+        val activeRanges = group
+            .filter { item -> item.raw.weeks.any { it.weekNumber == currentWeek } }
+            .map { it.start to it.end }
+
+        // 提取非本周课程占据的所有区间
+        val nonActiveRawRanges = group
+            .filter { item -> item.raw.weeks.none { it.weekNumber == currentWeek } }
+            .map { it.start to it.end }
+
+        // 计算“纯”非本周区域：从非本周区间中剔除被本周区间覆盖的部分
+        val nonActiveRanges = mutableListOf<Pair<Float, Float>>()
+
+        nonActiveRawRanges.forEach { (naStart, naEnd) ->
+            var segments = listOf(naStart to naEnd)
+
+            // 用每一个本周区间去“切割”当前的非本周区间
+            activeRanges.forEach { (aStart, aEnd) ->
+                val nextSegments = mutableListOf<Pair<Float, Float>>()
+                segments.forEach { (sStart, sEnd) ->
+                    if (aStart >= sEnd || aEnd <= sStart) {
+                        // 无交集，保留原片段
+                        nextSegments.add(sStart to sEnd)
+                    } else {
+                        // 有交集，进行切割
+                        if (aStart > sStart) {
+                            nextSegments.add(sStart to aStart) // 保留左侧
+                        }
+                        if (aEnd < sEnd) {
+                            nextSegments.add(aEnd to sEnd) // 保留右侧
+                        }
+                    }
+                }
+                segments = nextSegments
+            }
+            nonActiveRanges.addAll(segments)
+        }
+
         return MergedCourseBlock(
             day = day,
             startSection = (minS - 1f).coerceIn(0f, totalSlots.toFloat()),
@@ -387,7 +426,8 @@ class WeeklyScheduleViewModel @Inject constructor(
             isConflict = isConflict,
             hasNonCurrentWeekCourses = hasNonCurrentWeekCourses,
             needsProportionalRendering = group.any { it.raw.course.isCustomTime },
-            isVisualDemoted = isVisualDemoted
+            isVisualDemoted = isVisualDemoted,
+            nonActiveRanges = nonActiveRanges
         )
     }
 }

@@ -2,7 +2,6 @@ package com.xingheyuzhuan.shiguangschedule.ui.schedule.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -89,6 +88,11 @@ fun CourseBlock(
     }
 
     val textColor = style.courseTextColor ?: MaterialTheme.colorScheme.onSurface
+
+    // 基础高度计算：用于蒙版定位
+    val blockStart = mergedBlock.startSection + 1f
+    val blockEnd = mergedBlock.endSection + 1f
+    val totalLogicalHeight = blockEnd - blockStart
 
     // 字体大小计算逻辑
     val s13 = (13 * style.fontScale).sp
@@ -278,7 +282,7 @@ fun CourseBlock(
             }
         }
 
-        // 非本周课程标记
+        // 非本周课程标记（堆叠图标）
         if (mergedBlock.hasNonCurrentWeekCourses) {
             Icon(
                 painter = painterResource(id = R.drawable.stacks_24px),
@@ -291,7 +295,55 @@ fun CourseBlock(
             )
         }
 
-        // 视觉降级蒙版层
+        // 局部非本周区域蒙版绘制
+        if (!mergedBlock.isVisualDemoted && mergedBlock.nonActiveRanges.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .drawBehind {
+                        if (totalLogicalHeight <= 0) return@drawBehind
+
+                        val stripeWidth = 5.dp.toPx()
+                        val stripeColor = (if (isDarkTheme) Color.White else Color.Black).copy(alpha = 0.06f)
+                        val maskBgColor = (if (isDarkTheme) Color.Black else Color.White).copy(alpha = 0.618f)
+
+                        mergedBlock.nonActiveRanges.forEach { range ->
+                            // 计算该片段相对于整个课程块顶部的偏移百分比
+                            val relativeTop = ((range.first - blockStart) / totalLogicalHeight).coerceIn(0f, 1f)
+                            // 计算该片段相对于整个课程块高度的高度百分比
+                            val relativeHeight = ((range.second - range.first) / totalLogicalHeight).coerceAtLeast(0f)
+
+                            val startOffset = Offset(0f, relativeTop * size.height)
+                            val areaSize = androidx.compose.ui.geometry.Size(size.width, relativeHeight * size.height)
+
+                            // 1. 绘制压暗底色
+                            drawRect(
+                                color = maskBgColor,
+                                topLeft = startOffset,
+                                size = areaSize
+                            )
+
+                            // 2. 绘制斜纹
+                            val brush = Brush.linearGradient(
+                                0.0f to stripeColor,
+                                0.45f to stripeColor,
+                                0.55f to Color.Transparent,
+                                1.0f to Color.Transparent,
+                                start = Offset(0f, 0f),
+                                end = Offset(stripeWidth, stripeWidth),
+                                tileMode = TileMode.Repeated
+                            )
+                            drawRect(
+                                brush = brush,
+                                topLeft = startOffset,
+                                size = areaSize
+                            )
+                        }
+                    }
+            )
+        }
+
+        // 全局视觉降级蒙版层（只有在整个块都没有本周课时触发）
         if (mergedBlock.isVisualDemoted) {
             Box(
                 modifier = Modifier
