@@ -307,10 +307,15 @@
     <string name="toast_import_success">课表导入成功！</string>
     <string name="toast_ics_export_success">日历文件导出成功！</string>
     <string name="error_export_table_not_found">导出失败：找不到课表</string>
-    <string name="error_export_failed">导出失败：\%1$s</string>
-    <string name="error_import_failed">导入失败：\%1$s</string>
+    <string name="error_export_failed">导出失败：%1$s</string>
+    <string name="error_import_failed">导入失败：%1$s</string>
     <string name="error_ics_export_data_failed">日历文件导出失败：获取数据失败</string>
-    <string name="error_ics_export_failed">日历文件导出失败：\%1$s</string>
+    <string name="error_ics_export_failed">日历文件导出失败：%1$s</string>
+    <string name="section_sync">同步</string>
+    <string name="item_sync_to_system_calendar">同步到系统日历</string>
+    <string name="desc_sync_to_system_calendar">将当前课表一键同步至手机系统日历</string>
+    <string name="toast_sync_calendar_success">同步成功</string>
+    <string name="error_sync_calendar_failed">同步失败，请检查日历权限</string>
 
     <!-- 更多设置 -->
     <string name="title_more_options">更多</string>

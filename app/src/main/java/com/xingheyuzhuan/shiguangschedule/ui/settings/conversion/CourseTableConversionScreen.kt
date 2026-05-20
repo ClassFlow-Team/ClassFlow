@@ -1,213 +1,30 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.conversion
 
-import android.app.Activity
-import android.content.Context
-import android.content.Intent
 import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContract
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Destination
-import com.xingheyuzhuan.shiguangschedule.tool.shareFile
-import com.xingheyuzhuan.shiguangschedule.ui.components.CourseTablePickerDialog
-import com.xingheyuzhuan.shiguangschedule.ui.components.NativeNumberPicker
+import com.xingheyuzhuan.shiguangschedule.R
 import kotlinx.coroutines.launch
-import java.io.File
-import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-
-// 自定义文件选择器 Contract，用于导入，只允许选择 JSON 文件
-class OpenJsonDocumentContract : ActivityResultContract<Unit, Uri?>() {
-    override fun createIntent(context: Context, input: Unit): Intent {
-        return Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "application/json"
-        }
-    }
-
-    override fun parseResult(resultCode: Int, intent: Intent?): Uri? {
-        return if (resultCode == Activity.RESULT_OK) intent?.data else null
-    }
-}
-
-// 自定义文件创建器 Contract，用于导出，接受文件名作为输入
-class CreateJsonDocumentContract : ActivityResultContract<String, Uri?>() {
-    override fun createIntent(context: Context, input: String): Intent {
-        return Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "application/json"
-            putExtra(Intent.EXTRA_TITLE, input)
-        }
-    }
-
-    override fun parseResult(resultCode: Int, intent: Intent?): Uri? {
-        return if (resultCode == Activity.RESULT_OK) intent?.data else null
-    }
-}
-
-// 自定义 ICS 文件创建器 Contract
-class CreateIcsDocumentContract : ActivityResultContract<String, Uri?>() {
-    override fun createIntent(context: Context, input: String): Intent {
-        return Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "text/calendar" // ICS 文件的 MIME 类型
-            putExtra(Intent.EXTRA_TITLE, input)
-        }
-    }
-
-    override fun parseResult(resultCode: Int, intent: Intent?): Uri? {
-        return if (resultCode == Activity.RESULT_OK) intent?.data else null
-    }
-}
-
-private data class LocalizedAlarmOption(val value: Int?, private val displayString: String) {
-    override fun toString(): String = displayString
-}
-
-@Composable
-fun AlarmMinutesPicker(
-    modifier: Modifier = Modifier,
-    initialValue: Int? = 15,
-    onValueSelected: (Int?) -> Unit,
-    itemHeight: Dp
-) {
-    val alarmOptionNone = stringResource(R.string.alarm_option_none)
-    val alarmOptionOnTime = stringResource(R.string.alarm_option_on_time)
-
-    val localizedOptions = remember(alarmOptionNone, alarmOptionOnTime) {
-        buildList {
-            add(LocalizedAlarmOption(null, alarmOptionNone))
-            add(LocalizedAlarmOption(0, alarmOptionOnTime))
-            for (i in 1..60) {
-                add(LocalizedAlarmOption(i, i.toString()))
-            }
-        }
-    }
-
-    val initialOption = remember(initialValue, localizedOptions) {
-        localizedOptions.find { it.value == initialValue } ?: localizedOptions.find { it.value == 15 }!!
-    }
-
-    NativeNumberPicker(
-        values = localizedOptions,
-        selectedValue = initialOption,
-        onValueChange = { selectedOption ->
-            onValueSelected(selectedOption.value)
-        },
-        modifier = modifier,
-        itemHeight = itemHeight
-    )
-}
-
-// ICS 导出对话框，用于选择提醒时间和课表
-@Composable
-fun IcsExportDialog(
-    onDismissRequest: () -> Unit,
-    onConfirm: (String, Int?) -> Unit
-) {
-    var alarmMinutes by remember { mutableStateOf<Int?>(15) }
-    var showTablePicker by remember { mutableStateOf(false) }
-
-    val dialogTitleSelectExportTable = stringResource(R.string.dialog_title_select_export_table)
-
-    // 当 showTablePicker 为 false 时，显示第一个对话框（提醒时间选择）
-    if (!showTablePicker) {
-        AlertDialog(
-            onDismissRequest = onDismissRequest,
-            title = {
-                Text(text = stringResource(R.string.dialog_title_ics_export_settings))
-            },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(stringResource(R.string.label_select_alarm_time))
-                    Spacer(modifier = Modifier.height(16.dp))
-                    AlarmMinutesPicker(
-                        modifier = Modifier.width(150.dp),
-                        onValueSelected = { minutes -> alarmMinutes = minutes },
-                        itemHeight = 48.dp
-                    )
-                }
-            },
-            confirmButton = {
-                Button(onClick = { showTablePicker = true }) {
-                    Text(stringResource(R.string.action_next_step))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = onDismissRequest) {
-                    Text(stringResource(R.string.action_cancel))
-                }
-            }
-        )
-    }
-
-    // 当 showTablePicker 为 true 时，显示第二个对话框（课表选择）
-    if (showTablePicker) {
-        CourseTablePickerDialog(
-            title = dialogTitleSelectExportTable,
-            // 这里我们希望关闭课表选择器时，整个导出流程都结束
-            onDismissRequest = onDismissRequest,
-            onTableSelected = { selectedTable ->
-                // 在回调中，同时传递课表ID和之前选择的提醒时间
-                onConfirm(selectedTable.id, alarmMinutes)
-            }
-        )
-    }
-}
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -221,61 +38,39 @@ fun CourseTableConversionScreen(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    // 各项系统文字资源
     val snackbarCannotOpenFile = stringResource(R.string.snackbar_cannot_open_file)
     val snackbarFileSelectionCanceled = stringResource(R.string.snackbar_file_selection_canceled)
     val snackbarCannotSaveFile = stringResource(R.string.snackbar_cannot_save_file)
     val snackbarFileSaveCanceled = stringResource(R.string.snackbar_file_save_canceled)
     val snackbarFileCopyFailedForShare = stringResource(R.string.snackbar_file_copy_failed_for_share)
-
-    val dialogTitleFileSaved = stringResource(R.string.dialog_title_file_saved)
-    val dialogTextFileSavedSharePrompt = stringResource(R.string.dialog_text_file_saved_share_prompt)
-    val actionShare = stringResource(R.string.action_share)
-    val actionCancel = stringResource(R.string.action_cancel)
+    val snackbarCalendarPermissionDenied = stringResource(R.string.error_sync_calendar_failed)
 
     var pendingImportTableId by remember { mutableStateOf<String?>(null) }
     var pendingExportJsonContent by remember { mutableStateOf<String?>(null) }
     var pendingExportIcsTableId by remember { mutableStateOf<String?>(null) }
     var pendingAlarmMinutes by remember { mutableStateOf<Int?>(null) }
-
-    // 新增状态，用于显示分享弹窗。保存公共目录的Uri和原始文件名。
     var showShareDialog by remember { mutableStateOf<Triple<Uri, String, String>?>(null) }
 
-    // 文件导入启动器
-    val importLauncher = rememberLauncherForActivityResult(OpenJsonDocumentContract()) { uri: Uri? ->
+    val importLauncher = rememberLauncherForActivityResult(OpenJsonDocumentContract()) { uri ->
         val tableId = pendingImportTableId
         if (uri != null && tableId != null) {
-            val inputStream: InputStream? = try {
-                context.contentResolver.openInputStream(uri)
-            } catch (e: Exception) {
-                null
-            }
-            if (inputStream != null) {
-                viewModel.handleFileImport(tableId, inputStream)
-            } else {
-                coroutineScope.launch { snackbarHostState.showSnackbar(snackbarCannotOpenFile) }
-            }
+            val inputStream: InputStream? = try { context.contentResolver.openInputStream(uri) } catch (e: Exception) { null }
+            if (inputStream != null) viewModel.handleFileImport(tableId, inputStream)
+            else coroutineScope.launch { snackbarHostState.showSnackbar(snackbarCannotOpenFile) }
         } else if (uri == null) {
             coroutineScope.launch { snackbarHostState.showSnackbar(snackbarFileSelectionCanceled) }
         }
         pendingImportTableId = null
     }
 
-    // 文件导出启动器
-    val exportLauncher = rememberLauncherForActivityResult(CreateJsonDocumentContract()) { uri: Uri? ->
+    val exportLauncher = rememberLauncherForActivityResult(CreateJsonDocumentContract()) { uri ->
         val jsonContent = pendingExportJsonContent
         val filename = "shiguangschedule_${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))}.json"
         if (uri != null && jsonContent != null) {
-            val outputStream: OutputStream? = try {
-                context.contentResolver.openOutputStream(uri)
-            } catch (e: Exception) {
-                null
-            }
+            val outputStream: OutputStream? = try { context.contentResolver.openOutputStream(uri) } catch (e: Exception) { null }
             if (outputStream != null) {
-                // 将文件内容写入
-                outputStream.bufferedWriter().use { writer ->
-                    writer.write(jsonContent)
-                }
-                // 在文件保存成功后，设置状态以显示分享弹窗。我们保存公共Uri和我们想要的原始文件名。
+                outputStream.bufferedWriter().use { it.write(jsonContent) }
                 showShareDialog = Triple(uri, "application/json", filename)
             } else {
                 coroutineScope.launch { snackbarHostState.showSnackbar(snackbarCannotSaveFile) }
@@ -286,20 +81,14 @@ fun CourseTableConversionScreen(
         pendingExportJsonContent = null
     }
 
-    // ICS 文件导出启动器
-    val icsExportLauncher = rememberLauncherForActivityResult(CreateIcsDocumentContract()) { uri: Uri? ->
+    val icsExportLauncher = rememberLauncherForActivityResult(CreateIcsDocumentContract()) { uri ->
         val tableId = pendingExportIcsTableId
         val alarmMinutes = pendingAlarmMinutes
         val filename = "shiguangschedule_${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))}.ics"
         if (uri != null && tableId != null) {
-            val outputStream: OutputStream? = try {
-                context.contentResolver.openOutputStream(uri)
-            } catch (e: Exception) {
-                null
-            }
+            val outputStream: OutputStream? = try { context.contentResolver.openOutputStream(uri) } catch (e: Exception) { null }
             if (outputStream != null) {
                 viewModel.handleIcsExport(tableId, outputStream, alarmMinutes)
-                // 在文件保存成功后，设置状态以显示分享弹窗。我们保存公共Uri和我们想要的原始文件名。
                 showShareDialog = Triple(uri, "text/calendar", filename)
             } else {
                 coroutineScope.launch { snackbarHostState.showSnackbar(snackbarCannotSaveFile) }
@@ -311,6 +100,13 @@ fun CourseTableConversionScreen(
         pendingAlarmMinutes = null
     }
 
+    val calendarPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions.values.all { it }) viewModel.onSyncToCalendarClick()
+        else coroutineScope.launch { snackbarHostState.showSnackbar(snackbarCalendarPermissionDenied) }
+    }
+
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
@@ -320,41 +116,43 @@ fun CourseTableConversionScreen(
                 }
                 is ConversionEvent.LaunchExportFileCreator -> {
                     pendingExportJsonContent = event.jsonContent
-                    val now = LocalDateTime.now()
-                    val formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
-                    val timestamp = now.format(formatter)
-                    val filename = "shiguangschedule_$timestamp.json"
-                    exportLauncher.launch(filename)
+                    val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+                    exportLauncher.launch("shiguangschedule_$timestamp.json")
                 }
                 is ConversionEvent.LaunchExportIcsFileCreator -> {
                     pendingExportIcsTableId = event.tableId
                     pendingAlarmMinutes = event.alarmMinutes
-                    val now = LocalDateTime.now()
-                    val formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
-                    val timestamp = now.format(formatter)
-                    val filename = "shiguangschedule_$timestamp.ics"
-                    icsExportLauncher.launch(filename)
+                    val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+                    icsExportLauncher.launch("shiguangschedule_$timestamp.ics")
                 }
-                is ConversionEvent.ShowMessage -> {
-                    snackbarHostState.showSnackbar(event.message)
-                }
+                is ConversionEvent.ShowMessage -> snackbarHostState.showSnackbar(event.message)
             }
         }
     }
 
+    // 页面树结构中心
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.title_conversion)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.a11y_back)
-                        )
+            Column {
+                TopAppBar(
+                    title = { Text(stringResource(R.string.title_conversion)) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.a11y_back)
+                            )
+                        }
                     }
+                )
+                if (uiState.isLoading) {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
                 }
-            )
+            }
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { paddingValues ->
@@ -366,250 +164,130 @@ fun CourseTableConversionScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(16.dp))
+
+            // 类别一：文件转换
             Text(stringResource(R.string.section_file_conversion), style = MaterialTheme.typography.titleLarge, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(onClick = { viewModel.onImportClick() })
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(stringResource(R.string.item_import_course_file), style = MaterialTheme.typography.bodyLarge)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = stringResource(R.string.desc_import_json),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.Filled.ChevronRight,
-                            contentDescription = stringResource(R.string.a11y_import),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    ConversionRow(
+                        title = stringResource(R.string.item_import_course_file),
+                        desc = stringResource(R.string.desc_import_json),
+                        onClick = { viewModel.onImportClick() }
+                    )
                     HorizontalDivider()
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(onClick = { viewModel.onExportClick() })
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(stringResource(R.string.item_export_course_file), style = MaterialTheme.typography.bodyLarge)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = stringResource(R.string.desc_export_json_with_config),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.Filled.ChevronRight,
-                            contentDescription = stringResource(R.string.a11y_export),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    ConversionRow(
+                        title = stringResource(R.string.item_export_course_file),
+                        desc = stringResource(R.string.desc_export_json_with_config),
+                        onClick = { viewModel.onExportClick() }
+                    )
                     HorizontalDivider()
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(enabled = !uiState.isLoading, onClick = { viewModel.onExportIcsClick() })
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(stringResource(R.string.item_export_ics_file), style = MaterialTheme.typography.bodyLarge)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = stringResource(R.string.desc_export_ics_with_alarm),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        if (uiState.isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.height(20.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Filled.ChevronRight,
-                                contentDescription = stringResource(R.string.a11y_export),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                    ConversionRow(
+                        title = stringResource(R.string.item_export_ics_file),
+                        desc = stringResource(R.string.desc_export_ics_with_alarm),
+                        onClick = { viewModel.onExportIcsClick() }
+                    )
                 }
             }
+
             Spacer(Modifier.height(16.dp))
+
+            // 类别二：教务导入
             Text(stringResource(R.string.section_school_import), style = MaterialTheme.typography.titleLarge, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onNavigate(Destination.SchoolSelectionListScreen) }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.item_school_system_import),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = stringResource(R.string.desc_school_import_quick),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ConversionRow(
+                        title = stringResource(R.string.item_school_system_import),
+                        desc = stringResource(R.string.desc_school_import_quick),
+                        onClick = { onNavigate(Destination.SchoolSelectionListScreen) }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // 类别三：系统同步
+            Text(stringResource(R.string.section_sync), style = MaterialTheme.typography.titleLarge, modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(8.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    ConversionRow(
+                        title = stringResource(R.string.item_sync_to_system_calendar),
+                        desc = stringResource(R.string.desc_sync_to_system_calendar),
+                        onClick = {
+                            calendarPermissionLauncher.launch(
+                                arrayOf(
+                                    android.Manifest.permission.READ_CALENDAR,
+                                    android.Manifest.permission.WRITE_CALENDAR
+                                )
                             )
                         }
-                        Icon(
-                            imageVector = Icons.Filled.ChevronRight,
-                            contentDescription = stringResource(R.string.a11y_details),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    )
                 }
             }
         }
     }
 
-    if (uiState.showImportTableDialog) {
-        CourseTablePickerDialog(
-            title = stringResource(R.string.dialog_title_select_import_table),
-            onDismissRequest = { viewModel.dismissDialog() },
-            onTableSelected = { selectedTable ->
-                viewModel.onImportTableSelected(selectedTable.id)
+    // --- 独立分离出来的挂载弹窗部分 ---
+
+    ConversionDialogOverlay(
+        uiState = uiState,
+        onDismiss = { viewModel.dismissDialog() },
+        onConfirmImport = { viewModel.onImportTableSelected(it) },
+        onConfirmExport = { id, mins -> viewModel.onExportTableSelected(id, mins) }
+    )
+
+    showShareDialog?.let { shareData ->
+        ShareFileDialog(
+            shareData = shareData,
+            context = context,
+            onDismiss = { showShareDialog = null },
+            onCopyFailed = {
+                coroutineScope.launch { snackbarHostState.showSnackbar(snackbarFileCopyFailedForShare) }
             }
         )
     }
+}
 
-    if (uiState.showExportTableDialog) {
-        when (uiState.exportType) {
-            ExportType.JSON -> {
-                CourseTablePickerDialog(
-                    title = stringResource(R.string.dialog_title_select_export_table),
-                    onDismissRequest = { viewModel.dismissDialog() },
-                    onTableSelected = { selectedTable ->
-                        viewModel.onExportTableSelected(selectedTable.id, null)
-                    }
-                )
-            }
-            ExportType.ICS -> {
-                IcsExportDialog(
-                    onDismissRequest = { viewModel.dismissDialog() },
-                    onConfirm = { tableId, alarmMinutes ->
-                        viewModel.onExportTableSelected(tableId, alarmMinutes)
-                    }
-                )
-            }
-            else -> {
-            }
+/**
+ * 提取抽离的无障碍条目子组件，简化核心页面树
+ */
+@Composable
+private fun ConversionRow(
+    title: String,
+    desc: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(desc, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-    }
-
-    if (showShareDialog != null) {
-        AlertDialog(
-            onDismissRequest = { showShareDialog = null },
-            title = { Text(dialogTitleFileSaved) },
-            text = { Text(dialogTextFileSavedSharePrompt) },
-            confirmButton = {
-                TextButton(onClick = {
-                    val (publicUri, mimeType, defaultFilename) = showShareDialog!!
-
-                    val userDefinedFilename = context.contentResolver.query(
-                        publicUri,
-                        arrayOf(OpenableColumns.DISPLAY_NAME), // 明确指定要查询的列名
-                        null,
-                        null,
-                        null
-                    )?.use { cursor ->
-                        if (cursor.moveToFirst()) {
-                            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                            // 检查索引是否有效
-                            if (nameIndex >= 0) {
-                                cursor.getString(nameIndex)
-                            } else null
-                        } else null
-                    } ?: defaultFilename // 如果查询失败，回退到代码中的默认时间戳文件名
-
-                    // 确保 share_temp 目录存在
-                    val shareTempDir = File(context.cacheDir, "share_temp")
-                    if (!shareTempDir.exists()) {
-                        shareTempDir.mkdirs()
-                    }
-
-                    val tempFile = File(shareTempDir, userDefinedFilename)
-
-                    try {
-                        context.contentResolver.openInputStream(publicUri)?.use { input ->
-                            FileOutputStream(tempFile).use { output ->
-                                input.copyTo(output)
-                            }
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        coroutineScope.launch { snackbarHostState.showSnackbar(snackbarFileCopyFailedForShare) }
-                        showShareDialog = null
-                        return@TextButton
-                    }
-
-                    // FileProvider 将会根据 tempFile 的名称来设置分享的文件名
-                    val shareUri = FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        tempFile
-                    )
-
-                    // 使用 FileProvider 的 Uri 来分享
-                    shareFile(context, shareUri, mimeType)
-
-                    showShareDialog = null
-                }) {
-                    Text(actionShare)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showShareDialog = null
-                }) {
-                    Text(actionCancel)
-                }
-            }
+        Icon(
+            imageVector = Icons.Filled.ChevronRight,
+            contentDescription = stringResource(R.string.a11y_details),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

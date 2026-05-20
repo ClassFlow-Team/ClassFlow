@@ -312,6 +312,11 @@
     <string name="error_ics_export_failed">Calendar export failed: %1$s</string>
     
     <!-- More Settings -->
+    <string name="section_sync">Sync</string>
+    <string name="item_sync_to_system_calendar">Sync to System Calendar</string>
+    <string name="desc_sync_to_system_calendar">Sync the current schedule to your phone\\\'s system calendar with one click</string>
+    <string name="toast_sync_calendar_success">Synced successfully</string>
+    <string name="error_sync_calendar_failed">Sync failed. Please check calendar permissions.</string>
     <string name="title_more_options">More</string>
     <string name="a11y_app_icon">App icon</string>
     <string name="a11y_navigate">Navigate</string>
