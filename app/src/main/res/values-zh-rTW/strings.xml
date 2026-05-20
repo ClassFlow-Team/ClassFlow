@@ -306,12 +306,13 @@
     <string name="toast_import_success">課表匯入成功！</string>
     <string name="toast_ics_export_success">行事曆檔案匯出成功！</string>
     <string name="error_export_table_not_found">匯出失敗：找不到課表</string>
-    <string name="error_export_failed">匯出失敗：\%1$s</string>
-    <string name="error_import_failed">匯入失敗：\%1$s</string>
+    <string name="error_export_failed">匯出失敗：%1$s</string>
+    <string name="error_import_failed">匯入失敗：%1$s</string>
     <string name="error_ics_export_data_failed">行事曆檔案匯出失敗：取得資料失敗</string>
-    <string name="error_ics_export_failed">行事曆檔案匯出失敗：\%1$s</string>
+    <string name="error_ics_export_failed">行事曆檔案匯出失敗：%1$s</string>
     
     <!-- 更多設定 -->
+    <string name="error_sync_calendar_failed">同步失敗，請檢查行事曆權限</string>
     <string name="title_more_options">更多</string>
     <string name="a11y_app_icon">應用程式圖示</string>
     <string name="a11y_navigate">跳轉</string>
@@ -525,5 +526,9 @@
     <string name="theme_color_hint">說明：改變此顏色後，系統將作為種子色重新計算全應用配色方案。</string>
     <string name="label_page_text_color">課表頁面文字顏色</string>
     <string name="widget_course_remaining_count">剩餘 %1$d 節</string>
+    <string name="section_sync">同步</string>
+    <string name="item_sync_to_system_calendar">同步至系統行事曆</string>
+    <string name="desc_sync_to_system_calendar">將目前课表一鍵同步至手機系統行事曆</string>
+    <string name="toast_sync_calendar_success">同步成功</string>
 
 </resources>

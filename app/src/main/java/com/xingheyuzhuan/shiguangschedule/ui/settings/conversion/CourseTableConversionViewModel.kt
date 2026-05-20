@@ -125,7 +125,7 @@ class CourseTableConversionViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
-                val icsContent = courseConversionRepository.exportToIcsString(tableId, alarmMinutes)
+                val icsContent = courseConversionRepository.exportToIcsString(context,tableId, alarmMinutes)
                 if (icsContent != null) {
                     outputStream.bufferedWriter(Charset.forName("UTF-8")).use { writer ->
                         writer.write(icsContent)
@@ -139,6 +139,26 @@ class CourseTableConversionViewModel @Inject constructor(
             } catch (e: Exception) {
                 Log.e("CourseTableConversionViewModel", "日历文件导出失败：${e.message}", e)
                 val message = context.getString(R.string.error_ics_export_failed, e.message)
+                _events.send(ConversionEvent.ShowMessage(message))
+            } finally {
+                _uiState.value = _uiState.value.copy(isLoading = false)
+            }
+        }
+    }
+
+    fun onSyncToCalendarClick() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            try {
+                val success = courseConversionRepository.syncCurrentTableToSystemCalendar(context)
+                val message = if (success) {
+                    context.getString(R.string.toast_sync_calendar_success)
+                } else {
+                    context.getString(R.string.error_sync_calendar_failed)
+                }
+                _events.send(ConversionEvent.ShowMessage(message))
+            } catch (e: Exception) {
+                val message = context.getString(R.string.error_sync_calendar_failed)
                 _events.send(ConversionEvent.ShowMessage(message))
             } finally {
                 _uiState.value = _uiState.value.copy(isLoading = false)

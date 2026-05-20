@@ -1,5 +1,7 @@
 package com.xingheyuzhuan.shiguangschedule.data.repository
 
+import android.content.Context
+import android.provider.CalendarContract
 import androidx.room.Transaction
 import com.xingheyuzhuan.shiguangschedule.data.db.main.Course
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseDao
@@ -14,8 +16,11 @@ import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.Cou
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.ExportCourseJsonModel
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.ImportCourseJsonModel
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.TimeSlotJsonModel
+import com.xingheyuzhuan.shiguangschedule.tool.CalendarAccountManager
 import com.xingheyuzhuan.shiguangschedule.tool.IcsExportTool
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.util.UUID
 import javax.inject.Inject
@@ -339,36 +344,91 @@ class CourseConversionRepository @Inject constructor(
 
     /**
      * 将指定课表下的所有课程数据导出为 ICS 日历文件的内容字符串。
-     *
-     * @param tableId 要导出的课表的 ID。
-     * @param alarmMinutes 可选的提醒时间，单位分钟。传入null则不设置提醒。
-     * @return 包含 ICS 日历文件内容的字符串，如果失败则返回 null。
      */
-    suspend fun exportToIcsString(tableId: String, alarmMinutes: Int?): String? {
+    suspend fun exportToIcsString(context: Context,tableId: String, alarmMinutes: Int?): String? {
         val courses = courseDao.getCoursesWithWeeksByTableId(tableId).first()
         val timeSlots = timeSlotDao.getTimeSlotsByCourseTableId(tableId).first()
 
-        // 从 AppSettings 获取全局设置 (用于 skippedDates)
         val appSettings = appSettingsRepository.getAppSettingsOnce()
-        val skippedDates = appSettings.skippedDates
-
-        // 从 CourseTableConfig 获取课表配置 (用于日期和总周数)
         val courseConfig = appSettingsRepository.getCourseConfigOnce(tableId)
-        val semesterStartDate = courseConfig?.semesterStartDate?.let { LocalDate.parse(it) }
+        val semesterStartDate = courseConfig?.semesterStartDate?.let {
+            try { LocalDate.parse(it) } catch (_: Exception) { null }
+        }
 
-        // 检查必要配置是否存在
         if (semesterStartDate == null || courseConfig.semesterTotalWeeks <= 0) {
             return null
         }
 
         return IcsExportTool.generateIcsFileContent(
+            context = context,
             courses = courses,
             timeSlots = timeSlots,
             semesterStartDate = semesterStartDate,
             semesterTotalWeeks = courseConfig.semesterTotalWeeks,
             firstDayOfWeekInt = courseConfig.firstDayOfWeek,
             alarmMinutes = alarmMinutes,
-            skippedDates = skippedDates
+            skippedDates = appSettings.skippedDates
         )
+    }
+
+    /**
+     * 一键同步当前课表到系统日历
+     * 调用方无需传入 tableId 或分钟数，全自动从配置中读取。
+     */
+    suspend fun syncCurrentTableToSystemCalendar(context: Context): Boolean {
+        val appSettings = appSettingsRepository.getAppSettingsOnce()
+        val currentTableId = appSettings.currentCourseTableId
+        if (currentTableId.isEmpty()) return true
+
+        val courses = courseDao.getCoursesWithWeeksByTableId(currentTableId).first()
+        val timeSlots = timeSlotDao.getTimeSlotsByCourseTableId(currentTableId).first()
+        val alarmMinutes = appSettings.remindBeforeMinutes
+        val courseConfig = appSettingsRepository.getCourseConfigOnce(currentTableId)
+
+        val semesterStartDate = courseConfig?.semesterStartDate?.let {
+            try { LocalDate.parse(it) } catch (_: Exception) { null }
+        }
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val calendarId = CalendarAccountManager.getOrCreateCalendarId(context)
+                if (calendarId == -1L) return@withContext true
+
+                val resolver = context.contentResolver
+                resolver.delete(
+                    CalendarContract.Events.CONTENT_URI,
+                    "${CalendarContract.Events.CALENDAR_ID} = ?",
+                    arrayOf(calendarId.toString())
+                )
+                if (semesterStartDate == null || courseConfig.semesterTotalWeeks <= 0 || courses.isEmpty()) {
+                    return@withContext true
+                }
+
+                // 生成插入指令
+                val ops = IcsExportTool.generateCalendarOps(
+                    context = context,
+                    courses = courses,
+                    timeSlots = timeSlots,
+                    semesterStartDate = semesterStartDate,
+                    semesterTotalWeeks = courseConfig.semesterTotalWeeks,
+                    firstDayOfWeekInt = courseConfig.firstDayOfWeek,
+                    calendarId = calendarId,
+                    alarmMinutes = alarmMinutes,
+                    skippedDates = appSettings.skippedDates
+                )
+
+                if (ops.isNotEmpty()) {
+                    resolver.applyBatch(CalendarContract.AUTHORITY, ops)
+                }
+
+                true
+            } catch (se: SecurityException) {
+                se.printStackTrace()
+                false
+            } catch (e: Exception) {
+                e.printStackTrace()
+                true
+            }
+        }
     }
 }
