@@ -11,7 +11,7 @@ CONTRIBUTORS_BASE_DIR="./app/src/main/assets/contributors_data"
 OUTPUT_JSON_FILE="${CONTRIBUTORS_BASE_DIR}/contributors.json"
 AVATAR_DIR="${CONTRIBUTORS_BASE_DIR}/avatars"
 
-# 隔离列表 定义要排除的贡献者用户名 (login)，例如：CI/CD bot、AI 工具等
+# 隔离列表 定义要排除的贡献者用户名 (login)
 EXCLUDE_USERS_ARRAY=(
     "github-actions"
     "dependabot[bot]"
@@ -35,18 +35,51 @@ fetch_and_process_repo() {
     local API_URL="$1"
     local REPO_NAME="$2"
 
-    echo "--- 正在从 [${REPO_NAME}] 获取贡献者列表... ---" >&2
-    DATA=$(curl -s "${API_URL}")
+    local PAGE=1
+    local PER_PAGE=100
+    local RAW_DATA="[]"
 
-    if [ -z "$DATA" ]; then
-        echo "警告: 无法从 ${REPO_NAME} 获取数据，跳过。" >&2
+    echo "--- 正在从 [${REPO_NAME}] 获取全部贡献者列表... ---" >&2
+
+    # 分页循环抓取
+    while true; do
+        echo "正在读取第 ${PAGE} 页..." >&2
+
+        local PAGE_DATA
+        PAGE_DATA=$(curl -s "${API_URL}?per_page=${PER_PAGE}&page=${PAGE}")
+
+        if [ -z "$PAGE_DATA" ] || ! echo "$PAGE_DATA" | jq -e 'if type == "array" then true else false end' >/dev/null 2>&1; then
+            local ERR_MSG=$(echo "$PAGE_DATA" | jq -r '.message? // "未知错误/格式非法"')
+            echo "错误: 无法从 ${REPO_NAME} 获取第 ${PAGE} 页数据 (原因: ${ERR_MSG})，终止此仓库抓取。" >&2
+            break
+        fi
+
+        # 2. 如果当前页返回的是空数组 []，说明已经抓取完毕
+        local DATA_LENGTH=$(echo "$PAGE_DATA" | jq '. | length')
+        if [ "$DATA_LENGTH" -eq 0 ]; then
+            break
+        fi
+
+        # 将当前页的数据合并到总数据中
+        RAW_DATA=$(jq -n --argjson base "$RAW_DATA" --argjson new "$PAGE_DATA" '$base + $new')
+
+        # 如果当前页返回的数据少于 per_page，说明这已经是最后一页了，提前退出
+        if [ "$DATA_LENGTH" -lt "$PER_PAGE" ]; then
+            break
+        fi
+
+        ((PAGE++))
+    done
+
+    if [ "$RAW_DATA" = "[]" ]; then
+        echo "警告: 没有从 ${REPO_NAME} 获取到任何数据。" >&2
         echo "[]"
         return
     fi
 
-    # 1. 格式化数据并过滤，将纯净的 JSON 数组存储在变量中
-    FINAL_LIST=$(echo "$DATA" | jq --argjson EXCLUDES "$EXCLUDE_JSON" -c '
-        # 过滤和映射为最终结构
+    # 1. 过滤和格式化最终结构
+    local FINAL_LIST
+    FINAL_LIST=$(echo "$RAW_DATA" | jq --argjson EXCLUDES "$EXCLUDE_JSON" -c '
         map(select((.login | IN($EXCLUDES[])) | not))
         |
         map({
@@ -58,14 +91,15 @@ fetch_and_process_repo() {
 
     echo "--- 成功获取数据，正在下载头像... ---" >&2
 
-    # 2. 使用纯净的 FINAL_LIST 变量来驱动下载循环
+    # 使用过滤后的列表下载头像
     echo "$FINAL_LIST" | jq -c '.[]' | while read -r contributor; do
-        ID=$(echo "$contributor" | jq -r '(.avatar | sub("avatars/"; "") | sub(".png"; "") )')
-        LOGIN=$(echo "$contributor" | jq -r '.name')
+        local ID=$(echo "$contributor" | jq -r '(.avatar | sub("avatars/"; "") | sub(".png"; "") )')
+        local LOGIN=$(echo "$contributor" | jq -r '.name')
 
-        AVATAR_URL_BASE=$(echo "$DATA" | jq -r ".[] | select(.login == \"$LOGIN\") | .avatar_url")
-        AVATAR_URL_RESIZED="${AVATAR_URL_BASE}&s=160"
-        FINAL_FILE="${AVATAR_DIR}/${ID}.png"
+        # 从原始总数据中匹配出对应的 avatar_url
+        local AVATAR_URL_BASE=$(echo "$RAW_DATA" | jq -r ".[] | select(.login == \"$LOGIN\") | .avatar_url")
+        local AVATAR_URL_RESIZED="${AVATAR_URL_BASE}&s=160"
+        local FINAL_FILE="${AVATAR_DIR}/${ID}.png"
 
         if [ ! -f "${FINAL_FILE}" ]; then
             echo "    [下载] ${ID}.png" >&2
@@ -73,7 +107,6 @@ fetch_and_process_repo() {
         fi
     done
 
-    # 3. 将变量中的纯净 JSON 数组输出到 stdout 作为函数返回值
     echo "$FINAL_LIST"
 }
 
