@@ -276,6 +276,7 @@
     <string name="toast_slot_modified_unsaved">时间段已修改，请点击保存以更新数据库</string>
     <string name="toast_slot_added_unsaved">时间段已添加至列表，请点击保存以更新数据库</string>
     <string name="label_time_slot_alias">别名(可选)</string>
+    <string name="toast_time_conflict">选择的时间超出了前后课时限制范围</string>
 
     <!-- 课表导入/导出 -->
     <string name="title_conversion">课表导入/导出</string>

@@ -277,6 +277,7 @@
 
     <!-- 課表匯入/匯出 -->
     <string name="label_time_slot_alias">別名 (選填)</string>
+    <string name="toast_time_conflict">選擇的時間超出了前後課時限制範圍</string>
     <string name="title_conversion">課表匯入/匯出</string>
     <string name="section_file_conversion">檔案匯入/匯出</string>
     <string name="item_import_course_file">課程檔案匯入</string>

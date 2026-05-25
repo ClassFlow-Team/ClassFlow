@@ -278,6 +278,7 @@
     <string name="label_time_slot_alias">别名(可选)</string>
 
     <!-- 课表导入/导出 -->
+    <string name="toast_time_conflict">选择的时间超出了前后课时限制范围</string>
     <string name="title_conversion">课表导入/导出</string>
     <string name="section_file_conversion">文件导入/导出</string>
     <string name="item_import_course_file">课程文件导入</string>
