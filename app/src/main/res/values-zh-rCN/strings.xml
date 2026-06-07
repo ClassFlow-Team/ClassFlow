@@ -276,9 +276,9 @@
     <string name="toast_slot_modified_unsaved">时间段已修改，请点击保存以更新数据库</string>
     <string name="toast_slot_added_unsaved">时间段已添加至列表，请点击保存以更新数据库</string>
     <string name="label_time_slot_alias">别名(可选)</string>
+    <string name="toast_time_conflict">选择的时间超出了前后课时限制范围</string>
 
     <!-- 课表导入/导出 -->
-    <string name="toast_time_conflict">选择的时间超出了前后课时限制范围</string>
     <string name="title_conversion">课表导入/导出</string>
     <string name="section_file_conversion">文件导入/导出</string>
     <string name="item_import_course_file">课程文件导入</string>
@@ -495,9 +495,9 @@
     <string name="border_type_dashed">虚线</string>
     <string name="label_range">范围</string>
     <string name="placeholder_input_value">请输入数值</string>
-    <string name="label_overlap_style_toggle">重叠课程块样式切换</string>
     <string name="label_page_text_color">课表页面文字颜色</string>
     <string name="label_course_text_color">课程块文字颜色</string>
+    <string name="label_schedule_mode_24h">24小时时间轴模式</string>
 
     <!-- 快捷操作 -->
     <string name="item_quick_actions">快捷操作</string>

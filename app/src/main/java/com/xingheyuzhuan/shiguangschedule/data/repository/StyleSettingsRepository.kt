@@ -10,6 +10,7 @@ import com.xingheyuzhuan.shiguangschedule.data.model.DualColor
 import com.xingheyuzhuan.shiguangschedule.data.model.ScheduleGridStyle
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.BorderTypeProto
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleGridStyleProto
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleModeProto
 import com.xingheyuzhuan.shiguangschedule.data.model.toCompose
 import com.xingheyuzhuan.shiguangschedule.data.model.toProto
 import com.xingheyuzhuan.shiguangschedule.widget.updateAllWidgets
@@ -130,10 +131,6 @@ class StyleSettingsRepository @Inject constructor(
         it.copy(course_block_alpha_float = alpha)
     }
 
-    /** 设置重叠样式切换开关 */
-    suspend fun setOverlapStyleToggle(enabled: Boolean) = updateStyle {
-        it.copy(overlap_style_toggle = enabled)
-    }
 
     /** 设置颜色列表映射 */
     suspend fun setCourseColorMaps(maps: List<DualColor>) {
@@ -206,6 +203,11 @@ class StyleSettingsRepository @Inject constructor(
     /** 设置边框类型 */
     suspend fun setBorderType(type: BorderTypeProto) = updateStyle {
         it.copy(border_type = type)
+    }
+
+    /** 设置课表展示模式（传统节次模式 vs 24小时绝对时间轴模式） */
+    suspend fun setScheduleMode(mode: ScheduleModeProto) = updateStyle {
+        it.copy(schedule_mode = mode)
     }
 
     /**

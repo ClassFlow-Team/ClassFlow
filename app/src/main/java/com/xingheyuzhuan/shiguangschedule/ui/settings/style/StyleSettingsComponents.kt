@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -54,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -63,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.BorderTypeProto
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleModeProto
 import com.xingheyuzhuan.shiguangschedule.ui.components.AdvancedColorPicker
 import com.xingheyuzhuan.shiguangschedule.ui.components.ColorPickerConfig
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.WeeklyScheduleUiState
@@ -118,6 +121,17 @@ fun SettingsListContent(
             onClick = onWallpaperClick,
             onLongClick = { viewModel.removeWallpaper(context) }
         )
+        StyleSwitchItem(
+            label = stringResource(R.string.label_schedule_mode_24h),
+            checked = currentStyle.scheduleMode == ScheduleModeProto.TIME_24H_MODE
+        ) { isChecked ->
+            val targetMode = if (isChecked) {
+                ScheduleModeProto.TIME_24H_MODE
+            } else {
+                ScheduleModeProto.SECTION_MODE
+            }
+            viewModel.updateScheduleMode(targetMode)
+        }
         StyleSwitchItem(stringResource(R.string.label_hide_section_time), currentStyle.hideSectionTime) { viewModel.updateHideSectionTime(it) }
         StyleSwitchItem(stringResource(R.string.label_hide_date_under_day), currentStyle.hideDateUnderDay) { viewModel.updateHideDateUnderDay(it) }
         StyleSwitchItem(label = stringResource(R.string.label_hide_grid_lines), checked = currentStyle.hideGridLines) { viewModel.updateHideGridLines(it) }
@@ -150,7 +164,6 @@ fun SettingsListContent(
         StyleSwitchItem(stringResource(R.string.label_remove_location_at), currentStyle.removeLocationAt) { viewModel.updateRemoveLocationAt(it) }
         StyleSwitchItem(stringResource(R.string.label_text_align_center_h), currentStyle.textAlignCenterHorizontal) { viewModel.updateTextAlignCenterHorizontal(it) }
         StyleSwitchItem(stringResource(R.string.label_text_align_center_v), currentStyle.textAlignCenterVertical) { viewModel.updateTextAlignCenterVertical(it) }
-        StyleSwitchItem(stringResource(R.string.label_overlap_style_toggle), currentStyle.overlapStyleToggle) { viewModel.updateOverlapStyleToggle(it) }
         BorderTypeSelector(currentStyle.borderType) { viewModel.updateBorderType(it) }
 
         StyleSliderItem(stringResource(R.string.label_font_scale), currentStyle.fontScale, 0.5f..2.0f, 0.1f) { viewModel.updateCourseBlockFontScale(it) }
@@ -293,9 +306,16 @@ fun ScheduleGridContent(
             showWeekends = demoUiState.showWeekends,
             todayIndex = dynamicTodayIndex,
             firstDayOfWeek = demoUiState.firstDayOfWeek,
-            onCourseBlockClicked = { },
-            onGridCellClicked = { _, _ -> },
-            onTimeSlotClicked = { }
+            currentSectionIndex = -1,
+            onCourseBlockClicked = { _ ->},
+            onGridCellClicked = { _, _ ->},
+            onTimeSlotClicked = {},
+            onHoldStateChanged = { _ -> },
+            onCourseMovedWithinGrid = { _, _, _, _ ->},
+            onCourseTimeAdjusted = { _, _, _ ->}
+        )
+        Box(
+            modifier = Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onLongPress = {}, onTap = {}) }
         )
     }
 }

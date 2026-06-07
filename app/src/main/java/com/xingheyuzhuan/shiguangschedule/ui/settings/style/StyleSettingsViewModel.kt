@@ -10,6 +10,7 @@ import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.model.DualColor
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.BorderTypeProto
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleModeProto
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.StyleSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.MergedCourseBlock
@@ -54,10 +55,12 @@ class StyleSettingsViewModel @Inject constructor(
             }
 
             combine(configFlow, styleRepository.styleFlow) { config, currentStyle ->
+                val dummyTableId = UUID.randomUUID().toString()
+                val is24HourMode = currentStyle.scheduleMode == ScheduleModeProto.TIME_24H_MODE
                 WeeklyScheduleUiState(
                     style = currentStyle,
-                    currentMergedCourses = createDemoCourses(),
-                    timeSlots = createDemoTimeSlots(),
+                    currentMergedCourses = createDemoCourses(dummyTableId, is24HourMode),
+                    timeSlots = createDemoTimeSlots(dummyTableId),
                     showWeekends = config?.showWeekends ?: true,
                     totalWeeks = 20,
                     isSemesterSet = true,
@@ -187,10 +190,11 @@ class StyleSettingsViewModel @Inject constructor(
         styleRepository.setShowStartTime(show)
     }
 
-    /** 切换重叠课程的显示样式 (层叠 vs 列表) */
-    fun updateOverlapStyleToggle(enabled: Boolean) = viewModelScope.launch {
-        styleRepository.setOverlapStyleToggle(enabled)
+    /** 更新课表时间段展示模式（传统节次模式 vs 24小时绝对时间轴模式） */
+    fun updateScheduleMode(mode: ScheduleModeProto) = viewModelScope.launch {
+        styleRepository.setScheduleMode(mode)
     }
+
     /** * 更新课程块字体的缩放比例
      * @param scale 缩放倍数，通常范围在 0.5 - 2.0 之间
      */
@@ -269,85 +273,112 @@ class StyleSettingsViewModel @Inject constructor(
         styleRepository.setCourseColorMaps(updatedMaps)
     }
 
-    //  演示数据构造
-    private fun createDemoCourses(): List<MergedCourseBlock> {
-        val dummyTableId = UUID.randomUUID().toString()
-        val slots = createDemoTimeSlots()
-
-        /**
-         * startSection = (逻辑节次 - 1)
-         */
-        fun getLogicalPosition(timeStr: String): Float {
-            val formatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
-            val time = java.time.LocalTime.parse(timeStr, formatter)
-
-            // 模拟 ViewModel 的逻辑：找到所属节次
-            val slot = slots.find {
-                val s = java.time.LocalTime.parse(it.startTime, formatter)
-                val e = java.time.LocalTime.parse(it.endTime, formatter)
-                !time.isBefore(s) && !time.isAfter(e)
-            }
-
-            return if (slot != null) {
-                val sTime = java.time.LocalTime.parse(slot.startTime, formatter)
-                val eTime = java.time.LocalTime.parse(slot.endTime, formatter)
-                val duration = java.time.temporal.ChronoUnit.MINUTES.between(sTime, eTime).coerceAtLeast(1)
-                val elapsed = java.time.temporal.ChronoUnit.MINUTES.between(sTime, time)
-                // 结果：(节次序号 + 进度) - 1.0 (因为 UI 坐标从 0 开始)
-                (slot.number.toFloat() + (elapsed.toFloat() / duration.toFloat())) - 1f
-            } else {
-                // 如果在课间，简单返回最近的节次起止点（预览数据简化处理）
-                val nextSlot = slots.find { java.time.LocalTime.parse(it.startTime, formatter).isAfter(time) }
-                (nextSlot?.number?.minus(1)?.toFloat() ?: 0f)
-            }
-        }
-
-        // 1. 普通课程展示 (周一 1-2节)
-        val courseA = Course(UUID.randomUUID().toString(), dummyTableId, "普通课程展示", "张老师", "教A-101", 1, 1, 2, false, null, null, 0)
-
-        // 2. 自定义时间演示 (周二 09:50 - 11:30)
-        val courseB = Course(UUID.randomUUID().toString(), dummyTableId, "精准渲染演示", "系统", "1:1还原", 2, null, null, true, "09:50", "11:30", 1)
-
-        // 3. 冲突课程 (周三 1-2节)
-        val courseC1 = Course(UUID.randomUUID().toString(), dummyTableId, "冲突课程 A", "王老师", "302", 3, 1, 2, false, null, null, 2)
-        val courseC2 = Course(UUID.randomUUID().toString(), dummyTableId, "冲突课程 B", "赵老师", "405", 3, 1, 2, false, null, null, 10)
-
-        return listOf(
-            // 普通课程：第 1 节起(0.0)，第 2 节止(2.0)
-            MergedCourseBlock(
-                day = 1,
-                startSection = 0f,
-                endSection = 2f,
-                courses = listOf(CourseWithWeeks(courseA, emptyList()))
-            ),
-
-            // 自定义时间：动态计算逻辑位置
-            MergedCourseBlock(
-                day = 2,
-                startSection = getLogicalPosition("09:50"),
-                endSection = getLogicalPosition("11:30"),
-                courses = listOf(CourseWithWeeks(courseB, emptyList()))
-            ),
-
-            // 冲突课程：第 1 节起(0.0)，第 2 节止(2.0)
-            MergedCourseBlock(
-                day = 3,
-                startSection = 0f,
-                endSection = 2f,
-                courses = listOf(CourseWithWeeks(courseC1, emptyList()), CourseWithWeeks(courseC2, emptyList())),
-                isConflict = true
+    private fun createDemoCourses(dummyTableId: String, is24HourMode: Boolean): List<MergedCourseBlock> {
+        return if (is24HourMode) {
+            listOf(
+                // 24小时绝对时间模式：全部是自定义时间（自由时间），需要携带具体的时间字符串
+                createBlock(
+                    tableId = dummyTableId, day = 1, start = 0.0f, end = 1.75f, name = "深夜研讨",
+                    startSection = null, endSection = null,
+                    isCustomTime = true, customStartTime = "00:00", customEndTime = "00:45",
+                    colorInt = 0
+                ),
+                createBlock(
+                    tableId = dummyTableId, day = 2, start = 0.5f, end = 2.0f, name = "凌晨补录",
+                    startSection = null, endSection = null,
+                    isCustomTime = true, customStartTime = "01:00", customEndTime = "02:00",
+                    colorInt = 1
+                )
             )
+        } else {
+            listOf(
+                // 传统节次模式 1：标准节次课程（对应第1节到第2节），isCustomTime 为 false，不传时间字符串
+                createBlock(
+                    tableId = dummyTableId, day = 1, start = 0f, end = 2f, name = "普通课程展示",
+                    startSection = 1, endSection = 2,
+                    isCustomTime = false, customStartTime = null, customEndTime = null,
+                    colorInt = 0
+                ),
+                // 传统节次模式 2：精准自由时间演示（在传统表格里按绝对时间乱飞的非标准课程），isCustomTime 为 true
+                createBlock(
+                    tableId = dummyTableId, day = 2, start = 0.618f, end = 2.5f, name = "精准渲染演示",
+                    startSection = null, endSection = null,
+                    isCustomTime = true, customStartTime = "09:15", customEndTime = "11:05",
+                    colorInt = 1
+                ),
+                // 传统节次模式 3：冲突课程 A（标准节次课程，对应第1节到第3节）
+                createBlock(
+                    tableId = dummyTableId, day = 3, start = 0f, end = 3f, name = "冲突课程 A",
+                    startSection = 1, endSection = 3,
+                    isCustomTime = false, customStartTime = null, customEndTime = null,
+                    subColumn = 0f, totalColumns = 2f,
+                    colorInt = 2
+                ),
+                // 传统节次模式 4：冲突课程 B（标准节次课程，对应第2节到第3节，非当前周降级显示）
+                createBlock(
+                    tableId = dummyTableId, day = 3, start = 1f, end = 2.5f, name = "冲突课程 B",
+                    startSection = 2, endSection = 3,
+                    isCustomTime = false, customStartTime = null, customEndTime = null,
+                    subColumn = 1f, totalColumns = 2f,
+                    isNonCurrentWeek = true,
+                    colorInt = 3
+                )
+            )
+        }
+    }
+
+    private fun createBlock(
+        tableId: String,
+        day: Int,
+        start: Float,
+        end: Float,
+        name: String,
+        startSection: Int?,
+        endSection: Int?,
+        isCustomTime: Boolean,
+        customStartTime: String?,
+        customEndTime: String?,
+        subColumn: Float = 0f,
+        totalColumns: Float = 1f,
+        isNonCurrentWeek: Boolean = false,
+        colorInt: Int
+    ): MergedCourseBlock {
+        val course = Course(
+            id = UUID.randomUUID().toString(),
+            courseTableId = tableId,
+            name = name,
+            teacher = "老师",
+            position = "地点",
+            day = day,
+            startSection = startSection,
+            endSection = endSection,
+            isCustomTime = isCustomTime,
+            customStartTime = customStartTime,
+            customEndTime = customEndTime,
+            colorInt = colorInt,
+            remark = ""
+        )
+
+        return MergedCourseBlock(
+            day = day,
+            startSection = start,
+            endSection = end,
+            courses = listOf(CourseWithWeeks(course, emptyList())),
+            hasNonCurrentWeekCourses = isNonCurrentWeek,
+            needsProportionalRendering = isCustomTime,
+            isVisualDemoted = isNonCurrentWeek,
+            nonActiveRanges = listOf(subColumn to totalColumns)
         )
     }
 
-    private fun createDemoTimeSlots(): List<TimeSlot> = listOf(
-        TimeSlot(1, "08:20", "09:05", "demo"),
-        TimeSlot(2, "09:15", "10:00", "demo"),
-        TimeSlot(3, "10:20", "11:05", "demo"),
-        TimeSlot(4, "11:15", "12:00", "demo"),
-        TimeSlot(5, "14:00", "14:45", "demo"),
-        TimeSlot(6, "14:55", "15:40", "demo"),
-        TimeSlot(7, "16:00", "16:45", "demo"),
-        TimeSlot(8, "16:55", "17:40", "demo")
+    private fun createDemoTimeSlots(dummyTableId: String): List<TimeSlot> = listOf(
+        TimeSlot(1, "08:20", "09:05", dummyTableId),
+        TimeSlot(2, "09:15", "10:00", dummyTableId),
+        TimeSlot(3, "10:20", "11:05", dummyTableId),
+        TimeSlot(4, "11:15", "12:00", dummyTableId),
+        TimeSlot(5, "14:00", "14:45", dummyTableId),
+        TimeSlot(6, "14:55", "15:40", dummyTableId),
+        TimeSlot(7, "16:00", "16:45", dummyTableId),
+        TimeSlot(8, "16:55", "17:40", dummyTableId)
     )
 }

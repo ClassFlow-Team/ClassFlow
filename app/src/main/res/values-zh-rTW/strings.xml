@@ -492,8 +492,8 @@
     <string name="placeholder_input_value">請輸入數值</string>
 
     <!-- 快捷操作 -->
-    <string name="label_overlap_style_toggle">重疊課程塊樣式切換</string>
     <string name="label_course_text_color">課程區塊文字顏色</string>
+    <string name="label_schedule_mode_24h">24小時時間軸模式</string>
     <string name="item_quick_actions">快捷操作</string>
     <string name="desc_quick_actions">包含調課、課程臨時變動等功能</string>
     <string name="label_quick_action_category_schedule">課表調整</string>

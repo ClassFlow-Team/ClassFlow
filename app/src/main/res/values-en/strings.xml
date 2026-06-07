@@ -496,8 +496,8 @@
     <string name="placeholder_input_value">Enter value</string>
 
     <!-- Quick Actions -->
-    <string name="label_overlap_style_toggle">Toggle overlapping style</string>
     <string name="label_course_text_color">Course block text color</string>
+    <string name="label_schedule_mode_24h">24-Hour Timeline Mode</string>
     <string name="item_quick_actions">Quick Actions</string>
     <string name="desc_quick_actions">Includes schedule tweaks, temporary changes, etc.</string>
     <string name="label_quick_action_category_schedule">Schedule Adjustments</string>
