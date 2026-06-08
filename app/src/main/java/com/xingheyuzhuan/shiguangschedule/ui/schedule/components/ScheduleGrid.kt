@@ -1,5 +1,6 @@
 package com.xingheyuzhuan.shiguangschedule.ui.schedule.components
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.scrollBy
@@ -9,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -41,6 +41,7 @@ import kotlin.time.Duration.Companion.milliseconds
 @Suppress("COMPOSE_APPLIER_CALL_MISMATCH")
 @Composable
 fun ScheduleGrid(
+    gridScrollState: ScrollState,
     style: ScheduleGridStyleComposed,
     dates: List<String>,
     currentYear: String,
@@ -104,7 +105,6 @@ fun ScheduleGrid(
         val singleSchedulables = remember(mergedCourses, firstDayOfWeek, showWeekends) {
             calculateSingleSchedulables(mergedCourses, firstDayOfWeek, showWeekends)
         }
-        val gridScrollState = rememberScrollState()
         val sectionHeightPx = with(density) { style.sectionHeight.toPx() }
 
         var activeDragHour by remember { mutableStateOf<Int?>(null) }

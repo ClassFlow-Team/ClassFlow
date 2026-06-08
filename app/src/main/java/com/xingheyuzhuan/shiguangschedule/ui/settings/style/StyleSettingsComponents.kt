@@ -5,7 +5,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,6 +54,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +76,7 @@ import com.xingheyuzhuan.shiguangschedule.ui.components.ColorPickerConfig
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.WeeklyScheduleUiState
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGrid
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGridStyleComposed
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @Composable
@@ -287,6 +293,9 @@ fun ScheduleGridContent(
     }
     val dynamicTodayIndex = remember(localDates) { localDates.indexOf(today) }
 
+    val previewScrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
+
     Box(modifier = Modifier.fillMaxSize()) {
         if (style.backgroundImagePath.isNotEmpty()) {
             AsyncImage(
@@ -298,6 +307,7 @@ fun ScheduleGridContent(
             )
         }
         ScheduleGrid(
+            gridScrollState = previewScrollState,
             style = style,
             dates = dummyDates,
             currentYear = currentYearString,
@@ -314,8 +324,24 @@ fun ScheduleGridContent(
             onCourseMovedWithinGrid = { _, _, _, _ ->},
             onCourseTimeAdjusted = { _, _, _ ->}
         )
+
         Box(
-            modifier = Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onLongPress = {}, onTap = {}) }
+            modifier = Modifier
+                .fillMaxSize()
+                .draggable(
+                    orientation = Orientation.Vertical,
+                    state = rememberDraggableState { delta ->
+                        coroutineScope.launch {
+                            previewScrollState.scrollBy(-delta)
+                        }
+                    }
+                )
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onLongPress = {},
+                        onTap = {}
+                    )
+                }
         )
     }
 }

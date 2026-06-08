@@ -1,5 +1,8 @@
 package com.xingheyuzhuan.shiguangschedule.ui.schedule
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -10,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -110,6 +114,14 @@ fun WeeklyScheduleScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
+    val gridScrollState = rememberScrollState()
+
+    val isBottomBarVisible by remember {
+        derivedStateOf {
+            scrollBehavior.state.collapsedFraction == 0f
+        }
+    }
+
     val composedStyle by remember(uiState.style) {
         derivedStateOf { with(ScheduleGridStyleComposed) { uiState.style.toComposedStyle() } }
     }
@@ -193,12 +205,18 @@ fun WeeklyScheduleScreen(
                 )
             },
             bottomBar = {
-                BottomNavigationBar(
-                    currentDestination = Destination.CourseSchedule,
-                    onTabSelected = { dest -> onNavigate(dest) },
-                    isTransparent = composedStyle.backgroundImagePath.isNotEmpty(),
-                    contentColor = customTextColor
-                )
+                AnimatedVisibility(
+                    visible = isBottomBarVisible && !isGridHolding,
+                    enter = slideInVertically(initialOffsetY = { it }),
+                    exit = slideOutVertically(targetOffsetY = { it })
+                ) {
+                    BottomNavigationBar(
+                        currentDestination = Destination.CourseSchedule,
+                        onTabSelected = { dest -> onNavigate(dest) },
+                        isTransparent = composedStyle.backgroundImagePath.isNotEmpty(),
+                        contentColor = customTextColor
+                    )
+                }
             },
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
         ) { innerPadding ->
@@ -234,6 +252,7 @@ fun WeeklyScheduleScreen(
                 val pageCourses = uiState.courseCache[pageMondayDate.toString()] ?: emptyList()
 
                 ScheduleGrid(
+                    gridScrollState = gridScrollState,
                     style = composedStyle,
                     dates = pageDateStrings,
                     currentYear = pageYearString,
