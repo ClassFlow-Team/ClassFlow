@@ -1,12 +1,11 @@
 package com.xingheyuzhuan.shiguangschedule.ui.schedule
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -39,6 +38,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -116,12 +116,6 @@ fun WeeklyScheduleScreen(
 
     val gridScrollState = rememberScrollState()
 
-    val isBottomBarVisible by remember {
-        derivedStateOf {
-            scrollBehavior.state.collapsedFraction == 0f
-        }
-    }
-
     val composedStyle by remember(uiState.style) {
         derivedStateOf { with(ScheduleGridStyleComposed) { uiState.style.toComposedStyle() } }
     }
@@ -142,6 +136,8 @@ fun WeeklyScheduleScreen(
             stringResource(R.string.title_vacation)
         }
     }
+
+    val collapseFraction = scrollBehavior.state.collapsedFraction
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (composedStyle.backgroundImagePath.isNotEmpty()) {
@@ -205,25 +201,38 @@ fun WeeklyScheduleScreen(
                 )
             },
             bottomBar = {
-                AnimatedVisibility(
-                    visible = isBottomBarVisible && !isGridHolding,
-                    enter = slideInVertically(initialOffsetY = { it }),
-                    exit = slideOutVertically(targetOffsetY = { it })
-                ) {
+                if (!isGridHolding) {
                     BottomNavigationBar(
                         currentDestination = Destination.CourseSchedule,
                         onTabSelected = { dest -> onNavigate(dest) },
                         isTransparent = composedStyle.backgroundImagePath.isNotEmpty(),
-                        contentColor = customTextColor
+                        contentColor = customTextColor,
+                        modifier = Modifier.graphicsLayer {
+                            translationY = size.height * collapseFraction
+                            alpha = 1f - collapseFraction
+                        }
                     )
                 }
             },
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
         ) { innerPadding ->
+
+            val dynamicBottomPadding = remember(innerPadding, collapseFraction) {
+                val systemWindowInsetBottom = innerPadding.calculateBottomPadding() - 80.dp
+                val safeSystemBottom = systemWindowInsetBottom.coerceAtLeast(0.dp)
+                val expandableHeight = innerPadding.calculateBottomPadding() - safeSystemBottom
+                safeSystemBottom + (expandableHeight * (1f - collapseFraction))
+            }
+
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier
-                    .padding(innerPadding)
+                    .padding(
+                        start = innerPadding.calculateStartPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                        top = innerPadding.calculateTopPadding(),
+                        end = innerPadding.calculateEndPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                        bottom = dynamicBottomPadding
+                    )
                     .fillMaxSize(),
                 beyondViewportPageCount = 1,
                 userScrollEnabled = !isGridHolding
