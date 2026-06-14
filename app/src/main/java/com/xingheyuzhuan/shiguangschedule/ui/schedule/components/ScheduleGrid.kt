@@ -273,18 +273,24 @@ fun ScheduleGrid(
                                                         val intent = activeMoveIntent
                                                         if (intent != null && gridWidthPx > 0f) {
                                                             val cellWidth = gridWidthPx / displayDaysCount
-                                                            val originalX = item.columnIndex * cellWidth + (item.subColumnIndex * (cellWidth / item.subColumnCount))
-                                                            val currentAbsoluteX = originalX + bodyDragOffsetX
 
-                                                            // 只要水平拖拽滑出了当前屏幕内显示的网格天数边界（小于0或大于总宽度）
-                                                            // 说明用户有跨周意图，直接触发进入挂起模式
-                                                            if (currentAbsoluteX < 0f || currentAbsoluteX > gridWidthPx) {
+                                                            val initialX = item.columnIndex * cellWidth + (item.subColumnIndex * (cellWidth / item.subColumnCount))
+
+                                                            val currentAbsoluteX = initialX + bodyDragOffsetX
+                                                            val blockWidth = cellWidth / item.subColumnCount
+
+                                                            val strictThresholdPx = with(density) { (-6.18).dp.toPx() }
+
+                                                            val touchLeftEdge = currentAbsoluteX <= strictThresholdPx
+                                                            val touchRightEdge = (currentAbsoluteX + blockWidth) >= (gridWidthPx - strictThresholdPx)
+
+                                                            if (touchLeftEdge || touchRightEdge) {
                                                                 onInitiateFloatingMode(intent.parentBlock)
                                                                 expandedItem = null
                                                                 activeMoveIntent = null
                                                                 onHoldStateChanged(false)
                                                             } else {
-                                                                // 否则，仍然在网格内，走原本同周调课换算
+                                                                // 否则，正常走原本同周调课换算
                                                                 val deltaCols = (bodyDragOffsetX / cellWidth).roundToInt()
                                                                 val targetDisplayIdx = (item.columnIndex + deltaCols).coerceIn(0, displayDaysCount - 1)
                                                                 val targetDay = mapDisplayIndexToDay(targetDisplayIdx, firstDayOfWeek)
@@ -292,8 +298,9 @@ fun ScheduleGrid(
                                                                 targetStart = if (is24HourMode) (targetStart / 0.25f).roundToInt() * 0.25f else targetStart.roundToInt().toFloat()
                                                                 targetStart = targetStart.coerceIn(0f, maxGridSections - intent.duration)
                                                                 val targetEnd = targetStart + intent.duration
+
                                                                 val targetX = targetDisplayIdx * cellWidth
-                                                                bodyDragOffsetX = targetX - originalX
+                                                                bodyDragOffsetX = targetX - initialX
                                                                 bodyDragOffsetY = (targetStart - intent.initialStartSection) * sectionHeightPx
 
                                                                 onCourseMovedWithinGrid(intent.parentBlock, targetDay, targetStart, targetEnd)

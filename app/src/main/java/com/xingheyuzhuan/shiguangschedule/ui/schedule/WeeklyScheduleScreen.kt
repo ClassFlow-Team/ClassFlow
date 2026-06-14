@@ -112,14 +112,23 @@ fun WeeklyScheduleScreen(
     var showTableSwitcher by remember { mutableStateOf(false) }
     var isGridHolding by remember { mutableStateOf(false) }
 
+    val composedStyle by remember(uiState.style) {
+        derivedStateOf { with(ScheduleGridStyleComposed) { uiState.style.toComposedStyle() } }
+    }
+
     val floatingCourse = uiState.floatingCourse
 
-    val floatingDuration by remember(floatingCourse) {
+    val floatingDuration by remember(floatingCourse, composedStyle.scheduleMode) {
         derivedStateOf {
             if (floatingCourse != null) {
-                val start = floatingCourse.course.startSection?.toFloat() ?: 0f
+                val start = floatingCourse.course.startSection?.toFloat() ?: 1f
                 val end = floatingCourse.course.endSection?.toFloat() ?: 1f
-                (end - start).coerceAtLeast(1.0f)
+
+                if (composedStyle.scheduleMode == ScheduleModeProto.TIME_24H_MODE) {
+                    (end - start).coerceAtLeast(1.0f)
+                } else {
+                    (end - start + 1f).coerceAtLeast(1.0f)
+                }
             } else {
                 1.0f
             }
@@ -131,9 +140,7 @@ fun WeeklyScheduleScreen(
 
     val gridScrollState = rememberScrollState()
 
-    val composedStyle by remember(uiState.style) {
-        derivedStateOf { with(ScheduleGridStyleComposed) { uiState.style.toComposedStyle() } }
-    }
+
     val customTextColor = composedStyle.pageTextColor ?: MaterialTheme.colorScheme.onSurface
     val customSubTextColor = customTextColor.copy(alpha = 0.7f)
 
@@ -299,7 +306,11 @@ fun WeeklyScheduleScreen(
                         if (floatingCourse != null) {
                             val targetWeek = uiState.weekIndexInPager ?: uiState.currentWeekNumber ?: return@ScheduleGrid
                             val startSec = sectionOrHour.toFloat()
-                            val endSec = startSec + floatingDuration
+                            val endSec = if (composedStyle.scheduleMode == ScheduleModeProto.TIME_24H_MODE) {
+                                startSec + floatingDuration
+                            } else {
+                                startSec + floatingDuration - 1f
+                            }
 
                             coroutineScope.launch {
                                 viewModel.updateCourseTimeByFloatingGesture(

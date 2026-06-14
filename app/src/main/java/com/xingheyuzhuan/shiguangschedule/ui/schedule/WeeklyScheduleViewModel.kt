@@ -443,6 +443,16 @@ class WeeklyScheduleViewModel @Inject constructor(
                     )
                 }
 
+                val isNoPositionChange = originalCourse.day == updatedCourseForTime.day &&
+                        originalCourse.startSection == updatedCourseForTime.startSection &&
+                        originalCourse.endSection == updatedCourseForTime.endSection &&
+                        originalCourse.customStartTime == updatedCourseForTime.customStartTime &&
+                        originalCourse.customEndTime == updatedCourseForTime.customEndTime
+
+                if (sourceWeek == targetWeek && isNoPositionChange) {
+                    return@launch
+                }
+
                 val isSingleWeek = courseWrapper.weeks.size <= 1
 
                 if (isSingleWeek) {
@@ -523,6 +533,15 @@ class WeeklyScheduleViewModel @Inject constructor(
                         startSection = newStartSection,
                         endSection = newEndSection
                     )
+                }
+                val isNoPositionChange = originalCourse.day == updatedCourseForTime.day &&
+                        originalCourse.startSection == updatedCourseForTime.startSection &&
+                        originalCourse.endSection == updatedCourseForTime.endSection &&
+                        originalCourse.customStartTime == updatedCourseForTime.customStartTime &&
+                        originalCourse.customEndTime == updatedCourseForTime.customEndTime
+
+                if (isNoPositionChange) {
+                    return@launch
                 }
 
                 val isSingleWeek = targetWrapper.weeks.size <= 1
