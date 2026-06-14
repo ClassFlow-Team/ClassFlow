@@ -63,7 +63,9 @@ data class WeeklyScheduleUiState(
     val currentWeekNumber: Int? = null,
     val pagerMondayDate: LocalDate = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)),
     val currentSectionIndex: Int = -1,
-    val daysUntilStart: Long = 0
+    val daysUntilStart: Long = 0,
+    val floatingCourse: CourseWithWeeks? = null,
+    val floatingSourceWeek: Int? = null
 )
 
 /**
@@ -192,6 +194,8 @@ class WeeklyScheduleViewModel @Inject constructor(
                 val currentWeekCourses = cache[configPkg.mondayDate.toString()] ?: emptyList()
                 fixInvalidCourseColors(currentWeekCourses.flatMap { it.courses }, configPkg.style)
 
+                val previousState = _uiState.value
+
                 WeeklyScheduleUiState(
                     style = configPkg.style,
                     showWeekends = config?.showWeekends ?: false,
@@ -206,7 +210,9 @@ class WeeklyScheduleViewModel @Inject constructor(
                     currentWeekNumber = currentWeekNum,
                     pagerMondayDate = configPkg.mondayDate,
                     currentSectionIndex = currentSectionIndex,
-                    daysUntilStart = daysUntil
+                    daysUntilStart = daysUntil,
+                    floatingCourse = previousState.floatingCourse,
+                    floatingSourceWeek = previousState.floatingSourceWeek
                 )
             }.collect { _uiState.value = it }
         }
@@ -338,6 +344,130 @@ class WeeklyScheduleViewModel @Inject constructor(
                         LocalTime.parse(sortedSlots.last().endTime, formatter)
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * 进入跨周移动暂存状态
+     */
+    fun enterFloatingMode(course: CourseWithWeeks, sourceWeek: Int) {
+        _uiState.update {
+            it.copy(
+                floatingCourse = course,
+                floatingSourceWeek = sourceWeek
+            )
+        }
+    }
+
+    /**
+     * 全清空或取消挂起队列
+     */
+    fun exitFloatingMode() {
+        _uiState.update {
+            it.copy(
+                floatingCourse = null,
+                floatingSourceWeek = null
+            )
+        }
+    }
+
+    /**
+     * 配合跨周结算的最终持久化落地更新
+     */
+    fun updateCourseTimeByFloatingGesture(
+        targetWeek: Int,
+        targetDay: Int,
+        startSection: Float,
+        endSection: Float,
+        onComplete: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                val state = _uiState.value
+                val courseWrapper = state.floatingCourse ?: return@launch
+                val sourceWeek = state.floatingSourceWeek ?: return@launch
+                val mode = state.style.toComposedStyle().scheduleMode
+                val slots = state.timeSlots
+
+                val currentSettings = appSettingsRepository.getAppSettingsOnce()
+                val tableId = currentSettings.currentCourseTableId
+                if (tableId.isBlank()) return@launch
+
+                val originalCourse = courseWrapper.course
+                val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
+                val updatedCourseForTime = if (mode == ScheduleModeProto.TIME_24H_MODE) {
+                    val baseStartTime = gridScaleToTime(startSection, slots, mode)
+                    val origStart = LocalTime.parse(originalCourse.customStartTime ?: "08:00", timeFormatter)
+                    val origEnd = LocalTime.parse(originalCourse.customEndTime ?: "09:00", timeFormatter)
+                    val originalDurationMinutes = ChronoUnit.MINUTES.between(origStart, origEnd).coerceAtLeast(1)
+                    val newStartTime = baseStartTime
+                    val startMinutesFromMidnight = newStartTime.hour * 60 + newStartTime.minute
+                    val rawEndMinutes = startMinutesFromMidnight + originalDurationMinutes
+
+                    val (finalEndTime, isTruncatedToMidnight) = if (rawEndMinutes >= 1440) {
+                        LocalTime.of(23, 59) to true
+                    } else {
+                        newStartTime.plusMinutes(originalDurationMinutes) to false
+                    }
+                    val calcStartSection = newStartTime.hour + 1
+
+                    val finalEndSection = if (isTruncatedToMidnight) {
+                        24
+                    } else {
+                        val calcEndSection = if (finalEndTime.minute > 0) finalEndTime.hour + 1 else finalEndTime.hour
+                        if (calcEndSection == 0) 24 else calcEndSection
+                    }
+
+                    originalCourse.copy(
+                        day = targetDay,
+                        isCustomTime = true,
+                        customStartTime = newStartTime.format(timeFormatter),
+                        customEndTime = finalEndTime.format(timeFormatter),
+                        startSection = calcStartSection.coerceIn(1, 24),
+                        endSection = finalEndSection.coerceIn(1, 24)
+                    )
+                } else {
+                    val newStartSection = startSection.toInt().coerceIn(1, slots.size)
+                    val newEndSection = endSection.toInt().coerceIn(1, slots.size)
+                    if (newStartSection > newEndSection) return@launch
+
+                    originalCourse.copy(
+                        day = targetDay,
+                        isCustomTime = false,
+                        customStartTime = null,
+                        customEndTime = null,
+                        startSection = newStartSection,
+                        endSection = newEndSection
+                    )
+                }
+
+                val isSingleWeek = courseWrapper.weeks.size <= 1
+
+                if (isSingleWeek) {
+                    val weekNumbers = listOf(targetWeek)
+                    courseTableRepository.upsertCourse(updatedCourseForTime, weekNumbers)
+                } else {
+                    val remainingWeeks = courseWrapper.weeks
+                        .map { it.weekNumber }
+                        .filter { it != sourceWeek }
+                    courseTableRepository.upsertCourse(originalCourse, remainingWeeks)
+
+                    val clonedNewId = UUID.randomUUID().toString()
+                    val finalClonedCourse = updatedCourseForTime.copy(id = clonedNewId)
+                    courseTableRepository.upsertCourse(finalClonedCourse, listOf(targetWeek))
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _uiState.update {
+                    it.copy(
+                        floatingCourse = null,
+                        floatingSourceWeek = null
+                    )
+                }
+                onComplete()
             }
         }
     }

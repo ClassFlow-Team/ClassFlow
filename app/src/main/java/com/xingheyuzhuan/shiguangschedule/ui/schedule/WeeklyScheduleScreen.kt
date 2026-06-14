@@ -43,6 +43,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -55,6 +56,7 @@ import com.xingheyuzhuan.shiguangschedule.navigation.AddEditCourseChannel
 import com.xingheyuzhuan.shiguangschedule.navigation.PresetCourseData
 import com.xingheyuzhuan.shiguangschedule.ui.components.BottomNavigationBar
 import com.xingheyuzhuan.shiguangschedule.ui.components.CourseTablePickerDialog
+import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.FloatingCourseBar
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGrid
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGridStyleComposed
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.WeekSelectorBottomSheet
@@ -93,7 +95,6 @@ fun WeeklyScheduleScreen(
         pageCount = { Int.MAX_VALUE }
     )
 
-    // 修复滑动响应机制
     LaunchedEffect(pagerState.currentPage, uiState.firstDayOfWeek) {
         snapshotFlow { pagerState.currentPage }
             .distinctUntilChanged()
@@ -110,6 +111,20 @@ fun WeeklyScheduleScreen(
     var showWeekSelector by remember { mutableStateOf(false) }
     var showTableSwitcher by remember { mutableStateOf(false) }
     var isGridHolding by remember { mutableStateOf(false) }
+
+    val floatingCourse = uiState.floatingCourse
+
+    val floatingDuration by remember(floatingCourse) {
+        derivedStateOf {
+            if (floatingCourse != null) {
+                val start = floatingCourse.course.startSection?.toFloat() ?: 0f
+                val end = floatingCourse.course.endSection?.toFloat() ?: 1f
+                (end - start).coerceAtLeast(1.0f)
+            } else {
+                1.0f
+            }
+        }
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -201,7 +216,7 @@ fun WeeklyScheduleScreen(
                 )
             },
             bottomBar = {
-                if (!isGridHolding) {
+                if (floatingCourse == null) {
                     BottomNavigationBar(
                         currentDestination = Destination.CourseSchedule,
                         onTabSelected = { dest -> onNavigate(dest) },
@@ -217,20 +232,24 @@ fun WeeklyScheduleScreen(
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
         ) { innerPadding ->
 
-            val dynamicBottomPadding = remember(innerPadding, collapseFraction) {
-                val systemWindowInsetBottom = innerPadding.calculateBottomPadding() - 80.dp
-                val safeSystemBottom = systemWindowInsetBottom.coerceAtLeast(0.dp)
-                val expandableHeight = innerPadding.calculateBottomPadding() - safeSystemBottom
-                safeSystemBottom + (expandableHeight * (1f - collapseFraction))
+            val dynamicBottomPadding = remember(innerPadding, collapseFraction, floatingCourse) {
+                if (floatingCourse != null) {
+                    0.dp
+                } else {
+                    val systemWindowInsetBottom = innerPadding.calculateBottomPadding() - 80.dp
+                    val safeSystemBottom = systemWindowInsetBottom.coerceAtLeast(0.dp)
+                    val expandableHeight = innerPadding.calculateBottomPadding() - safeSystemBottom
+                    safeSystemBottom + (expandableHeight * (1f - collapseFraction))
+                }
             }
 
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier
                     .padding(
-                        start = innerPadding.calculateStartPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                        start = innerPadding.calculateStartPadding(LayoutDirection.Ltr),
                         top = innerPadding.calculateTopPadding(),
-                        end = innerPadding.calculateEndPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                        end = innerPadding.calculateEndPadding(LayoutDirection.Ltr),
                         bottom = dynamicBottomPadding
                     )
                     .fillMaxSize(),
@@ -277,38 +296,53 @@ fun WeeklyScheduleScreen(
                         }
                     },
                     onGridCellClicked = { day, sectionOrHour ->
-                        if (uiState.semesterStartDate != null && !today.isBefore(uiState.semesterStartDate)) {
+                        if (floatingCourse != null) {
+                            val targetWeek = uiState.weekIndexInPager ?: uiState.currentWeekNumber ?: return@ScheduleGrid
+                            val startSec = sectionOrHour.toFloat()
+                            val endSec = startSec + floatingDuration
+
                             coroutineScope.launch {
-                                val presetData = if (composedStyle.scheduleMode == ScheduleModeProto.TIME_24H_MODE) {
-                                    val startHour = sectionOrHour.coerceIn(0, 23)
-                                    val endHour = (startHour + 1) % 24
-
-                                    val startTimeStr = String.format(Locale.US,"%02d:00", startHour)
-                                    val endTimeStr = String.format(Locale.US,"%02d:00", endHour)
-
-                                    PresetCourseData(
-                                        day = day,
-                                        startSection = 1,
-                                        endSection = 1,
-                                        isCustomTime = true,
-                                        customStartTime = startTimeStr,
-                                        customEndTime = endTimeStr
-                                    )
-                                } else {
-                                    PresetCourseData(
-                                        day = day,
-                                        startSection = sectionOrHour,
-                                        endSection = sectionOrHour,
-                                        isCustomTime = false
-                                    )
-                                }
-
-                                AddEditCourseChannel.sendEvent(presetData)
-                                onNavigate(Destination.AddEditCourse())
+                                viewModel.updateCourseTimeByFloatingGesture(
+                                    targetWeek = targetWeek,
+                                    targetDay = day,
+                                    startSection = startSec,
+                                    endSection = endSec
+                                )
                             }
                         } else {
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar(snackbarMsg)
+                            if (uiState.semesterStartDate != null && !today.isBefore(uiState.semesterStartDate)) {
+                                coroutineScope.launch {
+                                    val presetData = if (composedStyle.scheduleMode == ScheduleModeProto.TIME_24H_MODE) {
+                                        val startHour = sectionOrHour.coerceIn(0, 23)
+                                        val endHour = (startHour + 1) % 24
+
+                                        val startTimeStr = String.format(Locale.US, "%02d:00", startHour)
+                                        val endTimeStr = String.format(Locale.US, "%02d:00", endHour)
+
+                                        PresetCourseData(
+                                            day = day,
+                                            startSection = 1,
+                                            endSection = 1,
+                                            isCustomTime = true,
+                                            customStartTime = startTimeStr,
+                                            customEndTime = endTimeStr
+                                        )
+                                    } else {
+                                        PresetCourseData(
+                                            day = day,
+                                            startSection = sectionOrHour,
+                                            endSection = sectionOrHour,
+                                            isCustomTime = false
+                                        )
+                                    }
+
+                                    AddEditCourseChannel.sendEvent(presetData)
+                                    onNavigate(Destination.AddEditCourse())
+                                }
+                            } else {
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(snackbarMsg)
+                                }
                             }
                         }
                     },
@@ -355,10 +389,27 @@ fun WeeklyScheduleScreen(
                                 snackbarHostState.showSnackbar(snackbarMsg)
                             }
                         }
+                    },
+                    onInitiateFloatingMode = { block ->
+                        val targetCourseWrapper = block.courses.firstOrNull()
+                        val currentWeek = uiState.weekIndexInPager ?: uiState.currentWeekNumber
+                        if (targetCourseWrapper != null && currentWeek != null) {
+                            viewModel.enterFloatingMode(
+                                course = targetCourseWrapper,
+                                sourceWeek = currentWeek
+                            )
+                        }
                     }
                 )
             }
         }
+        FloatingCourseBar(
+            floatingCourse = floatingCourse,
+            onCancelClick = { viewModel.exitFloatingMode() },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 24.dp)
+        )
     }
 
     // 周次选择弹窗

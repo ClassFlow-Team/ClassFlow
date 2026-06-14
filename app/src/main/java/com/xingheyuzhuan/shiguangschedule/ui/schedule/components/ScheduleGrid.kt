@@ -56,7 +56,8 @@ fun ScheduleGrid(
     onTimeSlotClicked: () -> Unit,
     onHoldStateChanged: (isHolding: Boolean) -> Unit = {},
     onCourseMovedWithinGrid: (block: MergedCourseBlock, newDay: Int, newStartSection: Float, newEndSection: Float) -> Unit = { _, _, _, _ -> },
-    onCourseTimeAdjusted: (block: MergedCourseBlock, newStart: Float, newEnd: Float) -> Unit = { _, _, _ -> }
+    onCourseTimeAdjusted: (block: MergedCourseBlock, newStart: Float, newEnd: Float) -> Unit = { _, _, _ -> },
+    onInitiateFloatingMode: (block: MergedCourseBlock) -> Unit = {}
 ) {
     Box(Modifier.fillMaxSize()) {
         val density = LocalDensity.current
@@ -272,19 +273,31 @@ fun ScheduleGrid(
                                                         val intent = activeMoveIntent
                                                         if (intent != null && gridWidthPx > 0f) {
                                                             val cellWidth = gridWidthPx / displayDaysCount
-                                                            val deltaCols = (bodyDragOffsetX / cellWidth).roundToInt()
-                                                            val targetDisplayIdx = (item.columnIndex + deltaCols).coerceIn(0, displayDaysCount - 1)
-                                                            val targetDay = mapDisplayIndexToDay(targetDisplayIdx, firstDayOfWeek)
-                                                            var targetStart = intent.initialStartSection + (bodyDragOffsetY / sectionHeightPx)
-                                                            targetStart = if (is24HourMode) (targetStart / 0.25f).roundToInt() * 0.25f else targetStart.roundToInt().toFloat()
-                                                            targetStart = targetStart.coerceIn(0f, maxGridSections - intent.duration)
-                                                            val targetEnd = targetStart + intent.duration
                                                             val originalX = item.columnIndex * cellWidth + (item.subColumnIndex * (cellWidth / item.subColumnCount))
-                                                            val targetX = targetDisplayIdx * cellWidth
-                                                            bodyDragOffsetX = targetX - originalX
-                                                            bodyDragOffsetY = (targetStart - intent.initialStartSection) * sectionHeightPx
+                                                            val currentAbsoluteX = originalX + bodyDragOffsetX
 
-                                                            onCourseMovedWithinGrid(intent.parentBlock, targetDay, targetStart, targetEnd)
+                                                            // 只要水平拖拽滑出了当前屏幕内显示的网格天数边界（小于0或大于总宽度）
+                                                            // 说明用户有跨周意图，直接触发进入挂起模式
+                                                            if (currentAbsoluteX < 0f || currentAbsoluteX > gridWidthPx) {
+                                                                onInitiateFloatingMode(intent.parentBlock)
+                                                                expandedItem = null
+                                                                activeMoveIntent = null
+                                                                onHoldStateChanged(false)
+                                                            } else {
+                                                                // 否则，仍然在网格内，走原本同周调课换算
+                                                                val deltaCols = (bodyDragOffsetX / cellWidth).roundToInt()
+                                                                val targetDisplayIdx = (item.columnIndex + deltaCols).coerceIn(0, displayDaysCount - 1)
+                                                                val targetDay = mapDisplayIndexToDay(targetDisplayIdx, firstDayOfWeek)
+                                                                var targetStart = intent.initialStartSection + (bodyDragOffsetY / sectionHeightPx)
+                                                                targetStart = if (is24HourMode) (targetStart / 0.25f).roundToInt() * 0.25f else targetStart.roundToInt().toFloat()
+                                                                targetStart = targetStart.coerceIn(0f, maxGridSections - intent.duration)
+                                                                val targetEnd = targetStart + intent.duration
+                                                                val targetX = targetDisplayIdx * cellWidth
+                                                                bodyDragOffsetX = targetX - originalX
+                                                                bodyDragOffsetY = (targetStart - intent.initialStartSection) * sectionHeightPx
+
+                                                                onCourseMovedWithinGrid(intent.parentBlock, targetDay, targetStart, targetEnd)
+                                                            }
                                                         }
                                                     },
                                                     onDragCancel = {
