@@ -27,6 +27,7 @@
     
     <!-- Main Interface and Today's Schedule -->
     <string name="action_reset">Reset</string>
+    <string name="floating_course_hint">Suspended. Swipe weeks and tap a blank space to drop.</string>
     <string name="nav_today_schedule">Today</string>
     <string name="nav_course_schedule">Schedule</string>
     <string name="nav_settings">Settings</string>
@@ -277,6 +278,7 @@
 
     <!-- Import/Export Schedule -->
     <string name="label_time_slot_alias">Alias (Optional)</string>
+    <string name="toast_time_conflict">The selected time exceeds the limits of the adjacent class periods</string>
     <string name="title_conversion">Import/Export schedule</string>
     <string name="section_file_conversion">File import/export</string>
     <string name="item_import_course_file">Import course file</string>
@@ -495,8 +497,8 @@
     <string name="placeholder_input_value">Enter value</string>
 
     <!-- Quick Actions -->
-    <string name="label_overlap_style_toggle">Toggle overlapping style</string>
     <string name="label_course_text_color">Course block text color</string>
+    <string name="label_schedule_mode_24h">24-Hour Timeline Mode</string>
     <string name="item_quick_actions">Quick Actions</string>
     <string name="desc_quick_actions">Includes schedule tweaks, temporary changes, etc.</string>
     <string name="label_quick_action_category_schedule">Schedule Adjustments</string>
@@ -530,5 +532,40 @@
     <string name="theme_color_hint">Note: After changing this color, the system will use it as a seed color to recalculate the entire app\\\'s color scheme.</string>
     <string name="label_page_text_color">Schedule text color</string>
     <string name="widget_course_remaining_count">%1$d left</string>
+
+    <string name="backup_err_empty">The backup file is empty and cannot be restored</string>
+    <string name="backup_err_corrupted">Failed to parse file; the data may be corrupted</string>
+    <string name="backup_err_version_too_new">This backup version is too new. Please upgrade the app and try again</string>
+    <string name="item_backup_restore">Backup &amp; Restore</string>
+    <string name="desc_backup_restore">Supports multi-channel backup via cloud drives and local files to secure your schedule data</string>
+    <string name="section_data_maintenance">Data Maintenance</string>
+    <string name="item_backup_data">Backup Data</string>
+    <string name="desc_backup_data">Pack and save your current schedule and configurations</string>
+    <string name="item_restore_data">Restore Data</string>
+    <string name="desc_restore_data">Download and overwrite local schedule and config data</string>
+    <string name="section_service_config">Service Configuration</string>
+    <string name="item_webdav_config">WebDAV Configuration</string>
+    <string name="desc_webdav_unconfigured">Cloud drive connection not configured</string>
+    <string name="desc_webdav_connected">Connected: %1$s</string>
+    <string name="dialog_title_backup_target">Select Backup Destination</string>
+    <string name="dialog_title_restore_source">Select Restore Source</string>
+    <string name="dialog_title_config_webdav">Configure WebDAV</string>
+    <string name="label_webdav_url">Server Address (URL)</string>
+    <string name="label_webdav_account">Account</string>
+    <string name="label_webdav_pwd_saved">Password saved (leave blank to keep unchanged)</string>
+    <string name="label_webdav_pwd_empty">App-specific password</string>
+    <string name="label_webdav_path">Cloud Backup Path</string>
+    <string name="desc_webdav_path_hint">Actual data will be isolated and saved in the /Backup folder under this directory</string>
+    <string name="toast_operation_success">Operation completed successfully</string>
+    <string name="toast_operation_failed">Operation failed: %1$s</string>
+    <string name="error_webdav_unconfigured">Please configure the WebDAV service first</string>
+    <string name="error_stream_open_failed">Cannot open data stream</string>
+    <string name="backup_err_connect_failed">Connection failed. Please check your configuration or network</string>
+    <string name="backup_err_upload_failed">Failed to upload file</string>
+    <string name="backup_err_download_failed">Failed to download backup</string>
+    <string name="backup_err_local_export_failed">Local export failed</string>
+    <string name="backup_err_restore_failed_prefix">Restore failed: %1$s</string>
+    <string name="backup_target_webdav">WebDAV Cloud Sync</string>
+    <string name="backup_target_local_zip">Local ZIP File</string>
 
 </resources>

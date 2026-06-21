@@ -110,3 +110,13 @@
 <a href="https://github.com/XingHeYuZhuan/shiguangschedule/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=XingHeYuZhuan/shiguangschedule" />
 </a>
+
+
+## Star 历史
+<a href="https://www.star-history.com/?repos=XingHeYuZhuan%2Fshiguangschedule&type=timeline&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=XingHeYuZhuan/shiguangschedule&type=timeline&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=XingHeYuZhuan/shiguangschedule&type=timeline&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=XingHeYuZhuan/shiguangschedule&type=timeline&legend=top-left" />
+ </picture>
+</a>

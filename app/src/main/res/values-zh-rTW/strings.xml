@@ -27,6 +27,7 @@
     
     <!-- 主介面及今日課表 -->
     <string name="action_reset">重置</string>
+    <string name="floating_course_hint">已掛起，左右滑周點擊空白處放下</string>
     <string name="nav_today_schedule">今日課表</string>
     <string name="nav_course_schedule">課表</string>
     <string name="nav_settings">我的</string>
@@ -277,6 +278,7 @@
 
     <!-- 課表匯入/匯出 -->
     <string name="label_time_slot_alias">別名 (選填)</string>
+    <string name="toast_time_conflict">選擇的時間超出了前後課時限制範圍</string>
     <string name="title_conversion">課表匯入/匯出</string>
     <string name="section_file_conversion">檔案匯入/匯出</string>
     <string name="item_import_course_file">課程檔案匯入</string>
@@ -491,8 +493,8 @@
     <string name="placeholder_input_value">請輸入數值</string>
 
     <!-- 快捷操作 -->
-    <string name="label_overlap_style_toggle">重疊課程塊樣式切換</string>
     <string name="label_course_text_color">課程區塊文字顏色</string>
+    <string name="label_schedule_mode_24h">24小時時間軸模式</string>
     <string name="item_quick_actions">快捷操作</string>
     <string name="desc_quick_actions">包含調課、課程臨時變動等功能</string>
     <string name="label_quick_action_category_schedule">課表調整</string>
@@ -530,5 +532,40 @@
     <string name="item_sync_to_system_calendar">同步至系統行事曆</string>
     <string name="desc_sync_to_system_calendar">將目前课表一鍵同步至手機系統行事曆</string>
     <string name="toast_sync_calendar_success">同步成功</string>
+
+    <string name="backup_err_empty">備份檔案為空，無法復原</string>
+    <string name="backup_err_corrupted">檔案解析失敗，數據可能已損壞</string>
+    <string name="backup_err_version_too_new">該備份數據版本過新，請升級 App 後再試</string>
+    <string name="item_backup_restore">備份與復原</string>
+    <string name="desc_backup_restore">支援雲端硬碟與本地檔案多管道備份，保障課表數據安全</string>
+    <string name="section_data_maintenance">數據維護</string>
+    <string name="item_backup_data">備份數據</string>
+    <string name="desc_backup_data">將目前的課表及設定打包儲存</string>
+    <string name="item_restore_data">復原數據</string>
+    <string name="desc_restore_data">下載並覆蓋本地課表設定數據</string>
+    <string name="section_service_config">服務設定</string>
+    <string name="item_webdav_config">WebDAV 參數設定</string>
+    <string name="desc_webdav_unconfigured">未設定網盤連線</string>
+    <string name="desc_webdav_connected">已連線: %1$s</string>
+    <string name="dialog_title_backup_target">選擇備份目標管道</string>
+    <string name="dialog_title_restore_source">選擇復原數據來源</string>
+    <string name="dialog_title_config_webdav">設定 WebDAV</string>
+    <string name="label_webdav_url">伺服器位址 (URL)</string>
+    <string name="label_webdav_account">帳號</string>
+    <string name="label_webdav_pwd_saved">密碼已儲存 (留空不修改)</string>
+    <string name="label_webdav_pwd_empty">應用程式獨立密碼</string>
+    <string name="label_webdav_path">雲端備份位置</string>
+    <string name="desc_webdav_path_hint">實際數據將隔離儲存在該目錄下的 /Backup 資料夾中</string>
+    <string name="toast_operation_success">操作成功完成</string>
+    <string name="toast_operation_failed">操作失敗: %1$s</string>
+    <string name="error_webdav_unconfigured">請先設定 WebDAV 服務</string>
+    <string name="error_stream_open_failed">無法開啟數據流</string>
+    <string name="backup_err_connect_failed">連線失敗，請檢查設定或網路</string>
+    <string name="backup_err_upload_failed">檔案上傳失敗</string>
+    <string name="backup_err_download_failed">下載備份失敗</string>
+    <string name="backup_err_local_export_failed">本地匯出失敗</string>
+    <string name="backup_err_restore_failed_prefix">還原失敗: %1$s</string>
+    <string name="backup_target_webdav">WebDAV 雲端同步</string>
+    <string name="backup_target_local_zip">本地 ZIP 檔案</string>
 
 </resources>

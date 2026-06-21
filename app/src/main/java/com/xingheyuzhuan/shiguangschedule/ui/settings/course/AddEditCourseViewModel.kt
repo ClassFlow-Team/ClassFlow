@@ -119,11 +119,15 @@ class AddEditCourseViewModel @Inject constructor(
                                 CourseScheme(
                                     teacher = initialPresetData?.teacher.orEmpty(),
                                     position = initialPresetData?.position.orEmpty(),
+                                    remark = initialPresetData?.remark.orEmpty(),
                                     day = initialPresetData?.day ?: 1,
                                     startSection = initialPresetData?.startSection ?: 1,
                                     endSection = initialPresetData?.endSection ?: 1,
-                                    weeks = (1..totalWeeks).toSet(),
-                                    colorIndex = newColor
+                                    isCustomTime = initialPresetData?.isCustomTime ?: false,
+                                    customStartTime = initialPresetData?.customStartTime ?: "08:00",
+                                    customEndTime = initialPresetData?.customEndTime ?: "09:35",
+                                    weeks = initialPresetData?.presetWeeks ?: (1..totalWeeks).toSet(),
+                                    colorIndex = initialPresetData?.colorIndex ?: newColor
                                 )
                             )
                         } else {

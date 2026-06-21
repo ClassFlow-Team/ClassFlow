@@ -46,30 +46,27 @@ class TimeSlotViewModel @Inject constructor(
         appSettingsFlow
             .flatMapLatest { appSettings ->
                 val currentTableId = appSettings.currentCourseTableId
-                run {
-                    val timeSlotsFlow = timeSlotRepository.getTimeSlotsByCourseTableId(currentTableId)
-                    val courseConfigFlow = appSettingsRepository.getCourseTableConfigFlow(currentTableId)
+                val timeSlotsFlow = timeSlotRepository.getTimeSlotsByCourseTableId(currentTableId)
+                val courseConfigFlow = appSettingsRepository.getCourseTableConfigFlow(currentTableId)
 
-                    combine(timeSlotsFlow, courseConfigFlow) { timeSlots, config ->
-                        val classDuration = config?.defaultClassDuration ?: 45
-                        val breakDuration = config?.defaultBreakDuration ?: 10
+                combine(timeSlotsFlow, courseConfigFlow) { timeSlots, config ->
+                    val classDuration = config?.defaultClassDuration ?: 45
+                    val breakDuration = config?.defaultBreakDuration ?: 10
 
-                        // 核心逻辑：当数据第一次从数据库加载成功时，记录为初始状态
-                        if (!isDataInitialized && timeSlots.isNotEmpty()) {
-                            // 存储备份（按开始时间排序以确保比对一致性）
-                            initialTimeSlots = timeSlots.sortedBy { it.startTime }
-                            initialClassDuration = classDuration
-                            initialBreakDuration = breakDuration
-                            isDataInitialized = true
-                        }
-
-                        TimeSlotUiState(
-                            timeSlots = timeSlots,
-                            defaultClassDuration = classDuration,
-                            defaultBreakDuration = breakDuration,
-                            isDataLoaded = true
-                        )
+                    if (!isDataInitialized) {
+                        // 存储备份（去除 ID 差异带来的比对干扰，仅比对核心业务字段）
+                        initialTimeSlots = timeSlots.map { it.copy(courseTableId = "") }.sortedBy { it.startTime }
+                        initialClassDuration = classDuration
+                        initialBreakDuration = breakDuration
+                        isDataInitialized = true
                     }
+
+                    TimeSlotUiState(
+                        timeSlots = timeSlots,
+                        defaultClassDuration = classDuration,
+                        defaultBreakDuration = breakDuration,
+                        isDataLoaded = true
+                    )
                 }
             }
             .stateIn(
@@ -96,16 +93,16 @@ class TimeSlotViewModel @Inject constructor(
         // 2. 检查时间段列表是否有变
         if (currentTimeSlots.size != initialTimeSlots.size) return true
 
-        // 排序后进行内容比对 (TimeSlot 是 data class，会自动比对字段值)
-        val sortedCurrent = currentTimeSlots.sortedBy { it.startTime }
-        return sortedCurrent != initialTimeSlots
+        val normalizedCurrent = currentTimeSlots.map { it.copy(courseTableId = "") }.sortedBy { it.startTime }
+
+        return normalizedCurrent != initialTimeSlots
     }
 
     /**
      * 保存成功后更新备份点，这样点击返回就不会再触发拦截弹窗
      */
     private fun updateBackupPoint(timeSlots: List<TimeSlot>, classDuration: Int, breakDuration: Int) {
-        initialTimeSlots = timeSlots.sortedBy { it.startTime }
+        initialTimeSlots = timeSlots.map { it.copy(courseTableId = "") }.sortedBy { it.startTime }
         initialClassDuration = classDuration
         initialBreakDuration = breakDuration
     }
@@ -127,7 +124,7 @@ class TimeSlotViewModel @Inject constructor(
             val tableExists = allTableIds.contains(currentTableId)
 
             if (tableExists) {
-                // 确保时间段关联正确的课表 ID
+                // 确保时间段关联正确的课表 ID 后写入数据库
                 val timeSlotsWithCorrectId = timeSlots.map { it.copy(courseTableId = currentTableId) }
 
                 // 1. 替换时间段列表

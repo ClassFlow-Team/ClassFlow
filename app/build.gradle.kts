@@ -10,14 +10,14 @@ plugins {
 
 android {
     namespace = "com.xingheyuzhuan.shiguangschedule"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.xingheyuzhuan.shiguangschedule"
         minSdk = 26
-        targetSdk = 36
-        versionCode = 31
-        versionName = "1.2.3"
+        targetSdk = 37
+        versionCode = 32
+        versionName = "1.2.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -111,6 +111,7 @@ aboutLibraries {
 }
 dependencies {
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.serialization.cbor)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.core.ktx)
@@ -150,11 +151,13 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.ktor.client.logging)
+    implementation(libs.ktor.client.auth)
     implementation(libs.wire.runtime)
 
 
     debugImplementation(libs.okhttp.logging.interceptor)
 
+    ksp(libs.kotlin.metadata.jvm) // hilt未支持Kotlin 2.4.x 因此引入 当支持后视情况移除
     ksp(libs.hilt.compiler)
     ksp(libs.androidx.room.compiler)
     ksp(libs.androidx.hilt.compiler)

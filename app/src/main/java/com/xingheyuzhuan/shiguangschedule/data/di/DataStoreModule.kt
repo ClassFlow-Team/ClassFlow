@@ -19,6 +19,9 @@ private val Context.appSettingsDataStore: DataStore<Preferences> by preferencesD
 // 定义 SchoolHistory Preferences DataStore 委托
 private val Context.schoolHistoryDataStore: DataStore<Preferences> by preferencesDataStore(name = "school_history")
 
+// 定义通用的 api_config 文件委托
+private val Context.apiConfigDataStore: DataStore<Preferences> by preferencesDataStore(name = "api_config")
+
 @Module
 @InstallIn(SingletonComponent::class)
 @Suppress("unused")
@@ -50,6 +53,17 @@ object DataStoreModule {
     @Provides
     @Singleton
     @Named("AppSettings")
-    fun provideAppSettingsDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
-        context.appSettingsDataStore
+    fun provideAppSettingsDataStore(@ApplicationContext context: Context): DataStore<Preferences> {
+        return context.appSettingsDataStore
+    }
+
+    /**
+     * 提供通用的 API 配置 DataStore 实例
+     */
+    @Provides
+    @Singleton
+    @Named("ApiConfig")
+    fun provideApiConfigDataStore(@ApplicationContext context: Context): DataStore<Preferences> {
+        return context.apiConfigDataStore
+    }
 }

@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.toArgb
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.BorderTypeProto
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.DualColorProto
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleGridStyleProto
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleModeProto
 
 // 1. Compose 业务模型
 
@@ -45,7 +46,7 @@ data class ScheduleGridStyle(
     val textAlignCenterHorizontal: Boolean = false,
     val textAlignCenterVertical: Boolean = false,
     val borderType: BorderTypeProto = BorderTypeProto.BORDER_TYPE_NONE,
-    val overlapStyleToggle: Boolean = false,
+    val scheduleMode: ScheduleModeProto = ScheduleModeProto.SECTION_MODE,
     val pageTextColorLong: Long? = null,
     val courseTextColorLong: Long? = null,
 
@@ -107,7 +108,7 @@ data class ScheduleGridStyle(
             textAlignCenterHorizontal = false,
             textAlignCenterVertical = false,
             borderType = BorderTypeProto.BORDER_TYPE_NONE,
-            overlapStyleToggle = false,
+            scheduleMode = ScheduleModeProto.SECTION_MODE,
             pageTextColorLong = null,
             courseTextColorLong = null,
             backgroundImagePath = null
@@ -174,7 +175,7 @@ fun ScheduleGridStyleProto.toCompose(): ScheduleGridStyle {
         textAlignCenterHorizontal = this.text_align_center_horizontal ?: d.textAlignCenterHorizontal,
         textAlignCenterVertical = this.text_align_center_vertical ?: d.textAlignCenterVertical,
         borderType = this.border_type ?: d.borderType,
-        overlapStyleToggle = this.overlap_style_toggle ?: d.overlapStyleToggle,
+        scheduleMode = this.schedule_mode ?: d.scheduleMode,
 
         // 8. 背景图路径映射
         backgroundImagePath = if (!this.background_image_path.isNullOrEmpty()) this.background_image_path else null
@@ -205,7 +206,8 @@ fun ScheduleGridStyle.toProto(): ScheduleGridStyleProto {
         text_align_center_horizontal = this.textAlignCenterHorizontal,
         text_align_center_vertical = this.textAlignCenterVertical,
         border_type = this.borderType,
-        overlap_style_toggle = this.overlapStyleToggle,
+        schedule_mode = this.scheduleMode,
+
         page_text_color_long = this.pageTextColorLong,
         course_text_color_long = this.courseTextColorLong,
         background_image_path = this.backgroundImagePath ?: ""

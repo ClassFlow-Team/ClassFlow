@@ -25,11 +25,13 @@ import com.xingheyuzhuan.shiguangschedule.R
  * @param onTabSelected 当用户点击 Tab 时的回调
  * @param isTransparent 是否开启透明模式（用于课表背景图展示）
  * @param contentColor 自定义内容颜色（通常来自课表样式的文字颜色）
+ * @param modifier 外部传入的修饰符，用于支持折叠动画同步
  */
 @Composable
 fun BottomNavigationBar(
     currentDestination: Destination,
     onTabSelected: (Destination) -> Unit,
+    modifier: Modifier = Modifier,
     isTransparent: Boolean = false,
     contentColor: Color? = null
 ) {
@@ -48,7 +50,8 @@ fun BottomNavigationBar(
 
     NavigationBar(
         containerColor = if (isTransparent) Color.Transparent else MaterialTheme.colorScheme.surface,
-        tonalElevation = if (isTransparent) 0.dp else 3.dp
+        tonalElevation = if (isTransparent) 0.dp else 3.dp,
+        modifier = modifier
     ) {
         navItems.forEach { (label, destination, icons) ->
             // 检查当前目的地类型是否匹配

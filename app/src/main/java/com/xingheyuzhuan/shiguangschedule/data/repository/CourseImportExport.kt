@@ -1,11 +1,19 @@
 package com.xingheyuzhuan.shiguangschedule.data.repository
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.cbor.Cbor
 
 
 object CourseImportExport {
 
+    /**
+     * 核心数据规范版本号
+     * 确立基础全量多课表 CBOR 备份协议规范
+     * 未来如果重构了底层数据架构（如颠覆了基础字段或关联关系），可手动升级为 2，借此编写迁移清洗流
+     */
+    const val CURRENT_SCHEMA_VERSION = 1
 
     /**
      * 自定义 Json 解析器
@@ -17,6 +25,36 @@ object CourseImportExport {
         encodeDefaults = true
         coerceInputValues = true
     }
+
+    /**
+     * CBOR 解析器（用于全盘多表备份、WebDAV 高密二进制流场景）
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    val cbor = Cbor {
+        ignoreUnknownKeys = true
+    }
+
+    /**
+     * 全盘备份文件的最外层“集装箱”
+     */
+    @Serializable
+    data class TotalAppBackupEnvelope(
+        val backupTimestamp: Long,          // 备份生成的时间戳
+        val appVersionCode: Int,            // 实际承载 CURRENT_SCHEMA_VERSION，代表数据协议版本
+        val currentCourseTableId: String,   // 备份前用户当前激活/选中的课表 ID
+        val allTables: List<SingleTablePack> // 系统中所有课表的总集合列表
+    )
+
+    /**
+     * 单个课表资产的隔离包裹
+     */
+    @Serializable
+    data class SingleTablePack(
+        val tableId: String,          // 课表在数据库中的物理 UUID 主键
+        val tableName: String,        // 课表名称
+        val createdAt: Long,          // 课表本身的创建时间戳，用于恢复后列表排序
+        val tableData: CourseTableExportModel // 直接复用单表导出模型
+    )
 
 
 

@@ -7,6 +7,8 @@ import androidx.compose.ui.unit.dp
 import com.xingheyuzhuan.shiguangschedule.data.model.DualColor
 import com.xingheyuzhuan.shiguangschedule.data.model.ScheduleGridStyle
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.BorderTypeProto
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleModeProto
+
 
 /**
  * 【Presentation Layer Model】
@@ -46,7 +48,7 @@ data class ScheduleGridStyleComposed(
     val textAlignCenterHorizontal: Boolean, // 文字水平居中
     val textAlignCenterVertical: Boolean,   // 文字垂直居中
     val borderType: BorderTypeProto,        // 边框类型 (NONE/SOLID/DASHED)
-    val overlapStyleToggle: Boolean,         // 重叠样式切换
+    val scheduleMode: ScheduleModeProto,         // 供 UI 和逻辑层判断当前走哪种排版规则
 
     val pageTextColor: Color?, // 页面字符颜色
     val courseTextColor: Color?, // 课程块文字颜色
@@ -82,7 +84,7 @@ data class ScheduleGridStyleComposed(
                 textAlignCenterHorizontal = this.textAlignCenterHorizontal,
                 textAlignCenterVertical = this.textAlignCenterVertical,
                 borderType = this.borderType,
-                overlapStyleToggle = this.overlapStyleToggle,
+                scheduleMode = this.scheduleMode,
                 pageTextColor = this.pageTextColorLong?.let { Color(it) },
                 courseTextColor = this.courseTextColorLong?.let { Color(it) },
             )
