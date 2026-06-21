@@ -1,4 +1,4 @@
-package com.xingheyuzhuan.shiguangschedule.data
+package com.xingheyuzhuan.shiguangschedule.data.api.date
 
 import com.xingheyuzhuan.shiguangschedule.BuildConfig
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository

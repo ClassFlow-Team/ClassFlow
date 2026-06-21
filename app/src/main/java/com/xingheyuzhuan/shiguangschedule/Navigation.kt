@@ -42,6 +42,7 @@ sealed interface Destination : NavKey {
     @Serializable data object CourseManagementList : Destination
     @Serializable data object StyleSettings : Destination
     @Serializable data object ThemeSettings : Destination
+    @Serializable data object BackupAndRestore : Destination
     // --- 动态传参页面 ---
 
     @Serializable

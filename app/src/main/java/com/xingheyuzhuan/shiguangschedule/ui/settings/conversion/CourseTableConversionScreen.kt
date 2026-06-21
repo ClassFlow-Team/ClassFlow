@@ -236,6 +236,13 @@ fun CourseTableConversionScreen(
                             )
                         }
                     )
+                    HorizontalDivider()
+
+                    ConversionRow(
+                        title = stringResource(R.string.item_backup_restore),
+                        desc = stringResource(R.string.desc_backup_restore),
+                        onClick = { onNavigate(Destination.BackupAndRestore) }
+                    )
                 }
             }
         }
