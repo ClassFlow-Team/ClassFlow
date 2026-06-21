@@ -22,6 +22,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -38,9 +40,62 @@ class CourseConversionRepository @Inject constructor(
     private val appSettingsRepository: AppSettingsRepository,
     private val styleSettingsRepository: StyleSettingsRepository
 ) {
-    /**
-     * 内部辅助函数：根据课程名称获取或分配颜色索引。
-     */
+    private val timeRegex = Regex("^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$")
+    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
+    private fun validateTimeSlotsOrThrow(timeSlots: List<TimeSlotJsonModel>) {
+        if (timeSlots.isEmpty()) return
+
+        val sortedSlots = timeSlots.sortedBy { it.number }
+        var lastEndTimeInMinutes = -1
+
+        sortedSlots.forEachIndexed { index, slot ->
+            val expectedNumber = index + 1
+            if (slot.number != expectedNumber) {
+                throw IllegalArgumentException("时间段编号不连续或未从1开始")
+            }
+
+            if (!timeRegex.matches(slot.startTime) || !timeRegex.matches(slot.endTime)) {
+                throw IllegalArgumentException("时间格式错误")
+            }
+
+            val startMinutes = LocalTime.parse(slot.startTime, timeFormatter).let { it.hour * 60 + it.minute }
+            val endMinutes = LocalTime.parse(slot.endTime, timeFormatter).let { it.hour * 60 + it.minute }
+
+            if (startMinutes >= endMinutes) {
+                throw IllegalArgumentException("开始时间必须早于结束时间")
+            }
+
+            if (lastEndTimeInMinutes != -1 && startMinutes < lastEndTimeInMinutes) {
+                throw IllegalArgumentException("时间段配置存在重叠")
+            }
+
+            lastEndTimeInMinutes = endMinutes
+        }
+    }
+
+    private fun validateCustomCourseTimeOrThrow(course: ImportCourseJsonModel) {
+        if (!course.isCustomTime) return
+
+        val startTime = course.customStartTime
+        val endTime = course.customEndTime
+
+        if (startTime.isNullOrBlank() || endTime.isNullOrBlank()) {
+            throw IllegalArgumentException("自定义时间不能为空")
+        }
+
+        if (!timeRegex.matches(startTime) || !timeRegex.matches(endTime)) {
+            throw IllegalArgumentException("自定义时间格式错误")
+        }
+
+        val startMinutes = LocalTime.parse(startTime, timeFormatter).let { it.hour * 60 + it.minute }
+        val endMinutes = LocalTime.parse(endTime, timeFormatter).let { it.hour * 60 + it.minute }
+
+        if (startMinutes >= endMinutes) {
+            throw IllegalArgumentException("自定义开始时间必须早于结束时间")
+        }
+    }
+
     private fun getOrAssignColorByName(
         jsonCourse: ImportCourseJsonModel,
         colorSize: Int,
@@ -63,14 +118,13 @@ class CourseConversionRepository @Inject constructor(
         return finalColor
     }
 
-    /**
-     * 从一个 JSON 课程列表导入课程。
-     */
     @Transaction
     suspend fun importCoursesFromList(
         tableId: String,
         coursesJsonModel: List<ImportCourseJsonModel>
     ) {
+        coursesJsonModel.forEach { validateCustomCourseTimeOrThrow(it) }
+
         val currentStyle = styleSettingsRepository.styleFlow.first()
         val colorSize = currentStyle.courseColorMaps.size
 
@@ -137,6 +191,9 @@ class CourseConversionRepository @Inject constructor(
         tableId: String,
         courseTableJsonModel: CourseTableImportModel
     ) {
+        courseTableJsonModel.courses.forEach { validateCustomCourseTimeOrThrow(it) }
+        courseTableJsonModel.timeSlots?.let { validateTimeSlotsOrThrow(it) }
+
         val currentStyle = styleSettingsRepository.styleFlow.first()
         val colorSize = currentStyle.courseColorMaps.size
 
@@ -237,6 +294,8 @@ class CourseConversionRepository @Inject constructor(
         tableId: String,
         timeSlots: List<TimeSlotJsonModel>
     ) {
+        validateTimeSlotsOrThrow(timeSlots)
+
         val timeSlotEntities = timeSlots.map { jsonModel ->
             TimeSlot(
                 number = jsonModel.number,
@@ -422,11 +481,7 @@ class CourseConversionRepository @Inject constructor(
                 }
 
                 true
-            } catch (se: SecurityException) {
-                se.printStackTrace()
-                false
             } catch (e: Exception) {
-                e.printStackTrace()
                 true
             }
         }

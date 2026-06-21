@@ -36,7 +36,7 @@ class CourseNameListViewModel @Inject constructor(
 
     // 1. 获取当前激活的课表ID的 Flow
     private val currentTableIdFlow = appSettingsRepository.getAppSettings()
-        .map { it.currentCourseTableId ?: "" }
+        .map { it.currentCourseTableId }
         .distinctUntilChanged()
 
     /**
@@ -80,8 +80,6 @@ class CourseNameListViewModel @Inject constructor(
         val appSettings = appSettingsRepository.getAppSettings().first()
         val tableId = appSettings.currentCourseTableId
 
-        if (tableId != null) {
-            courseTableRepository.deleteCoursesByNames(tableId, courseNames)
-        }
+        courseTableRepository.deleteCoursesByNames(tableId, courseNames)
     }
 }
