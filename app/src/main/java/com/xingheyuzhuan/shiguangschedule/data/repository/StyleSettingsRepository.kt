@@ -18,6 +18,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
 import java.io.InputStream
 import java.io.OutputStream
 import javax.inject.Inject
@@ -60,6 +61,37 @@ val Context.scheduleGridStyleDataStore: DataStore<ScheduleGridStyleProto> by dat
 )
 
 /**
+ * 样式自持版本号的中央备份信封
+ * 放在数据源头，对齐课表 envelope 的设计，保持物理传输字段名 appVersionCode
+ */
+@Serializable
+data class StyleBackupEnvelope(
+    val backupTimestamp: Long,
+    val appVersionCode: Int,
+    val styleProtoBytes: ByteArray
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as StyleBackupEnvelope
+
+        if (backupTimestamp != other.backupTimestamp) return false
+        if (appVersionCode != other.appVersionCode) return false
+        if (!styleProtoBytes.contentEquals(other.styleProtoBytes)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = backupTimestamp.hashCode()
+        result = 31 * result + appVersionCode
+        result = 31 * result + styleProtoBytes.contentHashCode()
+        return result
+    }
+}
+
+/**
  * 样式设置的数据仓库，负责与 Proto DataStore (Wire) 进行交互。
  * * 注意：由于 Wire 生成的是不可变类，所有更新操作均通过 .copy() 及其生成的下划线字段完成。
  */
@@ -68,6 +100,36 @@ class StyleSettingsRepository @Inject constructor(
     private val dataStore: DataStore<ScheduleGridStyleProto>,
     @param:ApplicationContext private val context: Context
 ) {
+
+    companion object {
+        /** 当前样式备份的版本号 */
+        const val STYLE_SCHEMA_VERSION = 1
+    }
+
+    // --- 备份与恢复扩展 API ---
+
+    /**
+     * 仅导出当前原生的样式配置字节数组 (排除壁纸路径)
+     */
+    suspend fun exportRawStyleBytes(): ByteArray {
+        val currentProto = dataStore.data.first()
+        val exportProto = currentProto.copy(background_image_path = "")
+        return ScheduleGridStyleProto.ADAPTER.encode(exportProto)
+    }
+
+    /**
+     * 将清洗/升级完毕后的原生字节数组还原 (缝合本地壁纸并写入)
+     */
+    suspend fun restoreRawStyleBytes(bytes: ByteArray): Result<Unit> = runCatching {
+        val currentLocalProto = dataStore.data.first()
+        val localWallpaperPath = currentLocalProto.background_image_path
+
+        val backupProto = ScheduleGridStyleProto.ADAPTER.decode(bytes)
+        val finalProto = backupProto.copy(background_image_path = localWallpaperPath)
+
+        dataStore.updateData { finalProto }
+        updateAllWidgets(context)
+    }
 
     /**
      * 获取当前样式的快照（一次性读取，用于业务逻辑校验）

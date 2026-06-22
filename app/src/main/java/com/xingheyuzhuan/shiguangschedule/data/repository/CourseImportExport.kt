@@ -13,7 +13,7 @@ object CourseImportExport {
      * 确立基础全量多课表 CBOR 备份协议规范
      * 未来如果重构了底层数据架构（如颠覆了基础字段或关联关系），可手动升级为 2，借此编写迁移清洗流
      */
-    const val CURRENT_SCHEMA_VERSION = 1
+    const val COURSE_SCHEMA_VERSION = 1
 
     /**
      * 自定义 Json 解析器
