@@ -154,8 +154,7 @@ class BackupViewModel @Inject constructor(
                 try {
                     val metaFile = File(context.cacheDir, "meta_restore.json")
                     if (!client.downloadFile("$FIXED_BACKUP_DIR/meta.json", metaFile)) {
-                        // 已字符化："下载网盘备份失败"
-                        return@withContext Result.failure(Exception(context.getString(R.string.backup_err_download_failed)))
+                        return@withContext Result.failure(Exception(context.getString(R.string.backup_err_corrupted)))
                     }
                     val meta = Json.decodeFromString(BackupMeta.serializer(), metaFile.readText())
 
@@ -167,7 +166,14 @@ class BackupViewModel @Inject constructor(
                         }
                     }
 
-                    val packageObj = AppBackupPackage(meta, payloadMap)
+                    if (payloadMap.isEmpty()) {
+                        return@withContext Result.failure(Exception(context.getString(R.string.backup_err_corrupted)))
+                    }
+
+                    val availableModules = meta.modules.filter { payloadMap.containsKey(it.key) }
+                    val safeMeta = meta.copy(modules = availableModules)
+
+                    val packageObj = AppBackupPackage(safeMeta, payloadMap)
                     backupRepository.restoreFullSoftwareBackup(packageObj)
                 } catch (e: Exception) { Result.failure(e) }
             }
@@ -225,17 +231,18 @@ class BackupViewModel @Inject constructor(
             ZipInputStream(inputStream).use { zis ->
                 var entry: ZipEntry? = zis.nextEntry
                 while (entry != null) {
-                    val fileName = File(entry.name).name
-
                     if (!entry.isDirectory) {
-                        when {
-                            fileName == "meta.json" -> {
-                                val content = zis.readBytes()
-                                meta = Json.decodeFromString(BackupMeta.serializer(), String(content, Charsets.UTF_8))
-                            }
-                            fileName.endsWith(".cbor") -> {
-                                val key = fileName.removeSuffix(".cbor")
-                                payloadMap[key] = zis.readBytes()
+                        val entryPath = entry.name
+                        if (!entryPath.contains("/")) {
+                            when {
+                                entryPath == "meta.json" -> {
+                                    val content = zis.readBytes()
+                                    meta = Json.decodeFromString(BackupMeta.serializer(), String(content, Charsets.UTF_8))
+                                }
+                                entryPath.endsWith(".cbor") -> {
+                                    val key = entryPath.removeSuffix(".cbor")
+                                    payloadMap[key] = zis.readBytes()
+                                }
                             }
                         }
                     }
@@ -246,13 +253,14 @@ class BackupViewModel @Inject constructor(
 
             val finalMeta = meta ?: throw Exception(context.getString(R.string.backup_err_corrupted))
 
-            for (module in finalMeta.modules) {
-                if (!payloadMap.containsKey(module.key)) {
-                    throw Exception(context.getString(R.string.backup_err_corrupted))
-                }
+            if (payloadMap.isEmpty()) {
+                throw Exception(context.getString(R.string.backup_err_corrupted))
             }
 
-            val packageObj = AppBackupPackage(finalMeta, payloadMap)
+            val availableModules = finalMeta.modules.filter { payloadMap.containsKey(it.key) }
+            val safeMeta = finalMeta.copy(modules = availableModules)
+
+            val packageObj = AppBackupPackage(safeMeta, payloadMap)
             backupRepository.restoreFullSoftwareBackup(packageObj).getOrThrow()
 
             _uiState.update { it.copy(isBusy = false, testResult = TestResult.Success) }

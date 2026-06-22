@@ -23,7 +23,8 @@ import javax.inject.Singleton
  * 模块化备份定义
  */
 enum class BackupModule(val key: String) {
-    COURSE("course")
+    COURSE("course"),
+    STYLE("style")
 }
 
 /**
@@ -58,7 +59,8 @@ class BackupRepository @Inject constructor(
     private val courseTableDao: CourseTableDao,
     private val courseTableRepository: CourseTableRepository,
     private val courseConversionRepository: CourseConversionRepository,
-    private val appSettingsRepository: AppSettingsRepository
+    private val appSettingsRepository: AppSettingsRepository,
+    private val styleSettingsRepository: StyleSettingsRepository
 ) {
 
     /**
@@ -74,7 +76,13 @@ class BackupRepository @Inject constructor(
                     BackupModule.COURSE -> {
                         exportAllCourseTablesCbor()?.let {
                             payloadMap[module.key] = it
-                            moduleInfos.add(ModuleInfo(module.key, CourseImportExport.CURRENT_SCHEMA_VERSION))
+                            moduleInfos.add(ModuleInfo(module.key, CourseImportExport.COURSE_SCHEMA_VERSION))
+                        }
+                    }
+                    BackupModule.STYLE -> {
+                        exportAppStyleBytes()?.let {
+                            payloadMap[module.key] = it
+                            moduleInfos.add(ModuleInfo(module.key, StyleSettingsRepository.STYLE_SCHEMA_VERSION))
                         }
                     }
                 }
@@ -103,9 +111,24 @@ class BackupRepository @Inject constructor(
     suspend fun restoreFullSoftwareBackup(backupPackage: AppBackupPackage): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             backupPackage.meta.modules.forEach { info ->
+                when (info.key) {
+                    BackupModule.COURSE.key -> {
+                        if (info.schemaVersion > CourseImportExport.COURSE_SCHEMA_VERSION) {
+                            return@withContext Result.failure(IllegalStateException(context.getString(R.string.backup_err_version_too_new)))
+                        }
+                    }
+                    BackupModule.STYLE.key -> {
+                        if (info.schemaVersion > StyleSettingsRepository.STYLE_SCHEMA_VERSION) {
+                            return@withContext Result.failure(IllegalStateException(context.getString(R.string.backup_err_version_too_new)))
+                        }
+                    }
+                }
+            }
+            backupPackage.meta.modules.forEach { info ->
                 val data = backupPackage.payloadMap[info.key] ?: return@forEach
                 val result = when (info.key) {
                     BackupModule.COURSE.key -> restoreAllCourseTablesCbor(data)
+                    BackupModule.STYLE.key -> restoreAppStyleBytes(data)
                     else -> Result.success(Unit)
                 }
                 if (result.isFailure) return@withContext result
@@ -116,7 +139,7 @@ class BackupRepository @Inject constructor(
         }
     }
 
-    // 核心业务通道
+    // 1. 课表核心业务通道
 
     @OptIn(ExperimentalSerializationApi::class)
     suspend fun exportAllCourseTablesCbor(): ByteArray? = withContext(Dispatchers.IO) {
@@ -132,7 +155,7 @@ class BackupRepository @Inject constructor(
 
             val envelope = TotalAppBackupEnvelope(
                 backupTimestamp = System.currentTimeMillis(),
-                appVersionCode = CourseImportExport.CURRENT_SCHEMA_VERSION,
+                appVersionCode = CourseImportExport.COURSE_SCHEMA_VERSION,
                 currentCourseTableId = appSettings.currentCourseTableId,
                 allTables = tablePacks
             )
@@ -157,7 +180,7 @@ class BackupRepository @Inject constructor(
                 return@withContext Result.failure(IllegalStateException(context.getString(R.string.backup_err_corrupted)))
             }
 
-            if (envelope.appVersionCode > CourseImportExport.CURRENT_SCHEMA_VERSION) {
+            if (envelope.appVersionCode > CourseImportExport.COURSE_SCHEMA_VERSION) {
                 return@withContext Result.failure(IllegalStateException(context.getString(R.string.backup_err_version_too_new)))
             }
 
@@ -186,6 +209,57 @@ class BackupRepository @Inject constructor(
             appSettingsRepository.insertOrUpdateAppSettings(currentSettings.copy(currentCourseTableId = finalTableId))
 
             Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // 2. 个性化样式核心业务通道
+
+    /**
+     * 导出样式独立通道
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    suspend fun exportAppStyleBytes(): ByteArray? = withContext(Dispatchers.IO) {
+        try {
+            val rawProtoBytes = styleSettingsRepository.exportRawStyleBytes()
+            val envelope = StyleBackupEnvelope(
+                backupTimestamp = System.currentTimeMillis(),
+                appVersionCode = StyleSettingsRepository.STYLE_SCHEMA_VERSION,
+                styleProtoBytes = rawProtoBytes
+            )
+            CourseImportExport.cbor.encodeToByteArray(StyleBackupEnvelope.serializer(), envelope)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * 样式恢复独立通道
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    suspend fun restoreAppStyleBytes(styleBytes: ByteArray): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            if (styleBytes.isEmpty()) {
+                return@withContext Result.failure(IllegalArgumentException(context.getString(R.string.backup_err_empty)))
+            }
+
+            val envelope = try {
+                CourseImportExport.cbor.decodeFromByteArray(StyleBackupEnvelope.serializer(), styleBytes)
+            } catch (_: Exception) {
+                return@withContext Result.failure(IllegalStateException(context.getString(R.string.backup_err_corrupted)))
+            }
+
+            if (envelope.appVersionCode > StyleSettingsRepository.STYLE_SCHEMA_VERSION) {
+                return@withContext Result.failure(IllegalStateException(context.getString(R.string.backup_err_version_too_new)))
+            }
+
+            val migratedProtoBytes = if (envelope.appVersionCode < StyleSettingsRepository.STYLE_SCHEMA_VERSION) {
+                envelope.styleProtoBytes
+            } else {
+                envelope.styleProtoBytes
+            }
+            styleSettingsRepository.restoreRawStyleBytes(migratedProtoBytes)
         } catch (e: Exception) {
             Result.failure(e)
         }
