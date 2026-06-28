@@ -5,8 +5,9 @@
 本仓库为拾光课程表（shiguangschedule）项目的主仓库，包含软件的全部源代码及相关资源。项目采用开源模式，欢迎社区开发者参与贡献和适配。  
 
 ## 预览图
-
-![预览图1](/picture/Preview_1.png "预览图")
+| 周课表页面(支持长按调整课程块位置或者高度) | 课表页面个性化配置(深色模式演示) | 小组件选择 |
+| :---: | :---: | :---: |
+| ![图片1](/picture/Screenshot_1.png) | ![图片2](/picture/Screenshot_2.png) | ![图片3](/picture/Screenshot_3.png) |
 
 ## 项目定位
 
