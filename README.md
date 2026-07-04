@@ -1,6 +1,7 @@
 # 拾光课程表
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/XingHeYuZhuan/shiguangschedule/total)  ![GitHub License](https://img.shields.io/github/license/XingHeYuZhuan/shiguangschedule)  ![GitHub Repo stars](https://img.shields.io/github/stars/XingHeYuZhuan/shiguangschedule)  
-<a href="https://hellogithub.com/repository/XingHeYuZhuan/shiguangschedule" target="_blank"><img src="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=9f09baa3931a4f79940100829d4d0ca4&claim_uid=TRP24EpKZ5sx68l&theme=neutral" alt="Featured｜HelloGitHub" style="width: 250px; height: 54px;" width="250" height="54" /></a>  
+<a href="https://hellogithub.com/repository/XingHeYuZhuan/shiguangschedule" target="_blank"><img src="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=9f09baa3931a4f79940100829d4d0ca4&claim_uid=TRP24EpKZ5sx68l&theme=neutral" alt="Featured｜HelloGitHub" style="width: 250px; height: 54px;" width="250" height="54" /></a>
+<a href="https://trendshift.io/repositories/45835?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-45835" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/45835/daily?language=Kotlin" alt="XingHeYuZhuan%2Fshiguangschedule | Trendshift" width="250" height="55"/></a>  
 #### 与我们交流和讨论 ![](https://img.shields.io/badge/QQ_频道-pd68794181-blue)
 
 本仓库为拾光课程表（shiguangschedule）项目的主仓库，包含软件的全部源代码及相关资源。项目采用开源模式，欢迎社区开发者参与贡献和适配。  
