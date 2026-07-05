@@ -43,7 +43,6 @@ data class MergedCourseBlock(
     val startSection: Float,
     val endSection: Float,
     val courses: List<CourseWithWeeks>,
-    val hasNonCurrentWeekCourses: Boolean = false,
     val needsProportionalRendering: Boolean = false,
     val isVisualDemoted: Boolean = false,
     val nonActiveRanges: List<Pair<Float, Float>> = emptyList()
@@ -678,7 +677,6 @@ class WeeklyScheduleViewModel @Inject constructor(
                             startSection = (item.start - 1f).coerceIn(0f, maxSection),
                             endSection = (item.end - 1f).coerceIn(0f, maxSection),
                             courses = listOf(cw),
-                            hasNonCurrentWeekCourses = !isCurrentWeekActive,
                             needsProportionalRendering = (mode == ScheduleModeProto.TIME_24H_MODE) || cw.course.isCustomTime,
                             isVisualDemoted = !isCurrentWeekActive,
                             nonActiveRanges = listOf(myColumnIndex.toFloat() to totalSubColumns.toFloat())

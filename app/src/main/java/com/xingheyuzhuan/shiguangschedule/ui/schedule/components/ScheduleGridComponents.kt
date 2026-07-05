@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -27,6 +28,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,50 +79,88 @@ fun DayHeader(
     subTextColor: Color,
     strokeWidthPx: Float
 ) {
-    Row(Modifier.fillMaxWidth().height(style.dayHeaderHeight)) {
-        Box(
-            modifier = Modifier
-                .width(style.timeColumnWidth)
-                .fillMaxHeight()
-                .drawBehind {
-                    if (!style.hideGridLines) {
-                        drawLine(lineColor, Offset(size.width, 0f), Offset(size.width, size.height), strokeWidthPx)
-                        drawLine(lineColor, Offset(0f, size.height), Offset(size.width, size.height), strokeWidthPx)
-                    }
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Text(text = currentYear, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = subTextColor)
-        }
+    BoxWithConstraints(Modifier.fillMaxWidth().height(style.dayHeaderHeight)) {
+        val shouldShowDate = !style.hideDateUnderDay && maxHeight >= 42.dp
 
-        val displayDaysCount = displayDays.size
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .drawBehind {
-                    if (!style.hideGridLines) {
-                        val cellWidth = size.width / displayDaysCount
-                        for (i in 1..displayDaysCount) {
-                            val x = i * cellWidth
-                            drawLine(lineColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = strokeWidthPx)
+        Row(Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .width(style.timeColumnWidth)
+                    .fillMaxHeight()
+                    .drawBehind {
+                        if (!style.hideGridLines) {
+                            drawLine(lineColor, Offset(size.width, 0f), Offset(size.width, size.height), strokeWidthPx)
+                            drawLine(lineColor, Offset(0f, size.height), Offset(size.width, size.height), strokeWidthPx)
                         }
-                        drawLine(lineColor, Offset(0f, size.height), Offset(size.width, size.height), strokeWidthPx)
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = currentYear,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = subTextColor,
+                    style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
+                )
+            }
+
+            val displayDaysCount = displayDays.size
+
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .drawBehind {
+                        if (!style.hideGridLines) {
+                            val cellWidth = size.width / displayDaysCount
+                            for (i in 1..displayDaysCount) {
+                                val x = i * cellWidth
+                                drawLine(lineColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = strokeWidthPx)
+                            }
+                            drawLine(lineColor, Offset(0f, size.height), Offset(size.width, size.height), strokeWidthPx)
+                        }
                     }
-                }
-        ) {
-            displayDays.forEachIndexed { index, day ->
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .background(if (index == todayIndex) MaterialTheme.colorScheme.primaryContainer.copy(0.4f) else Color.Transparent),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = day, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textColor)
-                        if (!style.hideDateUnderDay && dates.size > index) {
-                            Text(text = dates[index], fontSize = 10.sp, color = subTextColor)
+            ) {
+                displayDays.forEachIndexed { index, day ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .background(if (index == todayIndex) MaterialTheme.colorScheme.primaryContainer.copy(0.4f) else Color.Transparent),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .padding(vertical = 1.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = day,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textColor,
+                                maxLines = 1,
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                    lineHeight = 16.sp
+                                )
+                            )
+
+                            if (shouldShowDate && dates.size > index) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = dates[index],
+                                    fontSize = 10.sp,
+                                    color = subTextColor,
+                                    maxLines = 1,
+                                    style = TextStyle(
+                                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                        lineHeight = 12.sp
+                                    )
+                                )
+                            }
                         }
                     }
                 }

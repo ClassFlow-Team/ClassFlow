@@ -253,14 +253,10 @@ fun ScheduleGrid(
                             ) {
                                 CourseBlock(
                                     courseWrapper = item.courseWrapper,
-                                    hasNonCurrentWeekCourses = item.parentBlock.hasNonCurrentWeekCourses,
                                     isVisualDemoted = item.parentBlock.isVisualDemoted,
                                     style = style,
+                                    timeSlots = timeSlots,
                                     isFloating = isExpanded,
-                                    startTime = item.courseWrapper.course.let {
-                                        if (it.isCustomTime) it.customStartTime
-                                        else timeSlots.find { ts -> ts.number == it.startSection }?.startTime
-                                    },
                                     modifier = if (isExpanded) {
                                         if (!item.parentBlock.isVisualDemoted) {
                                             Modifier.pointerInput(item, gridWidthPx) {
