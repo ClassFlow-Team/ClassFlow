@@ -7,9 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,7 +22,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawOutline
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -32,7 +29,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.BorderTypeProto
 import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
@@ -40,7 +36,6 @@ import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
 @Composable
 fun CourseBlock(
     courseWrapper: CourseWithWeeks,
-    hasNonCurrentWeekCourses: Boolean,
     isVisualDemoted: Boolean,
     style: ScheduleGridStyleComposed,
     modifier: Modifier = Modifier,
@@ -153,16 +148,6 @@ fun CourseBlock(
                     Text(text = "$prefix$position", fontSize = s10, color = textColor, textAlign = textAlign, overflow = TextOverflow.Ellipsis, style = TextStyle(lineHeight = 1.em))
                 }
             }
-        }
-
-        // 右下角多版本/多课程重叠堆叠图标
-        if (hasNonCurrentWeekCourses) {
-            Icon(
-                painter = painterResource(id = R.drawable.stacks_24px),
-                contentDescription = null,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp).size(14.dp),
-                tint = textColor.copy(alpha = 0.5f)
-            )
         }
 
         // 当单课不是当前周时，进行干净的全局遮罩染色与虚化斜线绘制

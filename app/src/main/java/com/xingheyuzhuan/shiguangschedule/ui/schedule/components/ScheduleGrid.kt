@@ -253,7 +253,6 @@ fun ScheduleGrid(
                             ) {
                                 CourseBlock(
                                     courseWrapper = item.courseWrapper,
-                                    hasNonCurrentWeekCourses = item.parentBlock.hasNonCurrentWeekCourses,
                                     isVisualDemoted = item.parentBlock.isVisualDemoted,
                                     style = style,
                                     isFloating = isExpanded,
