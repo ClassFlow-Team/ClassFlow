@@ -30,7 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
+import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.BorderTypeProto
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleModeProto
 import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
 
 @Composable
@@ -38,14 +40,14 @@ fun CourseBlock(
     courseWrapper: CourseWithWeeks,
     isVisualDemoted: Boolean,
     style: ScheduleGridStyleComposed,
+    timeSlots: List<TimeSlot>,
     modifier: Modifier = Modifier,
-    startTime: String? = null,
     isFloating: Boolean = false // 标记当前块是否处于长按选中/悬浮状态
 ) {
     val course = courseWrapper.course
     val isDarkTheme = LocalIsDarkTheme.current
 
-    // 1. 颜色适配
+    // 颜色适配
     val colorIndex = course.colorInt.takeIf { it in style.courseColorMaps.indices }
     val courseColorAdapted: Color? = colorIndex?.let { index ->
         val baseColorMap = style.courseColorMaps[index]
@@ -57,16 +59,37 @@ fun CourseBlock(
     val blockColor = (courseColorAdapted ?: fallbackColorAdapted).copy(alpha = currentAlpha)
     val textColor = style.courseTextColor ?: MaterialTheme.colorScheme.onSurface
 
-    // 2. 字体大小
+    // 字体大小
     val s13 = (13 * style.fontScale).sp
     val s10 = (10 * style.fontScale).sp
 
+    // 核心分支逻辑：判断 24小时模式 与 节次模式 的时间文本渲染
     val customStartTime = course.customStartTime
     val customEndTime = course.customEndTime
     val customTimeString = if (customStartTime != null && customEndTime != null) "$customStartTime - $customEndTime" else null
     val isCustomTimeCourse = customTimeString != null
 
-    // 3. 边框样式配置
+    val timeTextToShow = if (style.scheduleMode == ScheduleModeProto.TIME_24H_MODE) {
+        // 24小时绝对时间轴模式：全部课程都显示起止时间
+        if (isCustomTimeCourse) {
+            customTimeString
+        } else {
+            val startSlot = timeSlots.find { it.number == course.startSection }
+            val endSlot = timeSlots.find { it.number == course.endSection }
+            if (startSlot != null && endSlot != null) "${startSlot.startTime} - ${endSlot.endTime}" else null
+        }
+    } else {
+        // 传统节次模式：只有自定义课程显示起止时间；普通节次课程只有在开启展示开始时间时才显示开始时间
+        if (isCustomTimeCourse) {
+            customTimeString
+        } else if (style.showStartTime) {
+            timeSlots.find { it.number == course.startSection }?.startTime
+        } else {
+            null
+        }
+    }
+
+    // 边框样式配置
     val borderColor = if (isFloating) Color(0xFF2196F3) else MaterialTheme.colorScheme.outline
     val borderWidth = if (isFloating) 2.dp else 1.dp
     val borderAlpha = if (isFloating) 1.0f else style.courseBlockAlpha
@@ -117,10 +140,15 @@ fun CourseBlock(
             horizontalAlignment = horizontalAlignment,
             verticalArrangement = verticalArrangement
         ) {
-            if (isCustomTimeCourse) {
-                Text(text = customTimeString, fontSize = s10, color = textColor.copy(alpha = 0.8f), fontWeight = FontWeight.SemiBold, textAlign = textAlign, style = TextStyle(lineHeight = 1.em))
-            } else if (style.showStartTime && startTime != null) {
-                Text(text = startTime, fontSize = s10, color = textColor.copy(alpha = 0.8f), fontWeight = FontWeight.SemiBold, textAlign = textAlign, style = TextStyle(lineHeight = 1.em))
+            if (timeTextToShow != null) {
+                Text(
+                    text = timeTextToShow,
+                    fontSize = s10,
+                    color = textColor.copy(alpha = 0.8f),
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = textAlign,
+                    style = TextStyle(lineHeight = 1.em)
+                )
             }
 
             Text(

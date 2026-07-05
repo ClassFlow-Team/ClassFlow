@@ -316,7 +316,7 @@ class StyleSettingsViewModel @Inject constructor(
                 ),
                 // 传统节次模式 4：冲突课程 B（标准节次课程，对应第2节到第3节，非当前周降级显示）
                 createBlock(
-                    tableId = dummyTableId, day = 3, start = 1f, end = 2.5f, name = "冲突课程 B",
+                    tableId = dummyTableId, day = 3, start = 1f, end = 3f, name = "冲突课程 B",
                     startSection = 2, endSection = 3,
                     isCustomTime = false, customStartTime = null, customEndTime = null,
                     subColumn = 1f, totalColumns = 2f,
@@ -364,7 +364,6 @@ class StyleSettingsViewModel @Inject constructor(
             startSection = start,
             endSection = end,
             courses = listOf(CourseWithWeeks(course, emptyList())),
-            hasNonCurrentWeekCourses = isNonCurrentWeek,
             needsProportionalRendering = isCustomTime,
             isVisualDemoted = isNonCurrentWeek,
             nonActiveRanges = listOf(subColumn to totalColumns)
