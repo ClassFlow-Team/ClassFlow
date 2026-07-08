@@ -16,8 +16,8 @@ android {
         applicationId = "com.xingheyuzhuan.shiguangschedule"
         minSdk = 26
         targetSdk = 37
-        versionCode = 32
-        versionName = "1.2.4"
+        versionCode = 33
+        versionName = "1.2.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -154,10 +154,8 @@ dependencies {
     implementation(libs.ktor.client.auth)
     implementation(libs.wire.runtime)
 
-
     debugImplementation(libs.okhttp.logging.interceptor)
 
-    ksp(libs.kotlin.metadata.jvm) // hilt未支持Kotlin 2.4.x 因此引入 当支持后视情况移除
     ksp(libs.hilt.compiler)
     ksp(libs.androidx.room.compiler)
     ksp(libs.androidx.hilt.compiler)
