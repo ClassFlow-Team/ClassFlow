@@ -13,7 +13,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import androidx.core.content.getSystemService
 import com.xingheyuzhuan.shiguangschedule.MainActivity
-import com.xingheyuzhuan.shiguangschedule.MyApplication
+import com.xingheyuzhuan.shiguangschedule.AppEntryPoint
+import dagger.hilt.android.EntryPointAccessors
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.widget.updateAllWidgets
 import kotlinx.coroutines.CoroutineScope
@@ -101,16 +102,14 @@ class CourseAlarmReceiver : BroadcastReceiver() {
 
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    val app = ctx.applicationContext as? MyApplication
-                    val appSettingsRepository = app?.appSettingsRepository
-
-                    if (appSettingsRepository == null) {
-                        Log.e(TAG, "无法获取 MyApplication 实例或 AppSettingsRepository。")
-                        return@launch
-                    }
+                    val entryPoint = EntryPointAccessors.fromApplication(
+                        ctx.applicationContext,
+                        AppEntryPoint::class.java
+                    )
+                    val appSettingsRepository = entryPoint.appSettingsRepository()
 
                     val appSettings = appSettingsRepository.getAppSettings().first()
-                    val modeToUse = appSettings.autoControlMode
+                    val modeToUse = appSettings.autoControlMode.value
 
                     // 检查模式动作
                     val dndAction = intent?.getStringExtra(EXTRA_DND_ACTION)

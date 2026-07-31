@@ -22,9 +22,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
+import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.Destination
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import school_index.AdapterCategory
@@ -36,7 +36,7 @@ import school_index.School
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SchoolSelectionListScreen(
-    navController: NavController,
+    navBridge: NavBridge,
     // 注入 ViewModel
     viewModel: SchoolSelectionViewModel = viewModel()
 ) {
@@ -59,7 +59,7 @@ fun SchoolSelectionListScreen(
     Scaffold(
         topBar = {
             SearchBarWithTitle(
-                navController = navController,
+                navBridge = navBridge,
                 searchQuery = searchQuery,
                 onQueryChange = viewModel::updateSearchQuery,
                 searchActive = isSearchActive,
@@ -73,14 +73,7 @@ fun SchoolSelectionListScreen(
                 titleText = titleText,
                 filteredSchools = filteredSchools,
             ) { selectedSchool ->
-                navController.navigate(
-                    Screen.AdapterSelection.createRoute(
-                        selectedSchool.id,
-                        selectedSchool.name,
-                        selectedCategory.number,
-                        selectedSchool.resourceFolder
-                    )
-                )
+                navBridge.navigate(Destination.AdapterSelection(selectedSchool.id, selectedSchool.name, selectedCategory.value, selectedSchool.resource_folder))
                 isSearchActive = false
                 viewModel.updateSearchQuery("")
             }
@@ -109,16 +102,9 @@ fun SchoolSelectionListScreen(
                     initials = initials,
                     lazyListState = lazyListState,
                     coroutineScope = coroutineScope,
-                    selectedCategoryNumber = selectedCategory.number,
+                    selectedCategoryNumber = selectedCategory.value,
                     onSchoolSelected = { school, categoryNumber ->
-                        navController.navigate(
-                            Screen.AdapterSelection.createRoute(
-                                school.id,
-                                school.name,
-                                categoryNumber,
-                                school.resourceFolder
-                            )
-                        )
+                        navBridge.navigate(Destination.AdapterSelection(school.id, school.name, categoryNumber, school.resource_folder))
                     }
                 )
             }
@@ -264,7 +250,7 @@ fun CategoryTabs(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchBarWithTitle(
-    navController: NavController,
+    navBridge: NavBridge,
     searchQuery: String,
     onQueryChange: (String) -> Unit,
     searchActive: Boolean,
@@ -272,7 +258,7 @@ fun SearchBarWithTitle(
     placeholderText: String,
     titleText: String,
     filteredSchools: List<School>,
-    onSchoolSelected: (School) -> Unit // 注意: 这个回调只在 SearchBar 内部使用，它通过 lambda 捕获了 selectedCategory.number
+    onSchoolSelected: (School) -> Unit // 注意: 这个回调只在 SearchBar 内部使用，它通过 lambda 捕获了 selectedCategory.value
 ) {
     SearchBar(
         modifier = Modifier.fillMaxWidth(),
@@ -290,7 +276,7 @@ fun SearchBarWithTitle(
                             onSearchActiveChange(false)
                             onQueryChange("")
                         } else {
-                            navController.popBackStack()
+                            navBridge.popBackStack()
                         }
                     }) {
                         Icon(

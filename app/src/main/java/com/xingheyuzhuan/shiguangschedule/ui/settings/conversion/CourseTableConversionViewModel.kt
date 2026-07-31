@@ -1,13 +1,12 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.conversion
 
-import android.app.Application
 import android.util.Log
-import androidx.lifecycle.AndroidViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.CreationExtras
-import com.xingheyuzhuan.shiguangschedule.MyApplication
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseConversionRepository
@@ -27,12 +26,13 @@ import java.nio.charset.Charset
  * 课表导入/导出界面的 ViewModel。
  * 处理所有业务逻辑和状态，并通过事件通道与 UI 沟通。
  */
-class CourseTableConversionViewModel(
-    application: Application,
+@HiltViewModel
+class CourseTableConversionViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val courseConversionRepository: CourseConversionRepository,
     private val courseTableRepository: CourseTableRepository,
     private val appSettingsRepository: AppSettingsRepository
-) : AndroidViewModel(application) {
+) : ViewModel() {
 
     // UI 状态流，仅包含 UI 显示相关的状态（如对话框可见性、加载状态）
     private val _uiState = MutableStateFlow(ConversionUiState())
@@ -42,7 +42,7 @@ class CourseTableConversionViewModel(
     private val _events = Channel<ConversionEvent>()
     val events = _events.receiveAsFlow()
 
-    private val context = getApplication<Application>()
+    // context 已由构造注入
 
     fun onImportClick() {
         _uiState.value = _uiState.value.copy(showImportTableDialog = true)
@@ -147,6 +147,26 @@ class CourseTableConversionViewModel(
             }
         }
     }
+
+    fun onSyncToCalendarClick() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            try {
+                val success = courseConversionRepository.syncCurrentTableToSystemCalendar(context)
+                val message = if (success) {
+                    context.getString(R.string.toast_sync_calendar_success)
+                } else {
+                    context.getString(R.string.error_sync_calendar_failed)
+                }
+                _events.send(ConversionEvent.ShowMessage(message))
+            } catch (e: Exception) {
+                Log.e("CourseTableConversionViewModel", "同步系统日历失败：${e.message}", e)
+                _events.send(ConversionEvent.ShowMessage(context.getString(R.string.error_sync_calendar_failed)))
+            } finally {
+                _uiState.value = _uiState.value.copy(isLoading = false)
+            }
+        }
+    }
 }
 
 data class ConversionUiState(
@@ -167,21 +187,4 @@ sealed class ConversionEvent {
     data class LaunchExportFileCreator(val jsonContent: String) : ConversionEvent()
     data class LaunchExportIcsFileCreator(val tableId: String, val alarmMinutes: Int?) : ConversionEvent()
     data class ShowMessage(val message: String) : ConversionEvent()
-}
-
-object CourseTableConversionViewModelFactory : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-        val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
-        if (modelClass.isAssignableFrom(CourseTableConversionViewModel::class.java)) {
-            val app = application as MyApplication
-            @Suppress("UNCHECKED_CAST")
-            return CourseTableConversionViewModel(
-                application,
-                app.courseConversionRepository,
-                app.courseTableRepository,
-                app.appSettingsRepository
-            ) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class")
-    }
 }

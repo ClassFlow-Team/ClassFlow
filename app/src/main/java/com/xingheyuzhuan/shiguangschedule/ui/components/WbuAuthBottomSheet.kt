@@ -1,9 +1,9 @@
 package com.xingheyuzhuan.shiguangschedule.ui.components
+import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,7 +69,7 @@ fun WbuAuthBottomSheet(
     initialStudentId: String = "",
     initialUseVpn: Boolean = false
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalIsDarkTheme.current
     var studentId by remember(initialStudentId) { mutableStateOf(initialStudentId) }
     var password by remember { mutableStateOf("") }
     var useVpn by remember(initialUseVpn) { mutableStateOf(initialUseVpn) }
@@ -342,8 +342,8 @@ fun VpnSmsCodeDialog(
                     enabled = !isVerifying,
                     isError = errorMessage != null,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = if (isSystemInDarkTheme()) 0.14f else 0.24f),
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = if (isSystemInDarkTheme()) 0.10f else 0.18f)
+                        focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = if (LocalIsDarkTheme.current) 0.14f else 0.24f),
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = if (LocalIsDarkTheme.current) 0.10f else 0.18f)
                     )
                 )
 

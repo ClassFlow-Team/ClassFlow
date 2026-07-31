@@ -1,12 +1,10 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.conversion
 
-import android.app.Activity
-import android.content.Context
-import android.content.Intent
+import androidx.hilt.navigation.compose.hiltViewModel
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContract
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,18 +16,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.EventAvailable
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,19 +47,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavHostController
+import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.tool.shareFile
 import com.xingheyuzhuan.shiguangschedule.ui.components.CourseTablePickerDialog
 import com.xingheyuzhuan.shiguangschedule.ui.components.DockSafeBottomPadding
-import com.xingheyuzhuan.shiguangschedule.ui.components.NativeNumberPicker
 import com.xingheyuzhuan.shiguangschedule.ui.settings.SettingsCard
 import com.xingheyuzhuan.shiguangschedule.ui.settings.SettingTile
 import com.xingheyuzhuan.shiguangschedule.ui.settings.SettingDivider
@@ -76,163 +67,10 @@ import java.io.OutputStream
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-// 自定义文件选择器 Contract，用于导入，只允许选择 JSON 文件
-class OpenJsonDocumentContract : ActivityResultContract<Unit, Uri?>() {
-    override fun createIntent(context: Context, input: Unit): Intent {
-        return Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "application/json"
-        }
-    }
-
-    override fun parseResult(resultCode: Int, intent: Intent?): Uri? {
-        return if (resultCode == Activity.RESULT_OK) intent?.data else null
-    }
-}
-
-// 自定义文件创建器 Contract，用于导出，接受文件名作为输入
-class CreateJsonDocumentContract : ActivityResultContract<String, Uri?>() {
-    override fun createIntent(context: Context, input: String): Intent {
-        return Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "application/json"
-            putExtra(Intent.EXTRA_TITLE, input)
-        }
-    }
-
-    override fun parseResult(resultCode: Int, intent: Intent?): Uri? {
-        return if (resultCode == Activity.RESULT_OK) intent?.data else null
-    }
-}
-
-// 自定义 ICS 文件创建器 Contract
-class CreateIcsDocumentContract : ActivityResultContract<String, Uri?>() {
-    override fun createIntent(context: Context, input: String): Intent {
-        return Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "text/calendar" // ICS 文件的 MIME 类型
-            putExtra(Intent.EXTRA_TITLE, input)
-        }
-    }
-
-    override fun parseResult(resultCode: Int, intent: Intent?): Uri? {
-        return if (resultCode == Activity.RESULT_OK) intent?.data else null
-    }
-}
-
-private data class LocalizedAlarmOption(val value: Int?, private val displayString: String) {
-    override fun toString(): String = displayString
-}
-
-@Composable
-fun AlarmMinutesPicker(
-    modifier: Modifier = Modifier,
-    initialValue: Int? = 15,
-    onValueSelected: (Int?) -> Unit,
-    itemHeight: Dp
-) {
-    val alarmOptionNone = stringResource(R.string.alarm_option_none)
-    val alarmOptionOnTime = stringResource(R.string.alarm_option_on_time)
-
-    val localizedOptions = remember(alarmOptionNone, alarmOptionOnTime) {
-        buildList {
-            add(LocalizedAlarmOption(null, alarmOptionNone))
-            add(LocalizedAlarmOption(0, alarmOptionOnTime))
-            for (i in 1..60) {
-                add(LocalizedAlarmOption(i, i.toString()))
-            }
-        }
-    }
-
-    val initialOption = remember(initialValue, localizedOptions) {
-        localizedOptions.find { it.value == initialValue } ?: localizedOptions.find { it.value == 15 }!!
-    }
-
-    NativeNumberPicker(
-        values = localizedOptions,
-        selectedValue = initialOption,
-        onValueChange = { selectedOption ->
-            onValueSelected(selectedOption.value)
-        },
-        modifier = modifier,
-        itemHeight = itemHeight
-    )
-}
-
-// ICS 导出对话框，用于选择提醒时间和课表
-@Composable
-fun IcsExportDialog(
-    onDismissRequest: () -> Unit,
-    onConfirm: (String, Int?) -> Unit
-) {
-    var alarmMinutes by remember { mutableStateOf<Int?>(15) }
-    var showTablePicker by remember { mutableStateOf(false) }
-
-    val dialogTitleIcsExport = stringResource(R.string.dialog_title_ics_export_settings)
-    val labelSelectAlarm = stringResource(R.string.label_select_alarm_time)
-    val actionCancel = stringResource(R.string.action_cancel)
-    val actionNextStep = stringResource(R.string.action_next_step)
-    val dialogTitleSelectExportTable = stringResource(R.string.dialog_title_select_export_table)
-
-    // 当 showTablePicker 为 false 时，显示第一个对话框（提醒时间选择）
-    if (!showTablePicker) {
-        Dialog(onDismissRequest = onDismissRequest) {
-            Card {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = dialogTitleIcsExport,
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(labelSelectAlarm, fontSize = 16.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    AlarmMinutesPicker(
-                        modifier = Modifier.width(150.dp),
-                        onValueSelected = { minutes -> alarmMinutes = minutes },
-                        itemHeight = 48.dp
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = onDismissRequest) {
-                            Text(actionCancel)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(onClick = { showTablePicker = true }) {
-                            Text(actionNextStep)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // 当 showTablePicker 为 true 时，显示第二个对话框（课表选择）
-    if (showTablePicker) {
-        CourseTablePickerDialog(
-            title = dialogTitleSelectExportTable,
-            // 这里我们希望关闭课表选择器时，整个导出流程都结束
-            onDismissRequest = onDismissRequest,
-            onTableSelected = { selectedTable ->
-                // 在回调中，同时传递课表ID和之前选择的提醒时间
-                onConfirm(selectedTable.id, alarmMinutes)
-            }
-        )
-    }
-}
-
-
 @Composable
 fun CourseTableConversionScreen(
-    navController: NavHostController,
-    viewModel: CourseTableConversionViewModel = viewModel(factory = CourseTableConversionViewModelFactory)
+    navBridge: NavBridge,
+    viewModel: CourseTableConversionViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -244,6 +82,7 @@ fun CourseTableConversionScreen(
     val snackbarCannotSaveFile = stringResource(R.string.snackbar_cannot_save_file)
     val snackbarFileSaveCanceled = stringResource(R.string.snackbar_file_save_canceled)
     val snackbarFileCopyFailedForShare = stringResource(R.string.snackbar_file_copy_failed_for_share)
+    val snackbarCalendarPermissionDenied = stringResource(R.string.error_sync_calendar_failed)
 
     val dialogTitleFileSaved = stringResource(R.string.dialog_title_file_saved)
     val dialogTextFileSavedSharePrompt = stringResource(R.string.dialog_text_file_saved_share_prompt)
@@ -329,6 +168,18 @@ fun CourseTableConversionScreen(
         pendingAlarmMinutes = null
     }
 
+    val calendarPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions.values.all { it }) {
+            viewModel.onSyncToCalendarClick()
+        } else {
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(snackbarCalendarPermissionDenied)
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
@@ -380,7 +231,7 @@ fun CourseTableConversionScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { navController.navigateUp() }) {
+                IconButton(onClick = { navBridge.navigateUp() }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = stringResource(R.string.a11y_back)
@@ -419,19 +270,37 @@ fun CourseTableConversionScreen(
                 )
             }
 
+            // 教务导入：仅保留 WBU 入口。
+            // 多校 SchoolSelection / 适配仓库 UpdateRepo 代码与路由仍保留（无 UI 入口），降低下次上游 merge 冲突面。
             SettingsCard(title = stringResource(R.string.section_school_import)) {
                 SettingTile(
                     icon = Icons.Rounded.School,
                     title = "武汉商学院教务一键同步",
                     subtitle = "自动登录后抓取课表并回写到当前课表",
                     onClick = {
-                        navController.navigate(
-                            Screen.WebView.createRoute(
-                                initialUrl = "https://jwxt.wbu.edu.cn/admin/?loginType=1",
-                                assetJsPath = ""
-                            )
-                        )
+                        navBridge.navigate(Destination.WebView(initialUrl = "https://jwxt.wbu.edu.cn/admin/?loginType=1", assetJsPath = ""))
                     }
+                )
+            }
+
+            SettingsCard(title = stringResource(R.string.section_sync)) {
+                SettingTile(
+                    icon = Icons.Rounded.EventAvailable,
+                    title = stringResource(R.string.item_sync_to_system_calendar),
+                    subtitle = stringResource(R.string.desc_sync_to_system_calendar),
+                    onClick = {
+                        if (!uiState.isLoading) {
+                            calendarPermissionLauncher.launch(
+                                arrayOf(
+                                    android.Manifest.permission.READ_CALENDAR,
+                                    android.Manifest.permission.WRITE_CALENDAR
+                                )
+                            )
+                        }
+                    },
+                    trailingContent = if (uiState.isLoading) {
+                        { CircularProgressIndicator(modifier = Modifier.height(20.dp), strokeWidth = 2.dp) }
+                    } else null
                 )
             }
 

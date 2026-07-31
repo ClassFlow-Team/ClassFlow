@@ -1,6 +1,7 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.style
 
 import androidx.activity.compose.BackHandler
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -58,7 +59,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.xingheyuzhuan.shiguangschedule.R
 import java.io.File
 
@@ -66,7 +67,7 @@ import java.io.File
 @Composable
 fun WallpaperAdjustScreen(
     onBack: () -> Unit,
-    viewModel: StyleSettingsViewModel = viewModel(factory = StyleSettingsViewModelFactory)
+    viewModel: StyleSettingsViewModel = hiltViewModel()
 ) {
     val styleState by viewModel.styleState.collectAsStateWithLifecycle()
     val demoUiState by viewModel.demoUiState.collectAsStateWithLifecycle()

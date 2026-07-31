@@ -1,4 +1,5 @@
 package com.xingheyuzhuan.shiguangschedule.ui.components
+import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -9,7 +10,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,9 +54,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavHostController
+import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.Destination
 import kotlin.math.abs
 
 /** Extra bottom content-padding for top-level screens overlaid by the floating dock. */
@@ -75,22 +75,22 @@ val DockSafeBottomPadding = 88.dp
  */
 @Composable
 fun BottomNavigationBar(
-    navController: NavHostController,
-    currentRoute: String?,
+    navBridge: NavBridge,
+    currentDestination: Destination?,
     isTransparent: Boolean = false,
-    onTabClickIntercept: ((String) -> Boolean)? = null,
+    onTabClickIntercept: ((Destination) -> Boolean)? = null,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalIsDarkTheme.current
     val density = LocalDensity.current
     val navItems = listOf(
-        Triple(stringResource(R.string.nav_today_schedule), Screen.TodaySchedule.route, 0),
-        Triple(stringResource(R.string.nav_course_schedule), Screen.CourseSchedule.route, 1),
-        Triple(stringResource(R.string.nav_settings), Screen.Settings.route, 2)
+        Triple(stringResource(R.string.nav_today_schedule), Destination.TodaySchedule, 0),
+        Triple(stringResource(R.string.nav_course_schedule), Destination.CourseSchedule, 1),
+        Triple(stringResource(R.string.nav_settings), Destination.Settings, 2)
     )
 
-    val effectiveRoute = currentRoute ?: Screen.CourseSchedule.route
-    val selectedIndex = navItems.indexOfFirst { it.second == effectiveRoute }.coerceAtLeast(0)
+    val effectiveDestination = currentDestination ?: Destination.CourseSchedule
+    val selectedIndex = navItems.indexOfFirst { it.second == effectiveDestination }.coerceAtLeast(0)
     val glassShape = RoundedCornerShape(22.dp)
 
     // ── Glass surface tint (Apple Liquid Glass: warm-white light / cool-gray dark) ──
@@ -218,7 +218,7 @@ fun BottomNavigationBar(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                navItems.forEach { (label, route, index) ->
+                navItems.forEach { (label, destination, index) ->
                     val isSelected = selectedIndex == index
 
                     val scale by animateFloatAsState(
@@ -246,25 +246,21 @@ fun BottomNavigationBar(
                                 indication = null,
                                 interactionSource = remember { MutableInteractionSource() }
                             ) {
-                                if (onTabClickIntercept?.invoke(route) == true) {
+                                if (onTabClickIntercept?.invoke(destination) == true) {
                                     return@clickable
                                 }
-                                // Use the actual route for click-guard.
-                                // If currentRoute is temporarily null, tabs must still be clickable.
-                                if (currentRoute != route) {
-                                    navController.navigate(route) {
-                                        popUpTo(navController.graph.startDestinationId)
-                                        launchSingleTop = true
-                                        restoreState = false
-                                    }
+                                // Use the actual destination for click-guard.
+                                // If currentDestination is temporarily null, tabs must still be clickable.
+                                if (currentDestination != destination) {
+                                    navBridge.navigateToMain(destination)
                                 }
                             },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        val (selIcon, unselIcon) = when (route) {
-                            Screen.TodaySchedule.route -> Icons.Rounded.Today to Icons.Outlined.Today
-                            Screen.CourseSchedule.route -> Icons.Rounded.CalendarMonth to Icons.Outlined.CalendarMonth
+                        val (selIcon, unselIcon) = when (destination) {
+                            Destination.TodaySchedule -> Icons.Rounded.Today to Icons.Outlined.Today
+                            Destination.CourseSchedule -> Icons.Rounded.CalendarMonth to Icons.Outlined.CalendarMonth
                             else -> Icons.Rounded.Person to Icons.Outlined.Person
                         }
 

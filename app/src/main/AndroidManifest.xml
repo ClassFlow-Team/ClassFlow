@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
 
     <application
         android:name=".MyApplication"
@@ -70,6 +72,18 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/classflow_moderate_widget" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.list_vertical.ListVerticalNativeProvider"
+            android:exported="false"
+            android:label="@string/widget_name_list_vertical">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/shiguangschedule_list_vertical_widget" />
         </receiver>
 
         <receiver

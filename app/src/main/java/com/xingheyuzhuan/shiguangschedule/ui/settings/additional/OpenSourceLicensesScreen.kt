@@ -39,11 +39,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
+import com.xingheyuzhuan.shiguangschedule.NavBridge
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OpenSourceLicensesScreen(navController: NavController) {
+fun OpenSourceLicensesScreen(navBridge: NavBridge) {
     val scrollState = rememberScrollState()
 
     Scaffold(
@@ -51,7 +51,7 @@ fun OpenSourceLicensesScreen(navController: NavController) {
             TopAppBar(
                 title = { Text(text = "开源协议") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navBridge.popBackStack() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "返回"

@@ -1,6 +1,7 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.quickactions.delete
 
 import android.widget.Toast
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,7 +24,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
+import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import java.time.Instant
@@ -36,8 +37,8 @@ import java.time.ZoneOffset
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuickDeleteScreen(
-    navController: NavController,
-    viewModel: QuickDeleteViewModel = viewModel(factory = QuickDeleteViewModelFactory)
+    navBridge: NavBridge,
+    viewModel: QuickDeleteViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -68,7 +69,7 @@ fun QuickDeleteScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.item_quick_delete)) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navBridge.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.a11y_back))
                     }
                 }

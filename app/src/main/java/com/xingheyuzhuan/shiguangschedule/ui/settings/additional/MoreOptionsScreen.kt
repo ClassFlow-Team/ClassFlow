@@ -24,9 +24,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PeopleAlt
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material.icons.filled.SystemUpdate
@@ -49,6 +54,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,10 +69,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.BuildConfig
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSyncEngine
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateChecker
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateStatus
@@ -74,7 +81,10 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoreOptionsScreen(navController: NavController) {
+fun MoreOptionsScreen(
+    navBridge: NavBridge,
+    viewModel: MoreOptionsViewModel = hiltViewModel()
+) {
     val scrollState = rememberScrollState()
     val context = LocalContext.current
     val versionName = BuildConfig.VERSION_NAME
@@ -84,9 +94,11 @@ fun MoreOptionsScreen(navController: NavController) {
 
     var updateStatus by remember { mutableStateOf<UpdateStatus>(UpdateStatus.Idle) }
     var showResultDialog by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
+    var showStartScreenDialog by remember { mutableStateOf(false) }
 
     val useManualWebViewVpn = remember {
-        mutableStateOf(WbuSyncEngine.shouldUseManualWebViewForVpn(navController.context))
+        mutableStateOf(WbuSyncEngine.shouldUseManualWebViewForVpn(navBridge.context))
     }
 
     fun startCheck() {
@@ -118,7 +130,7 @@ fun MoreOptionsScreen(navController: NavController) {
             TopAppBar(
                 title = { Text(text = "更多选项") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navBridge.popBackStack() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "返回"
@@ -137,6 +149,93 @@ fun MoreOptionsScreen(navController: NavController) {
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             HeroCard(versionName = versionName)
+
+            // 个性化设置卡片（主题 / 语言 / 备份恢复）
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                ListItem(
+                    modifier = Modifier.clickable {
+                        navBridge.navigate(Destination.ThemeSettings)
+                    },
+                    headlineContent = { Text(stringResource(R.string.theme_settings_title)) },
+                    supportingContent = { Text(stringResource(R.string.theme_mode_label)) },
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.Default.Palette,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    trailingContent = {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
+                    }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp)
+
+                ListItem(
+                    modifier = Modifier.clickable {
+                        handleLanguageSettingClick(context) { showLanguageDialog = true }
+                    },
+                    headlineContent = { Text(stringResource(R.string.item_language_settings)) },
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.Default.Language,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    trailingContent = {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
+                    }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp)
+
+                // 启动页面设置（上游同步）
+                val currentStartScreen by viewModel.startScreen.collectAsState()
+                ListItem(
+                    modifier = Modifier.clickable { showStartScreenDialog = true },
+                    headlineContent = { Text(stringResource(R.string.item_start_screen_settings)) },
+                    supportingContent = { Text(stringResource(currentStartScreen.labelRes)) },
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.Default.Home,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    trailingContent = {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
+                    }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp)
+
+                ListItem(
+                    modifier = Modifier.clickable {
+                        navBridge.navigate(Destination.BackupAndRestore)
+                    },
+                    headlineContent = { Text(stringResource(R.string.item_backup_restore)) },
+                    supportingContent = { Text(stringResource(R.string.desc_backup_restore)) },
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.Default.Backup,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    trailingContent = {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
+                    }
+                )
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -166,7 +265,27 @@ fun MoreOptionsScreen(navController: NavController) {
             ) {
                 ListItem(
                     modifier = Modifier.clickable {
-                        navController.navigate(Screen.OpenSourceLicenses.route)
+                        navBridge.navigate(Destination.ContributionList)
+                    },
+                    headlineContent = { Text(stringResource(R.string.item_contributors)) },
+                    supportingContent = { Text("查看为项目做出贡献的开发者") },
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.Default.PeopleAlt,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    trailingContent = {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
+                    }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp)
+
+                ListItem(
+                    modifier = Modifier.clickable {
+                        navBridge.navigate(Destination.OpenSourceLicenses)
                     },
                     headlineContent = { Text("开源协议") },
                     supportingContent = { Text("查看许可证与合规信息") },
@@ -241,7 +360,7 @@ fun MoreOptionsScreen(navController: NavController) {
                             checked = useManualWebViewVpn.value,
                             onCheckedChange = { enabled ->
                                 useManualWebViewVpn.value = enabled
-                                WbuSyncEngine.setManualWebViewForVpn(navController.context, enabled)
+                                WbuSyncEngine.setManualWebViewForVpn(navBridge.context, enabled)
                             }
                         )
                     }
@@ -415,6 +534,22 @@ fun MoreOptionsScreen(navController: NavController) {
             else -> Unit
         }
     }
+
+    LanguageSelectionDialog(
+        showDialog = showLanguageDialog,
+        onDismiss = { showLanguageDialog = false }
+    )
+
+    val currentStartScreen by viewModel.startScreen.collectAsState()
+    StartScreenSelectionDialog(
+        showDialog = showStartScreenDialog,
+        currentSelected = currentStartScreen,
+        onDismiss = { showStartScreenDialog = false },
+        onConfirm = { screen ->
+            viewModel.onStartScreenChanged(screen)
+            showStartScreenDialog = false
+        }
+    )
 }
 
 @Composable

@@ -15,6 +15,9 @@ import okhttp3.Request
 import java.io.File
 import java.io.IOException
 
+/** 更新渠道（上游 UpdateChecker API 兼容：ClassFlow 为单一 GitHub Releases 渠道） */
+data class UpdateChannel(val id: String, val title: String, val url: String)
+
 /** GitHub Release 解析结果 */
 data class ReleaseUpdateInfo(
     val latestVersionName: String,
@@ -58,6 +61,11 @@ class UpdateChecker(private val context: Context) {
             "https://api.github.com/repos/shiro123444/ClassFlow/releases/latest"
         const val GITHUB_RELEASES_URL =
             "https://github.com/shiro123444/ClassFlow/releases"
+
+        /** 更新渠道列表（上游 API 兼容，单渠道：GitHub Releases） */
+        val UPDATE_CHANNELS = listOf(
+            UpdateChannel("github", "GitHub Releases", GITHUB_RELEASES_URL)
+        )
     }
 
     private val httpClient = OkHttpClient.Builder().build()

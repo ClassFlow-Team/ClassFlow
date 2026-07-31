@@ -1,6 +1,9 @@
 package com.xingheyuzhuan.shiguangschedule.data.sync
 
 import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import android.util.Log
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
@@ -25,9 +28,10 @@ import kotlin.time.Duration.Companion.milliseconds
 /**
  * 中心化的同步管理器，负责在数据库数据初始化后启动同步任务。
  */
-class SyncManager(
+@Singleton
+class SyncManager @Inject constructor(
     // 仓库实例作为依赖项通过构造函数传入
-    private val appContext: Context,
+    @ApplicationContext private val appContext: Context,
     private val appSettingsRepository: AppSettingsRepository,
     private val courseTableRepository: CourseTableRepository,
     private val timeSlotRepository: TimeSlotRepository,

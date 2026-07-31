@@ -1,6 +1,7 @@
 package com.xingheyuzhuan.shiguangschedule.ui.today
 
 import android.app.Application
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -33,13 +35,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavHostController
+import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.model.ScheduleGridStyle
 import com.xingheyuzhuan.shiguangschedule.ui.components.DockSafeBottomPadding
@@ -54,12 +54,8 @@ import androidx.compose.ui.res.stringResource
 
 @Composable
 fun TodayScheduleScreen(
-    navController: NavHostController,
-    viewModel: TodayScheduleViewModel = viewModel(
-        factory = TodayScheduleViewModel.TodayScheduleViewModelFactory(
-            application = LocalContext.current.applicationContext as Application
-        )
-    )
+    navBridge: NavBridge,
+    viewModel: TodayScheduleViewModel = hiltViewModel()
 ) {
     val semesterStatus by viewModel.semesterStatus.collectAsState()
     val todayCourses by viewModel.todayCourses.collectAsState()
@@ -111,7 +107,26 @@ fun TodayScheduleScreen(
                 }
             } else {
                     val currentTime = LocalTime.now()
+                    // 与上游一致：打开今日页时定位到「当前/下一节」（endTime 尚未早于现在的第一节）
+                    val targetScrollIndex = remember(todayCourses, currentTime) {
+                        val firstActiveIndex = todayCourses.indexOfFirst { course ->
+                            try {
+                                !LocalTime.parse(course.endTime).isBefore(currentTime)
+                            } catch (_: Exception) {
+                                true
+                            }
+                        }
+                        if (firstActiveIndex == -1) {
+                            (todayCourses.size - 1).coerceAtLeast(0)
+                        } else {
+                            firstActiveIndex
+                        }
+                    }
+                    val listState = rememberLazyListState(
+                        initialFirstVisibleItemIndex = targetScrollIndex
+                    )
                     LazyColumn(
+                        state = listState,
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         contentPadding = PaddingValues(bottom = DockSafeBottomPadding)

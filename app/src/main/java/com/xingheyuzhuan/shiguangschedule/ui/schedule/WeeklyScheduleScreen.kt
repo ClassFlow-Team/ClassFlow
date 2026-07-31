@@ -1,4 +1,6 @@
 package com.xingheyuzhuan.shiguangschedule.ui.schedule
+import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
+import androidx.hilt.navigation.compose.hiltViewModel
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
@@ -7,7 +9,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,7 +25,9 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,8 +44,12 @@ import android.util.Log
 import com.xingheyuzhuan.shiguangschedule.ui.components.WbuAuthBottomSheet
 import com.xingheyuzhuan.shiguangschedule.ui.components.VpnSmsCodeDialog
 import com.xingheyuzhuan.shiguangschedule.ui.components.DockSafeBottomPadding
+import com.xingheyuzhuan.shiguangschedule.ui.components.CourseTablePickerDialog
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.VpnFullLoginStatus
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSyncEngine
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleModeProto
+import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTable
+import java.util.Locale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -50,19 +58,24 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.offset
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavHostController
-import coil.compose.AsyncImage
+import com.xingheyuzhuan.shiguangschedule.NavBridge
+import coil3.compose.AsyncImage
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
-import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.navigation.AddEditCourseChannel
 import com.xingheyuzhuan.shiguangschedule.navigation.PresetCourseData
-import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ConflictCourseBottomSheet
+import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.CourseDetailBottomSheet
+import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.FloatingCourseBar
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGrid
+import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGridActions
+import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGridViewState
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGridStyleComposed
+import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.WbuSyncActionButton
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.WeekSelectorBottomSheet
+import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.rememberScheduleGridState
 import com.xingheyuzhuan.shiguangschedule.ui.theme.ClassFlowTheme
 import com.xingheyuzhuan.shiguangschedule.ui.theme.ThemeGradients
 import com.xingheyuzhuan.shiguangschedule.ui.schoolselection.web.WbuWebLoginAutofillStore
@@ -89,19 +102,20 @@ private const val INFINITE_PAGER_CENTER = Int.MAX_VALUE / 2
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun WeeklyScheduleScreen(
-    navController: NavHostController,
-    viewModel: WeeklyScheduleViewModel = viewModel(factory = WeeklyScheduleViewModelFactory),
+    navBridge: NavBridge,
+    viewModel: WeeklyScheduleViewModel = hiltViewModel(),
     weekTitleModifier: Modifier = Modifier,
     syncButtonModifier: Modifier = Modifier,
     onWeekTitleClickIntercept: (() -> Boolean)? = null,
-    onSyncButtonClickIntercept: (() -> Boolean)? = null
+    onSyncButtonClickIntercept: (() -> Boolean)? = null,
+    onFloatingModeChange: (Boolean) -> Unit = {} // 悬浮课程模式状态通知（上游：挂起时隐藏底部导航栏）
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val today = LocalDate.now()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    val snackbarMsg = stringResource(id = R.string.snackbar_add_course_after_start)
+    val snackbarMsg = stringResource(id = R.string.snackbar_add_course_within_semester)
     val appContext = remember { context.applicationContext }
 
     LaunchedEffect(Unit) {
@@ -130,13 +144,15 @@ fun WeeklyScheduleScreen(
 
     // UI 交互控制
     var showWeekSelector by remember { mutableStateOf(false) }
-    var showConflictBottomSheet by remember { mutableStateOf(false) }
     var showWbuAuthDialog by remember { mutableStateOf(false) }
     var isWbuSyncing by remember { mutableStateOf(false) }
     var wbuSyncStatus by remember { mutableStateOf("") }
     var wbuInitialStudentId by remember { mutableStateOf(WbuSyncEngine.getSavedStudentId(appContext)) }
     var wbuInitialUseVpn by remember { mutableStateOf(WbuSyncEngine.getSavedUseVpn(appContext) ?: false) }
-    var conflictCoursesToShow by remember { mutableStateOf(emptyList<CourseWithWeeks>()) }
+    var selectedBlockForDetail by remember { mutableStateOf<MergedCourseBlock?>(null) }
+    var showTableSwitcher by remember { mutableStateOf(false) }
+    var isGridHolding by remember { mutableStateOf(false) } // 拖拽编辑期间禁用 Pager 滑页（上游同步）
+    val gridScrollState = rememberScrollState()
 
     // SMS 验证码对话框状态
     var smsDialogPhone by remember { mutableStateOf<String?>(null) }
@@ -152,6 +168,31 @@ fun WeeklyScheduleScreen(
     val composedStyle by remember(uiState.style) {
         derivedStateOf { with(ScheduleGridStyleComposed) { uiState.style.toComposedStyle() } }
     }
+
+    // 悬浮课程模式时通知宿主隐藏底部导航栏（上游同步）
+    LaunchedEffect(uiState.floatingCourse != null) {
+        onFloatingModeChange(uiState.floatingCourse != null)
+    }
+
+    // 悬浮课程（跨周挂起）状态与时长（上游同步）
+    val floatingCourse = uiState.floatingCourse
+    val floatingDuration by remember(floatingCourse, composedStyle.scheduleMode) {
+        derivedStateOf {
+            if (floatingCourse != null) {
+                val start = floatingCourse.course.startSection?.toFloat() ?: 1f
+                val end = floatingCourse.course.endSection?.toFloat() ?: 1f
+
+                if (composedStyle.scheduleMode == ScheduleModeProto.TIME_24H_MODE) {
+                    (end - start).coerceAtLeast(1.0f)
+                } else {
+                    (end - start + 1f).coerceAtLeast(1.0f)
+                }
+            } else {
+                1.0f
+            }
+        }
+    }
+
     val onVpnStatus: (VpnFullLoginStatus) -> Unit = { status ->
         wbuSyncStatus = when (status) {
             VpnFullLoginStatus.SMS_REQUIRED -> "需要短信验证码，请输入后继续~"
@@ -202,8 +243,8 @@ fun WeeklyScheduleScreen(
             topBar = {
                 CenterAlignedTopAppBar(
                     title = {
-                        Text(
-                            text = uiState.weekTitle,
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = weekTitleModifier.clickable {
                                 if (onWeekTitleClickIntercept?.invoke() == true) {
                                     return@clickable
@@ -211,12 +252,31 @@ fun WeeklyScheduleScreen(
                                 // Keep course tab behavior stable: title click only opens week selector,
                                 // never redirects to Settings implicitly.
                                 showWeekSelector = true
-                            },
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
+                            }
+                        ) {
+                            Text(
+                                text = uiState.weekTitle,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = composedStyle.pageTextColor ?: MaterialTheme.colorScheme.onSurface
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp).offset(y = (-4).dp),
+                                tint = (composedStyle.pageTextColor ?: MaterialTheme.colorScheme.onSurface).copy(alpha = 0.7f)
+                            )
+                        }
                     },
                     actions = {
+                        // 课表切换（上游同步）
+                        IconButton(onClick = { showTableSwitcher = true }) {
+                            Icon(
+                                imageVector = Icons.Default.SwapHoriz,
+                                contentDescription = stringResource(R.string.action_select_table),
+                                tint = composedStyle.pageTextColor ?: MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                         WbuSyncActionButton(
                             modifier = syncButtonModifier,
                             onClick = {
@@ -298,7 +358,9 @@ fun WeeklyScheduleScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
-                beyondViewportPageCount = 1
+                beyondViewportPageCount = 1,
+                // 拖拽编辑期间禁用滑页防止手势冲突（上游同步）
+                userScrollEnabled = !isGridHolding
             ) { pageIndex ->
 
                     val pageMondayDate = remember(pageIndex, uiState.firstDayOfWeek) {
@@ -319,43 +381,210 @@ fun WeeklyScheduleScreen(
 
                     val pageCourses = uiState.courseCache[pageMondayDate.toString()] ?: emptyList()
 
-                    ScheduleGrid(
-                        style = composedStyle,
-                        dates = pageDateStrings,
-                        timeSlots = uiState.timeSlots,
-                        mergedCourses = pageCourses,
-                        showWeekends = uiState.showWeekends,
-                        todayIndex = pageTodayIndex,
-                        firstDayOfWeek = uiState.firstDayOfWeek,
-                        onCourseBlockClicked = { mergedBlock ->
-                            if (mergedBlock.isConflict) {
-                                conflictCoursesToShow = mergedBlock.courses
-                                showConflictBottomSheet = true
-                            } else {
-                                mergedBlock.courses.firstOrNull()?.course?.id?.let {
-                                    navController.navigate(Screen.AddEditCourse.createRouteWithCourseId(it))
+                    val pageYearString = remember(pageMondayDate) {
+                        pageMondayDate.year.toString()
+                    }
+
+                    val pageWeekNumber = remember(pageIndex) {
+                        val offsetWeeks = (pageIndex - INFINITE_PAGER_CENTER).toInt()
+                        uiState.currentWeekNumber?.plus(offsetWeeks)
+                    }
+                    val weekStr = pageWeekNumber?.let { "第${it}周" }
+
+                    val gridState = rememberScheduleGridState(gridScrollState = gridScrollState)
+
+                    val gridViewState = remember(pageDateStrings, pageYearString, uiState, pageCourses, pageTodayIndex, weekStr) {
+                        ScheduleGridViewState(
+                            dates = pageDateStrings,
+                            currentYear = pageYearString,
+                            currentWeek = weekStr,
+                            timeSlots = uiState.timeSlots,
+                            mergedCourses = pageCourses,
+                            showWeekends = uiState.showWeekends,
+                            todayIndex = pageTodayIndex,
+                            firstDayOfWeek = uiState.firstDayOfWeek,
+                            currentSectionIndex = if (pageTodayIndex >= 0) uiState.currentSectionIndex else -1
+                        )
+                    }
+
+                    val gridActions = remember(uiState, floatingDuration, snackbarMsg) {
+                        object : ScheduleGridActions {
+                            override fun onCourseBlockClicked(block: MergedCourseBlock) {
+                                // 与上游一致：统一走详情卡片（含冲突块），不再弹出 ConflictCourseBottomSheet
+                                selectedBlockForDetail = block
+                            }
+
+                            override fun onGridCellClicked(day: Int, section: Int) {
+                                // 悬浮课程放置（上游同步）
+                                if (floatingCourse != null) {
+                                    val targetWeek = uiState.weekIndexInPager ?: uiState.currentWeekNumber ?: return
+                                    val startSec = section.toFloat()
+                                    val endSec = if (composedStyle.scheduleMode == ScheduleModeProto.TIME_24H_MODE) {
+                                        startSec + floatingDuration
+                                    } else {
+                                        startSec + floatingDuration - 1f
+                                    }
+
+                                    coroutineScope.launch {
+                                        viewModel.updateCourseTimeByFloatingGesture(
+                                            targetWeek = targetWeek,
+                                            targetDay = day,
+                                            startSection = startSec,
+                                            endSection = endSec
+                                        )
+                                    }
+                                } else {
+                                    // 上游同步：仅在教学周内允许添加，并预设当前周次；24h 模式预设 1 小时自定义时间段
+                                    val currentWeek = uiState.weekIndexInPager ?: 0
+                                    val isCurrentPageValid = currentWeek in 1..uiState.totalWeeks
+
+                                    if (isCurrentPageValid) {
+                                        coroutineScope.launch {
+                                            val currentWeekSet = setOf(currentWeek)
+
+                                            val presetData = if (composedStyle.scheduleMode == ScheduleModeProto.TIME_24H_MODE) {
+                                                val startHour = section.coerceIn(0, 23)
+                                                val endHour = (startHour + 1) % 24
+
+                                                val startTimeStr = String.format(Locale.US, "%02d:00", startHour)
+                                                val endTimeStr = String.format(Locale.US, "%02d:00", endHour)
+
+                                                PresetCourseData(
+                                                    day = day,
+                                                    isCustomTime = true,
+                                                    customStartTime = startTimeStr,
+                                                    customEndTime = endTimeStr,
+                                                    presetWeeks = currentWeekSet
+                                                )
+                                            } else {
+                                                PresetCourseData(
+                                                    day = day,
+                                                    startSection = section,
+                                                    endSection = section,
+                                                    isCustomTime = false,
+                                                    presetWeeks = currentWeekSet
+                                                )
+                                            }
+
+                                            AddEditCourseChannel.sendEvent(presetData)
+                                            navBridge.navigate(Destination.AddEditCourse())
+                                        }
+                                    } else {
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(snackbarMsg)
+                                        }
+                                    }
                                 }
                             }
-                        },
-                        onGridCellClicked = { day, section ->
-                            if (uiState.semesterStartDate != null && !today.isBefore(uiState.semesterStartDate)) {
-                                coroutineScope.launch {
-                                    AddEditCourseChannel.sendEvent(PresetCourseData(day, section, section))
-                                    navController.navigate(Screen.AddEditCourse.createRouteForNewCourse())
-                                }
-                            } else {
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar(snackbarMsg)
+
+                            override fun onTimeSlotClicked() {
+                                navBridge.navigate(Destination.TimeSlotSettings)
+                            }
+
+                            override fun onHoldStateChanged(isHolding: Boolean) {
+                                isGridHolding = isHolding
+                            }
+
+                            override fun onCourseMovedWithinGrid(
+                                block: MergedCourseBlock,
+                                newDay: Int,
+                                newStartSection: Float,
+                                newEndSection: Float
+                            ) {
+                                val currentWeek = uiState.weekIndexInPager ?: 0
+                                val isCurrentPageValid = currentWeek in 1..uiState.totalWeeks
+
+                                if (isCurrentPageValid) {
+                                    val courseId = block.courses.firstOrNull()?.course?.id
+                                    if (courseId != null) {
+                                        coroutineScope.launch {
+                                            viewModel.updateCourseTimeByGesture(
+                                                courseId = courseId,
+                                                targetDay = newDay,
+                                                startSection = newStartSection,
+                                                endSection = newEndSection
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(snackbarMsg)
+                                    }
                                 }
                             }
-                        },
-                        onTimeSlotClicked = {
-                            navController.navigate(Screen.TimeSlotSettings.route)
+
+                            override fun onCourseTimeAdjusted(
+                                block: MergedCourseBlock,
+                                newStart: Float,
+                                newEnd: Float
+                            ) {
+                                val currentWeek = uiState.weekIndexInPager ?: 0
+                                val isCurrentPageValid = currentWeek in 1..uiState.totalWeeks
+
+                                if (isCurrentPageValid) {
+                                    val courseId = block.courses.firstOrNull()?.course?.id
+                                    if (courseId != null) {
+                                        coroutineScope.launch {
+                                            viewModel.updateCourseTimeByGesture(
+                                                courseId = courseId,
+                                                targetDay = block.day,
+                                                startSection = newStart,
+                                                endSection = newEnd
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(snackbarMsg)
+                                    }
+                                }
+                            }
+
+                            override fun onInitiateFloatingMode(block: MergedCourseBlock) {
+                                val targetCourseWrapper = block.courses.firstOrNull()
+                                val currentWeek = uiState.weekIndexInPager ?: uiState.currentWeekNumber
+                                if (targetCourseWrapper != null && currentWeek != null) {
+                                    viewModel.enterFloatingMode(
+                                        course = targetCourseWrapper,
+                                        sourceWeek = currentWeek
+                                    )
+                                }
+                            }
                         }
+                    }
+
+                    ScheduleGrid(
+                        state = gridState,
+                        viewState = gridViewState,
+                        actions = gridActions,
+                        style = composedStyle,
+                        showGlassBorder = uiState.useSakuraTimeTheme
                     )
             }
         }
+
+        // 悬浮课程胶囊条（上游同步；导航栏此时已由宿主隐藏，固定底部位置）
+        FloatingCourseBar(
+            floatingCourse = floatingCourse,
+            onCancelClick = { viewModel.exitFloatingMode() },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 24.dp)
+        )
     }
+
+    // 课表切换弹窗（上游同步）
+    if (showTableSwitcher) {
+        CourseTablePickerDialog(
+            title = stringResource(R.string.action_select_table),
+            onDismissRequest = { showTableSwitcher = false },
+            onTableSelected = { table: CourseTable ->
+                viewModel.switchCourseTable(table.id)
+                showTableSwitcher = false
+            }
+        )
+    }
+
     // 周次选择弹窗
     if (showWeekSelector) {
         WeekSelectorBottomSheet(
@@ -374,17 +603,15 @@ fun WeeklyScheduleScreen(
         )
     }
 
-    // 冲突处理弹窗
-    if (showConflictBottomSheet) {
-        ConflictCourseBottomSheet(
-            style = composedStyle,
-            courses = conflictCoursesToShow,
-            timeSlots = uiState.timeSlots,
-            onCourseClicked = { course ->
-                showConflictBottomSheet = false
-                navController.navigate(Screen.AddEditCourse.createRouteWithCourseId(course.course.id))
-            },
-            onDismissRequest = { showConflictBottomSheet = false }
+    // 课程详情卡片（上游同步：点击课程先弹卡片，再从卡片进入编辑）
+    selectedBlockForDetail?.let { block ->
+        CourseDetailBottomSheet(
+            block = block,
+            onDismissRequest = { selectedBlockForDetail = null },
+            onEditClick = { courseId ->
+                selectedBlockForDetail = null
+                navBridge.navigate(Destination.AddEditCourse(courseId = courseId))
+            }
         )
     }
 
@@ -456,12 +683,7 @@ fun WeeklyScheduleScreen(
                                 showWbuAuthDialog = false
                                 snackbarHostState.showSnackbar("自动登录失败，请通过 WebView 手动登录")
                                 WbuWebLoginAutofillStore.put(studentId = studentId, password = password)
-                                navController.navigate(
-                                    Screen.WebView.createRoute(
-                                        initialUrl = "https://webvpn.wbu.edu.cn/portal/#!/login",
-                                        assetJsPath = "WBU/wbu_chaoxing.js"
-                                    )
-                                )
+                                navBridge.navigate(Destination.WebView(initialUrl = "https://webvpn.wbu.edu.cn/portal/#!/login", assetJsPath = "WBU/wbu_chaoxing.js"))
                             }
                             return@launch
                         }
@@ -556,40 +778,3 @@ private suspend fun SnackbarHostState.showSuccessSnackbar(message: String) {
     )
 }
 
-@Composable
-private fun WbuSyncActionButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val isDark = isSystemInDarkTheme()
-    IconButton(
-        onClick = onClick,
-        modifier = modifier
-            .padding(end = 8.dp)
-            .border(
-                width = 0.8.dp,
-                brush = Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = if (isDark) 0.18f else 0.55f),
-                        Color.White.copy(alpha = if (isDark) 0.05f else 0.12f)
-                    )
-                ),
-                shape = RoundedCornerShape(14.dp)
-            )
-            .background(
-                color = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.55f else 0.72f),
-                shape = RoundedCornerShape(14.dp)
-            )
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Sync,
-            contentDescription = "一键同步武商院课表"
-        )
-    }
-}
-
-
-@Preview(showBackground = true)
-@Composable
-private fun WbuSyncActionButtonPreview() {
-    ClassFlowTheme {
-        WbuSyncActionButton(onClick = {})
-    }
-}

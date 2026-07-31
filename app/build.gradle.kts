@@ -8,7 +8,8 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.gradle.license)
-    alias(libs.plugins.protobuf)
+    alias(libs.plugins.wire)
+    alias(libs.plugins.hilt.android)
 }
 
 tasks.withType<JavaCompile>().configureEach {
@@ -40,12 +41,12 @@ val hasReleaseSigning = listOf(
 
 android {
     namespace = "com.xingheyuzhuan.shiguangschedule"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.shiro.classflow"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 15
         versionName = "1.0.0.0"
 
@@ -142,15 +143,6 @@ android {
             include("armeabi-v7a", "arm64-v8a", "x86_64")
         }
     }
-    sourceSets {
-        getByName("main") {
-            withGroovyBuilder {
-                "proto" {
-                    "srcDir"("src/main/proto")
-                }
-            }
-        }
-    }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -168,9 +160,11 @@ afterEvaluate {
 
 dependencies {
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.serialization.cbor)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.appcompat)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
@@ -178,13 +172,13 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
-    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.navigation3.runtime)
+    implementation(libs.androidx.navigation3.ui)
+    implementation(libs.androidx.lifecycle.viewmodel.navigation3)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.datastore.core)
     implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.retrofit)
     implementation(libs.okhttp)
-    implementation(libs.retrofit.converter.kotlinx.serialization)
     debugImplementation(libs.okhttp.logging.interceptor)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
@@ -193,13 +187,22 @@ dependencies {
     implementation(libs.slf4j.android)
     implementation(libs.androidx.compose.animation)
     implementation(libs.coil.compose)
-    implementation(libs.haze)
-    implementation(libs.protobuf.kotlin.lite)
-    implementation(libs.protobuf.java.lite)
+    implementation(libs.wire.runtime)
     implementation(libs.javax.inject)
     implementation(libs.jsoup)
     implementation(libs.intro.showcase)
+    implementation(libs.hilt.android)
+    implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.androidx.hilt.work)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.okhttp)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.client.logging)
+    implementation(libs.ktor.client.auth)
     ksp(libs.androidx.room.compiler)
+    ksp(libs.hilt.compiler)
+    ksp(libs.androidx.hilt.compiler)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
@@ -210,23 +213,14 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 }
 
-protobuf {
-    protoc {
-        // 从版本目录中获取 protoc 编译器
-        artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
+wire {
+    sourcePath {
+        srcDir("src/main/proto")
     }
 
-    // 配置代码生成任务
-    generateProtoTasks {
-        all().forEach { task ->
-            task.builtins {
-                create("java") {
-                    option("lite")
-                }
-                create("kotlin") {
-                    option("lite")
-                }
-            }
-        }
+    kotlin {
+        escapeKotlinKeywords = true
+        enumMode = "enum_class"
+        rpcRole = "none"
     }
 }

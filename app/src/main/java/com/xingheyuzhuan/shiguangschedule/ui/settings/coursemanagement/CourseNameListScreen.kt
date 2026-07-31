@@ -1,6 +1,7 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.coursemanagement
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -50,9 +51,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
+import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.navigation.AddEditCourseChannel
 import com.xingheyuzhuan.shiguangschedule.navigation.PresetCourseData
 import kotlinx.coroutines.launch
@@ -65,8 +66,8 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun CourseNameListScreen(
-    navController: NavController,
-    viewModel: CourseNameListViewModel = viewModel(factory = CourseNameListViewModel.Factory)
+    navBridge: NavBridge,
+    viewModel: CourseNameListViewModel = hiltViewModel()
 ) {
     val uniqueCourseNames by viewModel.uniqueCourseNames.collectAsState()
     val coroutineScope = rememberCoroutineScope()
@@ -102,7 +103,7 @@ fun CourseNameListScreen(
                                 exitSelectionMode()
                             } else {
                                 // 在正常模式下是返回
-                                navController.popBackStack()
+                                navBridge.popBackStack()
                             }
                         }
                     ) {
@@ -203,8 +204,7 @@ fun CourseNameListScreen(
                             AddEditCourseChannel.sendEvent(defaultPresetData)
 
                             // 3. 执行导航
-                            val route = Screen.AddEditCourse.createRouteForNewCourse()
-                            navController.navigate(route)
+                            navBridge.navigate(Destination.AddEditCourse())
                         }
                     }
                 ) {
@@ -252,8 +252,7 @@ fun CourseNameListScreen(
                                 }
                             } else {
                                 // 正常模式：点击导航到详情页
-                                val route = Screen.CourseManagementDetail.createRoute(clickedName)
-                                navController.navigate(route)
+                                navBridge.navigate(Destination.CourseManagementDetail(courseName = clickedName))
                             }
                         },
                         onCourseLongClick = { clickedName ->

@@ -1,11 +1,11 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.quickactions.delete
 
-import android.app.Application
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.CreationExtras
-import com.xingheyuzhuan.shiguangschedule.MyApplication
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTable
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
@@ -45,10 +45,11 @@ data class QuickDeleteUiState(
     val successMessage: String? = null
 )
 
-class QuickDeleteViewModel(
+@HiltViewModel
+class QuickDeleteViewModel @Inject constructor(
     private val appSettingsRepository: AppSettingsRepository,
     private val courseTableRepository: CourseTableRepository,
-    private val application: Application
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(QuickDeleteUiState())
@@ -78,7 +79,7 @@ class QuickDeleteViewModel(
                     semesterStartDate = semesterStartDate
                 ) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = application.getString(R.string.error_load_failed)) }
+                _uiState.update { it.copy(errorMessage = context.getString(R.string.error_load_failed)) }
             }
         }
     }
@@ -206,7 +207,7 @@ class QuickDeleteViewModel(
 
                 _uiState.update {
                     it.copy(
-                        successMessage = application.getString(R.string.quick_delete_success),
+                        successMessage = context.getString(R.string.quick_delete_success),
                         affectedCourses = emptyList(),
                         isLoading = false,
                         // 重置所有筛选状态
@@ -219,7 +220,7 @@ class QuickDeleteViewModel(
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
-                        errorMessage = application.getString(R.string.error_op_failed, e.message ?: ""),
+                        errorMessage = context.getString(R.string.error_op_failed, e.message ?: ""),
                         isLoading = false
                     )
                 }
@@ -229,21 +230,5 @@ class QuickDeleteViewModel(
 
     fun resetMessages() {
         _uiState.update { it.copy(errorMessage = null, successMessage = null) }
-    }
-}
-
-object QuickDeleteViewModelFactory : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-        val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
-        val myApp = application as MyApplication
-        if (modelClass.isAssignableFrom(QuickDeleteViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return QuickDeleteViewModel(
-                appSettingsRepository = myApp.appSettingsRepository,
-                courseTableRepository = myApp.courseTableRepository,
-                application = application
-            ) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
 }

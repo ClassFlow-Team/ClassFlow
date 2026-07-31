@@ -6,12 +6,14 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
+import dagger.hilt.android.AndroidEntryPoint
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloat
@@ -40,8 +42,15 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Celebration
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Swipe
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,28 +64,47 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.navigation.NavType
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.remember
+import androidx.compose.ui.unit.IntOffset
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.NavEntry
+import androidx.navigation3.runtime.get
+import androidx.navigation3.runtime.metadata
+import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.ui.NavDisplay
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.canopas.lib.showcase.IntroShowcase
 import com.canopas.lib.showcase.IntroShowcaseScope
 import com.canopas.lib.showcase.component.IntroShowcaseState
 import com.canopas.lib.showcase.component.ShowcaseStyle
 import com.canopas.lib.showcase.component.rememberIntroShowcaseState
+import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
+import com.xingheyuzhuan.shiguangschedule.data.model.AppThemeMode
+import com.xingheyuzhuan.shiguangschedule.data.model.StartScreen
+import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
+import com.xingheyuzhuan.shiguangschedule.data.repository.CourseConversionRepository
+import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
 import com.xingheyuzhuan.shiguangschedule.ui.components.BottomNavigationBar
 import com.xingheyuzhuan.shiguangschedule.ui.components.isOnboardingCompleted
 import com.xingheyuzhuan.shiguangschedule.ui.components.markOnboardingCompleted
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.WeeklyScheduleScreen
+import com.xingheyuzhuan.shiguangschedule.ui.schoolselection.list.AdapterSelectionScreen
+import com.xingheyuzhuan.shiguangschedule.ui.schoolselection.list.SchoolSelectionListScreen
 import com.xingheyuzhuan.shiguangschedule.ui.schoolselection.web.WebViewScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.SettingsScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.additional.MoreOptionsScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.additional.OpenSourceLicensesScreen
+import com.xingheyuzhuan.shiguangschedule.ui.settings.backup.BackupScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.contribution.ContributionScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.conversion.CourseTableConversionScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.course.AddEditCourseScreen
@@ -84,17 +112,31 @@ import com.xingheyuzhuan.shiguangschedule.ui.settings.coursemanagement.COURSE_NA
 import com.xingheyuzhuan.shiguangschedule.ui.settings.coursemanagement.CourseInstanceListScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.coursemanagement.CourseNameListScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.coursetables.ManageCourseTablesScreen
+import com.xingheyuzhuan.shiguangschedule.ui.settings.notification.NotificationSettingsScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.quickactions.QuickActionsScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.quickactions.delete.QuickDeleteScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.quickactions.tweaks.TweakScheduleScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.style.StyleSettingsScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.style.WallpaperAdjustScreen
+import com.xingheyuzhuan.shiguangschedule.ui.settings.themesettings.ThemeSettingsScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.time.TimeSlotManagementScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.update.UpdateRepoScreen
 import com.xingheyuzhuan.shiguangschedule.ui.theme.ClassFlowTheme
 import com.xingheyuzhuan.shiguangschedule.ui.today.TodayScheduleScreen
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var appSettingsRepository: AppSettingsRepository
+
+    @Inject
+    lateinit var courseConversionRepository: CourseConversionRepository
+
+    @Inject
+    lateinit var timeSlotRepository: TimeSlotRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(
@@ -109,8 +151,33 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableHighRefreshRate()
         setContent {
-            ClassFlowTheme {
-                AppNavigation()
+            val settings by appSettingsRepository.getAppSettings()
+                .collectAsState(initial = null)
+
+            // 等待设置就绪后再进入导航，保证启动页面设置生效（上游同步）
+            val readySettings = settings ?: return@setContent
+
+            val darkTheme = when (readySettings.themeMode) {
+                AppThemeMode.FOLLOW_SYSTEM -> isSystemInDarkTheme()
+                AppThemeMode.LIGHT -> false
+                AppThemeMode.DARK -> true
+            }
+            ClassFlowTheme(
+                darkTheme = darkTheme,
+                dynamicColor = readySettings.useDynamicColor,
+                timeBasedTheme = readySettings.useSakuraTimeTheme,
+                customLightPrimary = Color(readySettings.customLightPrimary),
+                customDarkPrimary = Color(readySettings.customDarkPrimary)
+            ) {
+                AppNavigation(
+                    startDestination = when (readySettings.startScreen) {
+                        StartScreen.COURSE_SCHEDULE -> Destination.CourseSchedule
+                        StartScreen.TODAY_SCHEDULE -> Destination.TodaySchedule
+                    },
+                    courseConversionRepository = courseConversionRepository,
+                    timeSlotRepository = timeSlotRepository,
+                    appSettingsRepository = appSettingsRepository
+                )
             }
         }
     }
@@ -133,17 +200,63 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun AppNavigation() {
-    val navController = rememberNavController()
-    val currentBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = currentBackStackEntry?.destination?.route
+fun AppNavigation(
+    startDestination: Destination,
+    courseConversionRepository: CourseConversionRepository,
+    timeSlotRepository: TimeSlotRepository,
+    appSettingsRepository: AppSettingsRepository
+) {
+    val backStack = rememberNavBackStack(startDestination)
+    val currentDestination = backStack.lastOrNull() as? Destination
     val context = LocalContext.current
-    val topLevelRoutes = setOf(
-        Screen.TodaySchedule.route,
-        Screen.CourseSchedule.route,
-        Screen.Settings.route
+    // 悬浮课程模式时隐藏底部导航栏（上游同步）
+    var isFloatingCourseMode by remember { mutableStateOf(false) }
+    val showBottomDock = currentDestination?.isMainScreen == true && !isFloatingCourseMode
+
+    // NavBridge 实现（navigation3 后向兼容层，供各 Screen 使用）
+    val navBridge: NavBridge = remember(backStack, context) {
+        object : NavBridge {
+            override val context = context.applicationContext
+            override fun navigate(destination: Destination) {
+                if (backStack.lastOrNull() != destination) {
+                    backStack.add(destination)
+                }
+            }
+
+            override fun navigateToMain(destination: Destination) {
+                backStack.clear()
+                backStack.add(destination)
+            }
+
+            override fun popBackStack() {
+                if (backStack.size > 1) {
+                    backStack.removeAt(backStack.lastIndex)
+                }
+            }
+
+            override fun navigateUp() = popBackStack()
+        }
+    }
+
+    // 课表页下滑隐藏底部导航（上游同步）：滚动方向驱动显示/隐藏
+    var dockVisible by remember { mutableStateOf(true) }
+    val dockCollapseFraction by animateFloatAsState(
+        targetValue = if (dockVisible) 0f else 1f,
+        animationSpec = tween(220),
+        label = "dockCollapse"
     )
-    val showBottomDock = currentRoute in topLevelRoutes
+    val dockNestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.UserInput) {
+                    // 手指下滑（查看上方内容，available.y < 0）隐藏；手指上滑（available.y > 0）显示
+                    if (available.y < 0 && dockVisible) dockVisible = false
+                    else if (available.y > 0 && !dockVisible) dockVisible = true
+                }
+                return Offset.Zero
+            }
+        }
+    }
 
     var showOnboarding by remember { mutableStateOf(!isOnboardingCompleted(context)) }
     val introShowcaseState = rememberIntroShowcaseState()
@@ -158,27 +271,19 @@ fun AppNavigation() {
         // Lock onboarding flow: do not allow mid-way back exit.
     }
 
-    val smoothEnter = slideInHorizontally(tween(260)) { it / 4 } + fadeIn(tween(200))
-    val smoothExit = slideOutHorizontally(tween(260)) { -it / 6 } + fadeOut(tween(160))
-    val smoothPopEnter = slideInHorizontally(tween(260)) { -it / 6 } + fadeIn(tween(200))
-    val smoothPopExit = slideOutHorizontally(tween(260)) { it / 4 } + fadeOut(tween(160))
-
     // Keep onboarding on the expected route for each step.
-    LaunchedEffect(showOnboarding, introShowcaseState.currentTargetIndex, currentRoute, pendingSyncStepAdvance) {
+    LaunchedEffect(showOnboarding, introShowcaseState.currentTargetIndex, currentDestination, pendingSyncStepAdvance) {
         if (!showOnboarding) return@LaunchedEffect
         val currentIndex = introShowcaseState.currentTargetIndex
         if (pendingSyncStepAdvance && currentIndex != 2) {
             pendingSyncStepAdvance = false
         }
         when {
-            pendingSyncStepAdvance && currentRoute != Screen.Settings.route -> {
-                navController.navigate(Screen.Settings.route) {
-                    popUpTo(Screen.CourseSchedule.route) { inclusive = false }
-                    launchSingleTop = true
-                }
+            pendingSyncStepAdvance && currentDestination !is Destination.Settings -> {
+                navBridge.navigateToMain(Destination.Settings)
             }
 
-            pendingSyncStepAdvance && currentRoute == Screen.Settings.route && currentIndex == 2 -> {
+            pendingSyncStepAdvance && currentDestination is Destination.Settings && currentIndex == 2 -> {
                 introShowcaseState.goToNext(
                     onComplete = completeOnboarding,
                     allowCompleteOnMissingTarget = false
@@ -187,19 +292,13 @@ fun AppNavigation() {
             }
 
             currentIndex < LAST_ONBOARDING_TARGET_INDEX &&
-                currentRoute != Screen.CourseSchedule.route -> {
-                navController.navigate(Screen.CourseSchedule.route) {
-                    popUpTo(Screen.CourseSchedule.route) { inclusive = false }
-                    launchSingleTop = true
-                }
+                currentDestination !is Destination.CourseSchedule -> {
+                navBridge.navigateToMain(Destination.CourseSchedule)
             }
 
             currentIndex == LAST_ONBOARDING_TARGET_INDEX &&
-                currentRoute != Screen.Settings.route -> {
-            navController.navigate(Screen.Settings.route) {
-                popUpTo(Screen.CourseSchedule.route) { inclusive = false }
-                launchSingleTop = true
-            }
+                currentDestination !is Destination.Settings -> {
+                navBridge.navigateToMain(Destination.Settings)
             }
         }
     }
@@ -209,6 +308,9 @@ fun AppNavigation() {
         backgroundAlpha = 0.94f,
         targetCircleColor = Color.White
     )
+
+    // navigation3 转场动画（主页面间无过渡，其余页面滑动+渐变）
+    val animSpec = tween<IntOffset>(300)
 
     Box(modifier = Modifier.fillMaxSize()) {
         IntroShowcase(
@@ -225,7 +327,7 @@ fun AppNavigation() {
         ) {
             // ── Step 0: Welcome  +  Step 1: Swipe ── both target weekTitle
             val weekTitleTargetModifier =
-                if (showOnboarding && currentRoute == Screen.CourseSchedule.route) {
+                if (showOnboarding && currentDestination is Destination.CourseSchedule) {
                     Modifier
                         .introShowCaseTarget(
                             index = 0,
@@ -261,7 +363,7 @@ fun AppNavigation() {
 
             // ── Step 2: Sync button ──
             val syncButtonTargetModifier =
-                if (showOnboarding && currentRoute == Screen.CourseSchedule.route) {
+                if (showOnboarding && currentDestination is Destination.CourseSchedule) {
                     Modifier.introShowCaseTarget(
                         index = 2,
                         style = showcaseStyle,
@@ -287,7 +389,7 @@ fun AppNavigation() {
                 if (
                     showOnboarding &&
                     pendingSyncStepAdvance &&
-                    currentRoute == Screen.Settings.route &&
+                    currentDestination is Destination.Settings &&
                     introShowcaseState.currentTargetIndex == 2
                 ) {
                     Modifier.introShowCaseTarget(
@@ -315,7 +417,7 @@ fun AppNavigation() {
 
             // ── Step 3: Semester start date (Settings page) ──
             val semesterSettingTargetModifier =
-                if (showOnboarding && currentRoute == Screen.Settings.route) {
+                if (showOnboarding && currentDestination is Destination.Settings) {
                     Modifier.introShowCaseTarget(
                         index = 3,
                         style = showcaseStyle.copy(backgroundColor = Color(0xFF12222E)),
@@ -334,207 +436,169 @@ fun AppNavigation() {
                     Modifier
                 }
 
-            NavHost(
-                navController = navController,
-                startDestination = Screen.CourseSchedule.route,
-                modifier = Modifier.fillMaxSize(),
-                enterTransition = { smoothEnter },
-                exitTransition = { smoothExit },
-                popEnterTransition = { smoothPopEnter },
-                popExitTransition = { smoothPopExit }
-            ) {
-        // 底部导航栏顶级页面：丝滑渐变+缩放 — 类似 Liquid Glass 过渡
-        composable(
-            Screen.CourseSchedule.route,
-            enterTransition = { fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.94f) },
-            exitTransition = { fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.94f) },
-            popEnterTransition = { fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.94f) },
-            popExitTransition = { fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.94f) }
-        ) {
-            WeeklyScheduleScreen(
-                navController = navController,
-                weekTitleModifier = weekTitleTargetModifier,
-                syncButtonModifier = syncButtonTargetModifier,
-                onWeekTitleClickIntercept = {
-                    if (showOnboarding && introShowcaseState.currentTargetIndex in 0..1) {
-                        introShowcaseState.goToNext(
-                            onComplete = completeOnboarding,
-                            allowCompleteOnMissingTarget = false
-                        )
-                        true
-                    } else {
-                        false
-                    }
-                },
-                onSyncButtonClickIntercept = {
-                    if (!showOnboarding) {
-                        false
-                    } else {
-                        if (introShowcaseState.currentTargetIndex == 2) {
-                            pendingSyncStepAdvance = true
-                            if (currentRoute != Screen.Settings.route) {
-                                navController.navigate(Screen.Settings.route) {
-                                    popUpTo(Screen.CourseSchedule.route) { inclusive = false }
-                                    launchSingleTop = true
-                                }
-                            }
-                        }
-                        true
-                    }
-                }
-            )
-        }
-
-        composable(
-            Screen.Settings.route,
-            enterTransition = { fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.94f) },
-            exitTransition = { fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.94f) },
-            popEnterTransition = { fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.94f) },
-            popExitTransition = { fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.94f) }
-        ) {
-            Box(
+            NavDisplay(
+                backStack = backStack,
+                onBack = navBridge::popBackStack,
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(syncStepTransitionModifier)
-            ) {
-                SettingsScreen(
-                    navController = navController,
-                    semesterStartDateItemModifier = semesterSettingTargetModifier,
-                    forceShowSemesterStartDateCard = showOnboarding &&
-                        introShowcaseState.currentTargetIndex == LAST_ONBOARDING_TARGET_INDEX,
-                    onSemesterStartDateSet = {
-                        if (
-                            showOnboarding &&
-                            introShowcaseState.currentTargetIndex == LAST_ONBOARDING_TARGET_INDEX
-                        ) {
-                            completeOnboarding()
+                    .nestedScroll(dockNestedScrollConnection),
+                transitionSpec = {
+                    val fromMain = initialState.metadata[ShiguangNavMetadata.IsMainScreenKey] ?: false
+                    val toMain = targetState.metadata[ShiguangNavMetadata.IsMainScreenKey] ?: false
+
+                    if (fromMain && toMain) {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    } else {
+                        slideInHorizontally(initialOffsetX = { it }, animationSpec = animSpec) togetherWith
+                                slideOutHorizontally(targetOffsetX = { -it / 3 }, animationSpec = animSpec) + fadeOut()
+                    }
+                },
+                popTransitionSpec = {
+                    val fromMain = initialState.metadata[ShiguangNavMetadata.IsMainScreenKey] ?: false
+                    val toMain = targetState.metadata[ShiguangNavMetadata.IsMainScreenKey] ?: false
+
+                    if (fromMain && toMain) {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    } else {
+                        slideInHorizontally(initialOffsetX = { -it / 3 }, animationSpec = animSpec) + fadeIn() togetherWith
+                                slideOutHorizontally(targetOffsetX = { it }, animationSpec = animSpec)
+                    }
+                },
+                predictivePopTransitionSpec = {
+                    slideInHorizontally(initialOffsetX = { -it / 3 }, animationSpec = animSpec) + fadeIn() togetherWith
+                            slideOutHorizontally(targetOffsetX = { it }, animationSpec = animSpec)
+                },
+                entryDecorators = listOf(
+                    rememberSaveableStateHolderNavEntryDecorator(),
+                    rememberViewModelStoreNavEntryDecorator()
+                )
+            ) { key ->
+                val destination = key as Destination
+
+                NavEntry(
+                    key = key,
+                    metadata = metadata {
+                        put(ShiguangNavMetadata.IsMainScreenKey, destination.isMainScreen)
+                    }
+                ) {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        when (destination) {
+                            Destination.CourseSchedule -> WeeklyScheduleScreen(
+                                navBridge = navBridge,
+                                weekTitleModifier = weekTitleTargetModifier,
+                                syncButtonModifier = syncButtonTargetModifier,
+                                onFloatingModeChange = { isFloatingCourseMode = it },
+                                onWeekTitleClickIntercept = {
+                                    if (showOnboarding && introShowcaseState.currentTargetIndex in 0..1) {
+                                        introShowcaseState.goToNext(
+                                            onComplete = completeOnboarding,
+                                            allowCompleteOnMissingTarget = false
+                                        )
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                },
+                                onSyncButtonClickIntercept = {
+                                    if (!showOnboarding) {
+                                        false
+                                    } else {
+                                        if (introShowcaseState.currentTargetIndex == 2) {
+                                            pendingSyncStepAdvance = true
+                                            if (currentDestination !is Destination.Settings) {
+                                                navBridge.navigateToMain(Destination.Settings)
+                                            }
+                                        }
+                                        true
+                                    }
+                                }
+                            )
+
+                            Destination.Settings -> Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .then(syncStepTransitionModifier)
+                            ) {
+                                SettingsScreen(
+                                    navBridge = navBridge,
+                                    semesterStartDateItemModifier = semesterSettingTargetModifier,
+                                    forceShowSemesterStartDateCard = showOnboarding &&
+                                        introShowcaseState.currentTargetIndex == LAST_ONBOARDING_TARGET_INDEX,
+                                    onSemesterStartDateSet = {
+                                        if (
+                                            showOnboarding &&
+                                            introShowcaseState.currentTargetIndex == LAST_ONBOARDING_TARGET_INDEX
+                                        ) {
+                                            completeOnboarding()
+                                        }
+                                    }
+                                )
+                            }
+
+                            Destination.TodaySchedule -> TodayScheduleScreen(navBridge = navBridge)
+                            Destination.TimeSlotSettings -> TimeSlotManagementScreen(onBackClick = navBridge::popBackStack)
+                            Destination.ManageCourseTables -> ManageCourseTablesScreen(navBridge = navBridge)
+                            Destination.SchoolSelectionListScreen -> SchoolSelectionListScreen(navBridge = navBridge)
+                            Destination.CourseTableConversion -> CourseTableConversionScreen(navBridge = navBridge)
+                            Destination.MoreOptions -> MoreOptionsScreen(navBridge = navBridge)
+                            Destination.OpenSourceLicenses -> OpenSourceLicensesScreen(navBridge = navBridge)
+                            Destination.QuickActions -> QuickActionsScreen(navBridge = navBridge)
+                            Destination.TweakSchedule -> TweakScheduleScreen(navBridge = navBridge)
+                            Destination.ContributionList -> ContributionScreen(navBridge = navBridge)
+                            Destination.CourseManagementList -> CourseNameListScreen(navBridge = navBridge)
+                            Destination.StyleSettings -> StyleSettingsScreen(navBridge = navBridge)
+                            Destination.WallpaperAdjust -> WallpaperAdjustScreen(onBack = navBridge::popBackStack)
+                            Destination.QuickDelete -> QuickDeleteScreen(navBridge = navBridge)
+                            Destination.UpdateRepo -> UpdateRepoScreen(navBridge = navBridge)
+                            Destination.NotificationSettings -> NotificationSettingsScreen(onBack = navBridge::popBackStack)
+                            Destination.ThemeSettings -> ThemeSettingsScreen(onBack = navBridge::popBackStack)
+                            Destination.BackupAndRestore -> BackupScreen(onBack = navBridge::popBackStack)
+
+                            // 动态传参页面
+                            is Destination.AdapterSelection -> AdapterSelectionScreen(
+                                navBridge = navBridge,
+                                schoolId = destination.schoolId,
+                                schoolName = destination.schoolName,
+                                categoryNumber = destination.categoryNumber,
+                                resourceFolder = destination.resourceFolder
+                            )
+
+                            is Destination.WebView -> WebViewScreen(
+                                navBridge = navBridge,
+                                initialUrl = destination.initialUrl,
+                                assetJsPath = destination.assetJsPath,
+                                courseConversionRepository = courseConversionRepository,
+                                timeSlotRepository = timeSlotRepository,
+                                appSettingsRepository = appSettingsRepository
+                            )
+
+                            is Destination.AddEditCourse -> AddEditCourseScreen(
+                                onBack = navBridge::popBackStack,
+                                courseId = destination.courseId
+                            )
+
+                            is Destination.CourseManagementDetail -> CourseInstanceListScreen(
+                                courseName = destination.courseName,
+                                onNavigateBack = navBridge::popBackStack,
+                                navBridge = navBridge
+                            )
                         }
                     }
-                )
-            }
-        }
-
-        composable(
-            Screen.TodaySchedule.route,
-            enterTransition = { fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.94f) },
-            exitTransition = { fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.94f) },
-            popEnterTransition = { fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.94f) },
-            popExitTransition = { fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.94f) }
-        ) {
-            TodayScheduleScreen(navController = navController)
-        }
-
-        // 子页面：继承 NavHost 级别的丝滑滑动+渐变动画
-        composable(Screen.TimeSlotSettings.route) {
-            TimeSlotManagementScreen(onBackClick = { navController.popBackStack() })
-        }
-
-        composable(Screen.ManageCourseTables.route) {
-            ManageCourseTablesScreen(navController = navController)
-        }
-
-        composable(
-            route = Screen.WebView.route,
-            arguments = listOf(
-                navArgument("initialUrl") { type = NavType.StringType },
-                navArgument("assetJsPath") { type = NavType.StringType }
-            )
-        ) { backStackEntry ->
-            val initialUrl = backStackEntry.arguments?.getString("initialUrl")
-            val assetJsPath = backStackEntry.arguments?.getString("assetJsPath")
-
-            val context = LocalContext.current
-            val app = context.applicationContext as MyApplication
-
-            WebViewScreen(
-                navController = navController,
-                initialUrl = initialUrl,
-                assetJsPath = assetJsPath,
-                courseConversionRepository = app.courseConversionRepository,
-                timeSlotRepository = app.timeSlotRepository,
-                appSettingsRepository = app.appSettingsRepository,
-                courseScheduleRoute = Screen.CourseSchedule.route,
-            )
-        }
-
-        composable(
-            route = Screen.AddEditCourse.route,
-            arguments = listOf(
-                navArgument("courseId") {
-                    type = NavType.StringType
-                    nullable = true
                 }
-            )
-        ) { backStackEntry ->
-            val courseId = backStackEntry.arguments?.getString("courseId")
-            AddEditCourseScreen(
-                courseId = courseId,
-                onNavigateBack = { navController.popBackStack() },
-            )
-        }
-
-        composable(Screen.CourseTableConversion.route) {
-            CourseTableConversionScreen(navController = navController)
-        }
-
-        composable(Screen.MoreOptions.route) {
-            MoreOptionsScreen(navController = navController)
-        }
-
-        composable(Screen.OpenSourceLicenses.route) {
-            OpenSourceLicensesScreen(navController = navController)
-        }
-
-        composable(Screen.QuickActions.route) {
-            QuickActionsScreen(navController = navController)
-        }
-
-        composable(Screen.TweakSchedule.route) {
-            TweakScheduleScreen(navController = navController)
-        }
-
-        composable(Screen.ContributionList.route) {
-            ContributionScreen(navController = navController)
-        }
-
-        composable(Screen.CourseManagementList.route) {
-            CourseNameListScreen(navController = navController)
-        }
-
-        composable(
-            route = Screen.CourseManagementDetail.route,
-            arguments = listOf(navArgument(COURSE_NAME_ARG) { type = NavType.StringType })
-        ) { backStackEntry ->
-            val courseName = Uri.decode(backStackEntry.arguments?.getString(COURSE_NAME_ARG) ?: "")
-            CourseInstanceListScreen(
-                courseName = courseName,
-                onNavigateBack = { navController.popBackStack() },
-                navController = navController
-            )
-        }
-
-            composable(Screen.StyleSettings.route) {
-                StyleSettingsScreen(navController = navController)
-            }
-
-            composable(Screen.WallpaperAdjust.route) {
-                WallpaperAdjustScreen(onBack = { navController.popBackStack() })
-            }
-
-            composable(Screen.QuickDelete.route) {
-                QuickDeleteScreen(navController = navController)
-            }
-
-            composable(Screen.UpdateRepo.route) {
-                UpdateRepoScreen(navController = navController)
-            }
             }
 
             if (showBottomDock) {
-                Box(modifier = bottomNavTargetModifier.align(Alignment.BottomCenter)) {
+                Box(
+                    modifier = bottomNavTargetModifier
+                        .align(Alignment.BottomCenter)
+                        .graphicsLayer {
+                            translationY = size.height * dockCollapseFraction
+                            alpha = 1f - dockCollapseFraction
+                        }
+                ) {
                     BottomNavigationBar(
-                        navController = navController,
-                        currentRoute = currentRoute,
+                        navBridge = navBridge,
+                        currentDestination = currentDestination,
                         isTransparent = true,
                         onTabClickIntercept = {
                             if (showOnboarding && introShowcaseState.currentTargetIndex == LAST_ONBOARDING_TARGET_INDEX) {

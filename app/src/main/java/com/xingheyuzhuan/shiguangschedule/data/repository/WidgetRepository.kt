@@ -1,6 +1,9 @@
 package com.xingheyuzhuan.shiguangschedule.data.repository
 
 import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetCourse
 import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetCourseDao
 import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetAppSettingsDao
@@ -19,10 +22,11 @@ import java.util.Locale
 /**
  * Widget 数据仓库，负责处理与 Widget 数据库相关的所有数据操作。
  */
-class WidgetRepository(
+@Singleton
+class WidgetRepository @Inject constructor(
     private val widgetCourseDao: WidgetCourseDao,
     private val widgetAppSettingsDao: WidgetAppSettingsDao,
-    private val context: Context
+    @ApplicationContext private val context: Context
 ) {
     // 使用线程安全的 java.time.DateTimeFormatter
     private val DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.getDefault())

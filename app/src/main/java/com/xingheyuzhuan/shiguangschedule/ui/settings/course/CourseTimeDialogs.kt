@@ -1,11 +1,29 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.course
 
 import android.widget.Toast
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -45,10 +63,7 @@ fun CourseTimePickerBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
-        sheetState = modalBottomSheetState,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 2.dp,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        sheetState = modalBottomSheetState
     ) {
         Column(
             modifier = Modifier
@@ -144,15 +159,12 @@ fun CustomTimeRangePickerBottomSheet(
     var eH by remember { mutableIntStateOf(endH) }
     var eM by remember { mutableIntStateOf(endM) }
 
-    val hours = remember { (0..23).toList() }
-    val minutes = remember { (0..59).toList() }
+    val hours = remember { (0..23).map { String.format(Locale.US, "%02d", it) } }
+    val minutes = remember { (0..59).map { String.format(Locale.US, "%02d", it) } }
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 2.dp,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        sheetState = sheetState
     ) {
         Column(
             modifier = Modifier
@@ -199,15 +211,16 @@ fun CustomTimeRangePickerBottomSheet(
                 ) {
                     NativeNumberPicker(
                         values = hours,
-                        selectedValue = sH,
-                        onValueChange = { sH = it },
+                        // 将 Int 转换为 "08" 这样的 String 来匹配数据源
+                        selectedValue = String.format(Locale.US, "%02d", sH),
+                        onValueChange = { sH = it.toInt() }, // 拿到 "08" 转回 8 存入 sH
                         modifier = Modifier.weight(1f)
                     )
                     Text(":", style = MaterialTheme.typography.titleMedium)
                     NativeNumberPicker(
                         values = minutes,
-                        selectedValue = sM,
-                        onValueChange = { sM = it },
+                        selectedValue = String.format(Locale.US, "%02d", sM),
+                        onValueChange = { sM = it.toInt() },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -221,15 +234,15 @@ fun CustomTimeRangePickerBottomSheet(
                 ) {
                     NativeNumberPicker(
                         values = hours,
-                        selectedValue = eH,
-                        onValueChange = { eH = it },
+                        selectedValue = String.format(Locale.US, "%02d", eH),
+                        onValueChange = { eH = it.toInt() },
                         modifier = Modifier.weight(1f)
                     )
                     Text(":", style = MaterialTheme.typography.titleMedium)
                     NativeNumberPicker(
                         values = minutes,
-                        selectedValue = eM,
-                        onValueChange = { eM = it },
+                        selectedValue = String.format(Locale.US, "%02d", eM),
+                        onValueChange = { eM = it.toInt() },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -310,8 +323,26 @@ fun DayPicker(selectedDay: Int, onDaySelected: (Int) -> Unit, modifier: Modifier
 }
 
 @Composable
-fun SectionPicker(selectedSection: Int, onSectionSelected: (Int) -> Unit, timeSlots: List<TimeSlot>, modifier: Modifier = Modifier) {
-    val sectionNumbers = timeSlots.map { it.number }.sorted()
-    val validSelected = if (selectedSection in sectionNumbers) selectedSection else sectionNumbers.firstOrNull() ?: 1
-    NativeNumberPicker(values = sectionNumbers, selectedValue = validSelected, onValueChange = onSectionSelected, modifier = modifier)
+fun SectionPicker(
+    selectedSection: Int,
+    onSectionSelected: (Int) -> Unit,
+    timeSlots: List<TimeSlot>,
+    modifier: Modifier = Modifier
+) {
+    val sortedSlots = remember(timeSlots) {
+        timeSlots.sortedBy { it.number }
+    }
+    val displayValues = sortedSlots.map { it.alias ?: it.number.toString() }
+    val currentSlot = sortedSlots.find { it.number == selectedSection } ?: sortedSlots.firstOrNull()
+    val selectedValueText = currentSlot?.let { it.alias ?: it.number.toString() } ?: ""
+
+    NativeNumberPicker(
+        values = displayValues,
+        selectedValue = selectedValueText,
+        onValueChange = { newValueText ->
+            val pickedSlot = sortedSlots.find { (it.alias ?: it.number.toString()) == newValueText }
+            pickedSlot?.let { onSectionSelected(it.number) }
+        },
+        modifier = modifier
+    )
 }

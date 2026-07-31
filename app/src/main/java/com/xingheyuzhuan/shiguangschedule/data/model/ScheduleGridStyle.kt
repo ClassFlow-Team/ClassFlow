@@ -2,8 +2,10 @@ package com.xingheyuzhuan.shiguangschedule.data.model
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.BorderTypeProto
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.DualColorProto
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleGridStyleProto
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleModeProto
 
 // 1. Compose 业务模型
 
@@ -28,15 +30,12 @@ data class ScheduleGridStyle(
     val courseBlockInnerPaddingDp: Float = DEFAULT_BLOCK_INNER_PADDING,
     val courseBlockAlphaFloat: Float = DEFAULT_BLOCK_ALPHA,
 
-    // 颜色 (单位: Long/ARGB)
-    val conflictCourseColorLong: Long = DEFAULT_CONFLICT_COLOR,
-    val conflictCourseColorDarkLong: Long = DEFAULT_CONFLICT_COLOR_DARK,
-
     // 颜色列表
     val courseColorMaps: List<DualColor> = DEFAULT_COLOR_MAPS,
 
     val courseBlockFontScale: Float = DEFAULT_FONT_SCALE,
 
+    // 界面开关与布局控制
     val hideGridLines: Boolean = false,
     val hideSectionTime: Boolean = false,
     val hideDateUnderDay: Boolean = false,
@@ -44,6 +43,14 @@ data class ScheduleGridStyle(
     val hideLocation: Boolean = false,
     val hideTeacher: Boolean = false,
     val removeLocationAt: Boolean = false,
+    val textAlignCenterHorizontal: Boolean = false,
+    val textAlignCenterVertical: Boolean = false,
+    val borderType: BorderTypeProto = BorderTypeProto.BORDER_TYPE_NONE,
+    val scheduleMode: ScheduleModeProto = ScheduleModeProto.SECTION_MODE,
+    val pageTextColorLong: Long? = null,
+    val courseTextColorLong: Long? = null,
+
+    // ── ClassFlow 自有字段 ──
     val courseFontFamilyPreset: Int = DEFAULT_COURSE_FONT_FAMILY_PRESET,
     val glassPreset: Int = DEFAULT_GLASS_PRESET,
     val backgroundDimAlpha: Float = DEFAULT_BACKGROUND_DIM_ALPHA,
@@ -70,8 +77,6 @@ data class ScheduleGridStyle(
         internal val DEFAULT_BLOCK_INNER_PADDING = 4f
         internal val DEFAULT_BLOCK_ALPHA = 1f
         internal val DEFAULT_FONT_SCALE = 1f
-        internal val DEFAULT_CONFLICT_COLOR = 0xFFFF9999L
-        internal val DEFAULT_CONFLICT_COLOR_DARK = 0xFF660000L
         internal val DEFAULT_COURSE_FONT_FAMILY_PRESET = 0
         internal val DEFAULT_GLASS_PRESET = 1
         internal val DEFAULT_BACKGROUND_DIM_ALPHA = 0.2f
@@ -105,8 +110,6 @@ data class ScheduleGridStyle(
             courseBlockOuterPaddingDp = DEFAULT_BLOCK_OUTER_PADDING,
             courseBlockInnerPaddingDp = DEFAULT_BLOCK_INNER_PADDING,
             courseBlockAlphaFloat = DEFAULT_BLOCK_ALPHA,
-            conflictCourseColorLong = DEFAULT_CONFLICT_COLOR,
-            conflictCourseColorDarkLong = DEFAULT_CONFLICT_COLOR_DARK,
             courseColorMaps = DEFAULT_COLOR_MAPS,
             courseBlockFontScale = DEFAULT_FONT_SCALE,
             hideGridLines = false,
@@ -116,6 +119,12 @@ data class ScheduleGridStyle(
             hideLocation = false,
             hideTeacher = false,
             removeLocationAt = false,
+            textAlignCenterHorizontal = false,
+            textAlignCenterVertical = false,
+            borderType = BorderTypeProto.BORDER_TYPE_NONE,
+            scheduleMode = ScheduleModeProto.SECTION_MODE,
+            pageTextColorLong = null,
+            courseTextColorLong = null,
             courseFontFamilyPreset = DEFAULT_COURSE_FONT_FAMILY_PRESET,
             glassPreset = DEFAULT_GLASS_PRESET,
             backgroundDimAlpha = DEFAULT_BACKGROUND_DIM_ALPHA,
@@ -128,65 +137,73 @@ data class ScheduleGridStyle(
 }
 
 
-// 2. Proto ? Compose 转换扩展函数
+// 2. Proto ⇔ Compose 转换扩展函数 (Wire 风格，与上游一致)
 
 fun DualColorProto.toCompose(): DualColor {
     return DualColor(
-        light = Color(this.lightColor.toInt()),
-        dark = Color(this.darkColor.toInt())
+        light = Color(this.light_color), // Wire 属性名是下划线风格
+        dark = Color(this.dark_color)
     )
 }
 
 fun DualColor.toProto(): DualColorProto {
-    return DualColorProto.newBuilder()
-        .setLightColor(this.light.toArgb().toLong())
-        .setDarkColor(this.dark.toArgb().toLong())
-        .build()
+    return DualColorProto(
+        light_color = this.light.toArgb().toLong(),
+        dark_color = this.dark.toArgb().toLong()
+    )
 }
 
 /**
- * Protobuf -> ScheduleGridStyle 转换函数
+ * Protobuf -> ScheduleGridStyle 转换 function
  */
 fun ScheduleGridStyleProto.toCompose(): ScheduleGridStyle {
     val d = ScheduleGridStyle.DEFAULT
 
     return ScheduleGridStyle(
-        // 1. 基础布局尺寸
-        timeColumnWidthDp = if (hasTimeColumnWidthDp()) timeColumnWidthDp else d.timeColumnWidthDp,
-        dayHeaderHeightDp = if (hasDayHeaderHeightDp()) dayHeaderHeightDp else d.dayHeaderHeightDp,
-        sectionHeightDp = if (hasSectionHeightDp()) sectionHeightDp else d.sectionHeightDp,
+        // 1. 基础布局尺寸 (Wire 生成的可空属性直接用 ?: 取默认)
+        timeColumnWidthDp = this.time_column_width_dp ?: d.timeColumnWidthDp,
+        dayHeaderHeightDp = this.day_header_height_dp ?: d.dayHeaderHeightDp,
+        sectionHeightDp = this.section_height_dp ?: d.sectionHeightDp,
 
         // 2. 课程块外观
-        courseBlockCornerRadiusDp = if (hasCourseBlockCornerRadiusDp()) courseBlockCornerRadiusDp else d.courseBlockCornerRadiusDp,
-        courseBlockOuterPaddingDp = if (hasCourseBlockOuterPaddingDp()) courseBlockOuterPaddingDp else d.courseBlockOuterPaddingDp,
-        courseBlockInnerPaddingDp = if (hasCourseBlockInnerPaddingDp()) courseBlockInnerPaddingDp else d.courseBlockInnerPaddingDp,
+        courseBlockCornerRadiusDp = this.course_block_corner_radius_dp ?: d.courseBlockCornerRadiusDp,
+        courseBlockOuterPaddingDp = this.course_block_outer_padding_dp ?: d.courseBlockOuterPaddingDp,
+        courseBlockInnerPaddingDp = this.course_block_inner_padding_dp ?: d.courseBlockInnerPaddingDp,
 
         // 3. 透明度与缩放
-        courseBlockAlphaFloat = if (hasCourseBlockAlphaFloat()) courseBlockAlphaFloat else d.courseBlockAlphaFloat,
-        courseBlockFontScale = if (hasCourseBlockFontScale()) courseBlockFontScale else d.courseBlockFontScale,
+        courseBlockAlphaFloat = this.course_block_alpha_float ?: d.courseBlockAlphaFloat,
+        courseBlockFontScale = this.course_block_font_scale ?: d.courseBlockFontScale,
 
-        // 4. 颜色配置
-        conflictCourseColorLong = if (hasConflictCourseColorLong()) conflictCourseColorLong else d.conflictCourseColorLong,
-        conflictCourseColorDarkLong = if (hasConflictCourseColorDarkLong()) conflictCourseColorDarkLong else d.conflictCourseColorDarkLong,
+        // 5. 列表转换 (Wire 中 List 不会是 null，为空则是 EmptyList)
+        courseColorMaps = if (this.course_color_maps.isEmpty()) d.courseColorMaps else this.course_color_maps.map { it.toCompose() },
 
-        // 5. 其他列表和布尔值
-        courseColorMaps = if (this.courseColorMapsList.isEmpty()) d.courseColorMaps else this.courseColorMapsList.map { it.toCompose() },
-        hideGridLines = this.hideGridLines,
-        hideSectionTime = this.hideSectionTime,
-        hideDateUnderDay = this.hideDateUnderDay,
-        showStartTime = this.showStartTime,
-        hideLocation = this.hideLocation,
-        hideTeacher = this.hideTeacher,
-        removeLocationAt = this.removeLocationAt,
-        courseFontFamilyPreset = if (hasCourseFontFamilyPreset()) courseFontFamilyPreset.coerceIn(0, 3) else d.courseFontFamilyPreset,
-        glassPreset = if (hasGlassPreset()) glassPreset.coerceIn(0, 2) else d.glassPreset,
-        backgroundDimAlpha = if (hasBackgroundDimAlpha()) backgroundDimAlpha.coerceIn(0f, 0.8f) else d.backgroundDimAlpha,
-        backgroundScale = if (hasBackgroundScale()) backgroundScale.coerceIn(0.8f, 5f) else d.backgroundScale,
-        backgroundOffsetX = if (hasBackgroundOffsetX()) backgroundOffsetX.coerceIn(-1f, 1f) else d.backgroundOffsetX,
-        backgroundOffsetY = if (hasBackgroundOffsetY()) backgroundOffsetY.coerceIn(-1f, 1f) else d.backgroundOffsetY,
+        // 6. 开关映射
+        hideGridLines = this.hide_grid_lines ?: d.hideGridLines,
+        hideSectionTime = this.hide_section_time ?: d.hideSectionTime,
+        hideDateUnderDay = this.hide_date_under_day ?: d.hideDateUnderDay,
+        showStartTime = this.show_start_time ?: d.showStartTime,
+        hideLocation = this.hide_location ?: d.hideLocation,
+        hideTeacher = this.hide_teacher ?: d.hideTeacher,
+        removeLocationAt = this.remove_location_at ?: d.removeLocationAt,
+        pageTextColorLong = this.page_text_color_long,
+        courseTextColorLong = this.course_text_color_long,
 
-        // 6. 背景图路径映射 (空字符串转 null)
-        backgroundImagePath = if (this.backgroundImagePath.isNullOrEmpty()) null else this.backgroundImagePath
+        // 7. 对齐与边框
+        textAlignCenterHorizontal = this.text_align_center_horizontal ?: d.textAlignCenterHorizontal,
+        textAlignCenterVertical = this.text_align_center_vertical ?: d.textAlignCenterVertical,
+        borderType = this.border_type ?: d.borderType,
+        scheduleMode = this.schedule_mode ?: d.scheduleMode,
+
+        // 8. ClassFlow 自有字段：玻璃效果/背景/字体
+        courseFontFamilyPreset = (this.course_font_family_preset ?: d.courseFontFamilyPreset).coerceIn(0, 3),
+        glassPreset = (this.glass_preset ?: d.glassPreset).coerceIn(0, 2),
+        backgroundDimAlpha = (this.background_dim_alpha ?: d.backgroundDimAlpha).coerceIn(0f, 0.8f),
+        backgroundScale = (this.background_scale ?: d.backgroundScale).coerceIn(0.8f, 5f),
+        backgroundOffsetX = (this.background_offset_x ?: d.backgroundOffsetX).coerceIn(-1f, 1f),
+        backgroundOffsetY = (this.background_offset_y ?: d.backgroundOffsetY).coerceIn(-1f, 1f),
+
+        // 9. 背景图路径映射 (空字符串转 null)
+        backgroundImagePath = if (!this.background_image_path.isNullOrEmpty()) this.background_image_path else null
     )
 }
 
@@ -194,35 +211,38 @@ fun ScheduleGridStyleProto.toCompose(): ScheduleGridStyle {
  * ScheduleGridStyle -> Protobuf 转换 (用于写入)
  */
 fun ScheduleGridStyle.toProto(): ScheduleGridStyleProto {
-    return ScheduleGridStyleProto.newBuilder().apply {
-        timeColumnWidthDp = this@toProto.timeColumnWidthDp
-        dayHeaderHeightDp = this@toProto.dayHeaderHeightDp
-        sectionHeightDp = this@toProto.sectionHeightDp
-        courseBlockCornerRadiusDp = this@toProto.courseBlockCornerRadiusDp
-        courseBlockOuterPaddingDp = this@toProto.courseBlockOuterPaddingDp
-        courseBlockInnerPaddingDp = this@toProto.courseBlockInnerPaddingDp
-        courseBlockAlphaFloat = this@toProto.courseBlockAlphaFloat
-        conflictCourseColorLong = this@toProto.conflictCourseColorLong
-        conflictCourseColorDarkLong = this@toProto.conflictCourseColorDarkLong
-        courseBlockFontScale = this@toProto.courseBlockFontScale
+    return ScheduleGridStyleProto(
+        time_column_width_dp = this.timeColumnWidthDp,
+        day_header_height_dp = this.dayHeaderHeightDp,
+        section_height_dp = this.sectionHeightDp,
+        course_block_corner_radius_dp = this.courseBlockCornerRadiusDp,
+        course_block_outer_padding_dp = this.courseBlockOuterPaddingDp,
+        course_block_inner_padding_dp = this.courseBlockInnerPaddingDp,
+        course_block_alpha_float = this.courseBlockAlphaFloat,
+        course_block_font_scale = this.courseBlockFontScale,
+        course_color_maps = this.courseColorMaps.map { it.toProto() },
+        hide_grid_lines = this.hideGridLines,
+        hide_section_time = this.hideSectionTime,
+        hide_date_under_day = this.hideDateUnderDay,
+        show_start_time = this.showStartTime,
+        hide_location = this.hideLocation,
+        hide_teacher = this.hideTeacher,
+        remove_location_at = this.removeLocationAt,
+        text_align_center_horizontal = this.textAlignCenterHorizontal,
+        text_align_center_vertical = this.textAlignCenterVertical,
+        border_type = this.borderType,
+        schedule_mode = this.scheduleMode,
 
-        addAllCourseColorMaps(this@toProto.courseColorMaps.map { it.toProto() })
+        page_text_color_long = this.pageTextColorLong,
+        course_text_color_long = this.courseTextColorLong,
+        background_image_path = this.backgroundImagePath ?: "",
 
-        hideGridLines = this@toProto.hideGridLines
-        hideSectionTime = this@toProto.hideSectionTime
-        hideDateUnderDay = this@toProto.hideDateUnderDay
-        showStartTime = this@toProto.showStartTime
-        hideLocation = this@toProto.hideLocation
-        hideTeacher = this@toProto.hideTeacher
-        removeLocationAt = this@toProto.removeLocationAt
-        courseFontFamilyPreset = this@toProto.courseFontFamilyPreset
-        glassPreset = this@toProto.glassPreset
-        backgroundDimAlpha = this@toProto.backgroundDimAlpha
-        backgroundScale = this@toProto.backgroundScale
-        backgroundOffsetX = this@toProto.backgroundOffsetX
-        backgroundOffsetY = this@toProto.backgroundOffsetY
-
-        // 将 null 映射回空字符串写入 Proto
-        backgroundImagePath = this@toProto.backgroundImagePath ?: ""
-    }.build()
+        // ClassFlow 自有字段 (100+)
+        course_font_family_preset = this.courseFontFamilyPreset,
+        glass_preset = this.glassPreset,
+        background_dim_alpha = this.backgroundDimAlpha,
+        background_scale = this.backgroundScale,
+        background_offset_x = this.backgroundOffsetX,
+        background_offset_y = this.backgroundOffsetY
+    )
 }

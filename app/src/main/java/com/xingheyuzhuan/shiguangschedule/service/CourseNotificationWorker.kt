@@ -1,6 +1,11 @@
 package com.xingheyuzhuan.shiguangschedule.service
 
 import android.app.AlarmManager
+import androidx.hilt.work.HiltWorker
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
+import dagger.hilt.android.qualifiers.ApplicationContext
+
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -22,9 +27,10 @@ import androidx.core.content.edit
 /**
  * WorkManager 用于设置课程提醒闹钟的 Worker。
  */
-class CourseNotificationWorker(
-    appContext: Context,
-    workerParams: WorkerParameters,
+@HiltWorker
+class CourseNotificationWorker @AssistedInject constructor(
+    @Assisted appContext: Context,
+    @Assisted workerParams: WorkerParameters,
     private val appSettingsRepository: AppSettingsRepository,
     private val widgetRepository: WidgetRepository
 ) : CoroutineWorker(appContext, workerParams) {

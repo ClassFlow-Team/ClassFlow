@@ -1,11 +1,10 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.CreationExtras
-import com.xingheyuzhuan.shiguangschedule.MyApplication
-import com.xingheyuzhuan.shiguangschedule.data.db.main.AppSettings
+import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -21,16 +20,17 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 
-class SettingsViewModel(
+@HiltViewModel
+class SettingsViewModel @Inject constructor(
     private val appSettingsRepository: AppSettingsRepository
 ) : ViewModel() {
 
     // 直接从 Repository 获取 AppSettings 的数据流，并暴露给 UI
-    val appSettingsState: StateFlow<AppSettings> = appSettingsRepository.getAppSettings()
+    val appSettingsState: StateFlow<AppSettingsModel> = appSettingsRepository.getAppSettings()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = AppSettings()
+            initialValue = AppSettingsModel()
         )
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -61,7 +61,21 @@ class SettingsViewModel(
      */
     private fun updateCurrentWeek() {
         viewModelScope.launch {
-            _currentWeekState.value = appSettingsRepository.calculateCurrentWeekFromDb()
+            appSettingsRepository.calculateCurrentWeekFromDb().collect {
+                _currentWeekState.value = it
+            }
+        }
+    }
+
+    /**
+     * UI 事件：更新是否显示非本周课程。
+     * 逻辑：更新 AppSettings（与上游 SettingsViewModel 对齐）
+     */
+    fun onShowNonCurrentWeekChanged(show: Boolean) {
+        viewModelScope.launch {
+            val currentSettings = appSettingsState.value
+            val updatedSettings = currentSettings.copy(showNonCurrentWeekCourses = show)
+            appSettingsRepository.insertOrUpdateAppSettings(updatedSettings)
         }
     }
 
@@ -152,16 +166,3 @@ class SettingsViewModel(
  * ViewModel 的工厂类，用于依赖注入。
  * 在此文件中定义，以提高代码内聚性。
  */
-object SettingsViewModelFactory : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-        val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
-
-        if (modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
-            val appSettingsRepository = (application as MyApplication).appSettingsRepository
-
-            @Suppress("UNCHECKED_CAST")
-            return SettingsViewModel(appSettingsRepository) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class")
-    }
-}

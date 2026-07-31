@@ -1,6 +1,11 @@
 package com.xingheyuzhuan.shiguangschedule.service
 
 import android.app.AlarmManager
+import androidx.hilt.work.HiltWorker
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
+import dagger.hilt.android.qualifiers.ApplicationContext
+
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
@@ -34,9 +39,10 @@ import java.util.Locale
  * 3. 取消所有旧的模式闹钟。
  * 4. 计算未来 N 天内最近的模式开启和关闭时间点，并设置精确闹钟。
  */
-class DndSchedulerWorker(
-    appContext: Context,
-    workerParams: WorkerParameters,
+@HiltWorker
+class DndSchedulerWorker @AssistedInject constructor(
+    @Assisted appContext: Context,
+    @Assisted workerParams: WorkerParameters,
     private val appSettingsRepository: AppSettingsRepository,
     private val widgetRepository: WidgetRepository
 ) : CoroutineWorker(appContext, workerParams) {

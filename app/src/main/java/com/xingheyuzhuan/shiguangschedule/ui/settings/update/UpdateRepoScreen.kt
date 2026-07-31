@@ -1,6 +1,7 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.update
 
 import androidx.compose.foundation.background
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -48,7 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
+import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.BuildConfig
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.model.RepoType
@@ -57,8 +58,8 @@ import com.xingheyuzhuan.shiguangschedule.data.model.RepositoryInfo
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UpdateRepoScreen(
-    navController: NavController,
-    viewModel: UpdateRepoViewModel = viewModel(factory = UpdateRepoViewModelFactory)
+    navBridge: NavBridge,
+    viewModel: UpdateRepoViewModel = hiltViewModel()
 ) {
     // 观察ViewModel的uiState
     val uiState by viewModel.uiState.collectAsState()
@@ -81,7 +82,7 @@ fun UpdateRepoScreen(
             TopAppBar(
                 title = { Text(text = stringResource(R.string.title_update_repo_screen)) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navBridge.popBackStack() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.a11y_back)

@@ -1,6 +1,7 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.time
 
 import android.util.Log
+import androidx.hilt.navigation.compose.hiltViewModel
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -75,7 +76,7 @@ import java.time.format.DateTimeParseException
 @Composable
 fun TimeSlotManagementScreen(
     onBackClick: () -> Unit,
-    timeSlotViewModel: TimeSlotViewModel = viewModel(factory = TimeSlotViewModelFactory)
+    timeSlotViewModel: TimeSlotViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()

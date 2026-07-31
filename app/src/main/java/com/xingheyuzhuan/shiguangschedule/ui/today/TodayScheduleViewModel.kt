@@ -1,11 +1,11 @@
 package com.xingheyuzhuan.shiguangschedule.ui.today
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import androidx.lifecycle.viewModelScope
-import com.xingheyuzhuan.shiguangschedule.MyApplication
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetCourse
 import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetAppSettings
@@ -20,11 +20,12 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 
-class TodayScheduleViewModel(
-    application: Application,
+@HiltViewModel
+class TodayScheduleViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val widgetRepository: WidgetRepository,
     private val styleSettingsRepository: StyleSettingsRepository
-) : AndroidViewModel(application) {
+) : ViewModel() {
 
     private val widgetSettingsFlow: Flow<WidgetAppSettings?> = widgetRepository.getAppSettingsFlow()
 
@@ -38,7 +39,7 @@ class TodayScheduleViewModel(
 
     // 辅助函数
     private fun getString(resId: Int, vararg formatArgs: Any): String {
-        return getApplication<Application>().getString(resId, *formatArgs)
+        return context.getString(resId, *formatArgs)
     }
 
     val semesterStatus: StateFlow<String> = widgetSettingsFlow.map { widgetSettings ->
@@ -97,18 +98,4 @@ class TodayScheduleViewModel(
     }
 
     // 更新 Factory 以支持注入 StyleSettingsRepository
-    class TodayScheduleViewModelFactory(private val application: Application) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass.isAssignableFrom(TodayScheduleViewModel::class.java)) {
-                val myApp = application as MyApplication
-                return TodayScheduleViewModel(
-                    myApp,
-                    myApp.widgetRepository,
-                    myApp.styleSettingsRepository
-                ) as T
-            }
-            throw IllegalArgumentException("Unknown ViewModel class")
-        }
-    }
 }

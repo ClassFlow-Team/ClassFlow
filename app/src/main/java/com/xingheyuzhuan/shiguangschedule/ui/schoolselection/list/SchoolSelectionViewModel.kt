@@ -56,7 +56,7 @@ class SchoolSelectionViewModel(application: Application) : AndroidViewModel(appl
     ) { allSchools, query, category ->
         // 1. 类别过滤：筛选出内部适配器列表中包含选中类别的学校
         val categoryFiltered = allSchools.filter { school ->
-            school.adaptersList.any { adapter -> adapter.category == category }
+            school.adapters.any { adapter -> adapter.category == category }
         }
 
         // 2. 搜索过滤

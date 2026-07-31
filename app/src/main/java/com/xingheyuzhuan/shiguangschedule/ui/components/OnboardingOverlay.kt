@@ -60,7 +60,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.Destination
 
 private const val ONBOARDING_PREFS = "classflow_onboarding"
 private const val KEY_COMPLETED = "onboarding_completed"
@@ -138,7 +138,7 @@ private val onboardingSteps = listOf(
 
 @Composable
 fun OnboardingOverlay(
-    currentRoute: String?,
+    currentDestination: Destination?,
     onFinish: () -> Unit,
     onGoToSettings: () -> Unit
 ) {
@@ -178,7 +178,7 @@ fun OnboardingOverlay(
         }
 
         val shouldUsePreciseSettingsTarget =
-            isLastStep && currentRoute == Screen.Settings.route && rowSpot != null
+            isLastStep && currentDestination is Destination.Settings && rowSpot != null
 
         val spotlightRect = if (shouldUsePreciseSettingsTarget) rowSpot else defaultSpot
 
@@ -315,7 +315,7 @@ fun OnboardingOverlay(
                     isLastStep = isLastStep,
                     lastStepReady = shouldUsePreciseSettingsTarget,
                     onLastStepClick = {
-                        if (currentRoute != Screen.Settings.route) {
+                        if (currentDestination !is Destination.Settings) {
                             onGoToSettings()
                             return@BubbleCard
                         }

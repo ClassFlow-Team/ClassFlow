@@ -4,9 +4,12 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.Serializer
 import androidx.datastore.dataStore
+import dagger.hilt.android.qualifiers.ApplicationContext
 import com.xingheyuzhuan.shiguangschedule.data.model.DualColor
 import com.xingheyuzhuan.shiguangschedule.data.model.ScheduleGridStyle
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.BorderTypeProto
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleGridStyleProto
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleModeProto
 import com.xingheyuzhuan.shiguangschedule.data.model.toCompose
 import com.xingheyuzhuan.shiguangschedule.data.model.toProto
 import kotlinx.coroutines.flow.Flow
@@ -14,25 +17,26 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.io.InputStream
 import java.io.OutputStream
+import javax.inject.Inject
 
 // 1. DataStore 文件名常量
 const val SCHEDULE_STYLE_DATASTORE_FILE_NAME = "schedule_style_settings.pb"
 
-// 2. DataStore Serializer (序列化器)
+// 2. DataStore Serializer (序列化器, Wire ADAPTER 风格)
 object ScheduleStyleSerializer : Serializer<ScheduleGridStyleProto> {
     override val defaultValue: ScheduleGridStyleProto
-        get() = ScheduleGridStyleProto.getDefaultInstance()
+        get() = ScheduleGridStyleProto()
 
     override suspend fun readFrom(input: InputStream): ScheduleGridStyleProto {
         return try {
-            ScheduleGridStyleProto.parseFrom(input)
+            ScheduleGridStyleProto.ADAPTER.decode(input)
         } catch (exception: Exception) {
-            ScheduleGridStyleProto.getDefaultInstance()
+            ScheduleGridStyleProto()
         }
     }
 
     override suspend fun writeTo(t: ScheduleGridStyleProto, output: OutputStream) {
-        t.writeTo(output)
+        ScheduleGridStyleProto.ADAPTER.encode(output, t)
     }
 }
 
@@ -46,13 +50,44 @@ val Context.scheduleGridStyleDataStore: DataStore<ScheduleGridStyleProto> by dat
     serializer = ScheduleStyleSerializer
 )
 
+/**
+ * 样式自持版本号的中央备份信封
+ * 放在数据源头，对齐课表 envelope 的设计，保持物理传输字段名 appVersionCode
+ */
+@kotlinx.serialization.Serializable
+data class StyleBackupEnvelope(
+    val backupTimestamp: Long,
+    val appVersionCode: Int,
+    val styleProtoBytes: ByteArray
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as StyleBackupEnvelope
+
+        if (backupTimestamp != other.backupTimestamp) return false
+        if (appVersionCode != other.appVersionCode) return false
+        if (!styleProtoBytes.contentEquals(other.styleProtoBytes)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = backupTimestamp.hashCode()
+        result = 31 * result + appVersionCode
+        result = 31 * result + styleProtoBytes.contentHashCode()
+        return result
+    }
+}
+
 // 4. StyleSettingsRepository (仓库类)
 /**
  * 样式设置的数据仓库，负责与 Proto DataStore 进行交互。
  */
-class StyleSettingsRepository(
+class StyleSettingsRepository @Inject constructor(
     private val dataStore: DataStore<ScheduleGridStyleProto>,
-    private val context: Context
+    @ApplicationContext private val context: Context
 ) {
 
     /**
@@ -68,64 +103,120 @@ class StyleSettingsRepository(
     val styleFlow: Flow<ScheduleGridStyle> = dataStore.data
         .map { proto -> proto.toCompose() }
 
-    // --- 通用写入 API ---
+    companion object {
+        /**
+         * 样式备份协议版本号
+         */
+        const val STYLE_SCHEMA_VERSION = 1
+    }
+
+    // --- 备份与恢复扩展 API ---
+
+    /**
+     * 仅导出当前原生的样式配置字节数组 (排除壁纸路径)
+     */
+    suspend fun exportRawStyleBytes(): ByteArray {
+        val currentProto = dataStore.data.first()
+        val exportProto = currentProto.copy(background_image_path = "")
+        return ScheduleGridStyleProto.ADAPTER.encode(exportProto)
+    }
+
+    /**
+     * 将清洗/升级完毕后的原生字节数组还原 (缝合本地壁纸并写入)
+     */
+    suspend fun restoreRawStyleBytes(bytes: ByteArray): Result<Unit> = runCatching {
+        val currentLocalProto = dataStore.data.first()
+        val localWallpaperPath = currentLocalProto.background_image_path
+
+        val backupProto = ScheduleGridStyleProto.ADAPTER.decode(bytes)
+        val finalProto = backupProto.copy(background_image_path = localWallpaperPath)
+
+        dataStore.updateData { finalProto }
+        com.xingheyuzhuan.shiguangschedule.widget.updateAllWidgets(context)
+    }
+
+    // --- 通用写入 API (Wire 风格：copy 生成新实例) ---
     private suspend fun updateStyle(
-        transform: ScheduleGridStyleProto.Builder.() -> Unit
+        transform: (ScheduleGridStyleProto) -> ScheduleGridStyleProto
     ) {
         dataStore.updateData { currentProto ->
-            currentProto.toBuilder().apply(transform).build()
+            transform(currentProto)
         }
     }
 
-    // --- 原子化公共写入 API (Setters) ---
+    // --- 原子化公共写入 API (Setters, Wire copy 风格) ---
 
     /** 设置时间列宽度 (DP 值) */
-    suspend fun setTimeColumnWidth(widthDp: Float) = updateStyle { timeColumnWidthDp = widthDp }
+    suspend fun setTimeColumnWidth(widthDp: Float) = updateStyle { it.copy(time_column_width_dp = widthDp) }
     /** 设置日表头高度 (DP 值) */
-    suspend fun setDayHeaderHeight(heightDp: Float) = updateStyle { dayHeaderHeightDp = heightDp }
+    suspend fun setDayHeaderHeight(heightDp: Float) = updateStyle { it.copy(day_header_height_dp = heightDp) }
     /** 设置节次高度 (DP 值) */
-    suspend fun setSectionHeight(heightDp: Float) = updateStyle { sectionHeightDp = heightDp }
+    suspend fun setSectionHeight(heightDp: Float) = updateStyle { it.copy(section_height_dp = heightDp) }
 
     /** 设置圆角半径 (DP 值) */
-    suspend fun setCourseBlockCornerRadius(radiusDp: Float) = updateStyle { courseBlockCornerRadiusDp = radiusDp }
+    suspend fun setCourseBlockCornerRadius(radiusDp: Float) = updateStyle { it.copy(course_block_corner_radius_dp = radiusDp) }
     /** 设置外部边距 (DP 值) */
-    suspend fun setCourseBlockOuterPadding(paddingDp: Float) = updateStyle { courseBlockOuterPaddingDp = paddingDp }
+    suspend fun setCourseBlockOuterPadding(paddingDp: Float) = updateStyle { it.copy(course_block_outer_padding_dp = paddingDp) }
     /** 设置内部填充 (DP 值) */
-    suspend fun setCourseBlockInnerPadding(paddingDp: Float) = updateStyle { courseBlockInnerPaddingDp = paddingDp }
+    suspend fun setCourseBlockInnerPadding(paddingDp: Float) = updateStyle { it.copy(course_block_inner_padding_dp = paddingDp) }
     /** 设置透明度 (0.0f - 1.0f) */
-    suspend fun setCourseBlockAlpha(alpha: Float) = updateStyle { courseBlockAlphaFloat = alpha }
+    suspend fun setCourseBlockAlpha(alpha: Float) = updateStyle { it.copy(course_block_alpha_float = alpha) }
     /** 设置毛玻璃预设 (0..2) */
-    suspend fun setGlassPreset(preset: Int) = updateStyle { glassPreset = preset.coerceIn(0, 2) }
+    suspend fun setGlassPreset(preset: Int) = updateStyle { it.copy(glass_preset = preset.coerceIn(0, 2)) }
     /** 设置背景遮罩透明度 (0.0..0.8) */
-    suspend fun setBackgroundDimAlpha(alpha: Float) = updateStyle { backgroundDimAlpha = alpha.coerceIn(0f, 0.8f) }
+    suspend fun setBackgroundDimAlpha(alpha: Float) = updateStyle { it.copy(background_dim_alpha = alpha.coerceIn(0f, 0.8f)) }
     /** 设置背景缩放 (1.0..3.0) */
-    suspend fun setBackgroundScale(scale: Float) = updateStyle { backgroundScale = scale.coerceIn(0.8f, 5f) }
+    suspend fun setBackgroundScale(scale: Float) = updateStyle { it.copy(background_scale = scale.coerceIn(0.8f, 5f)) }
     /** 设置背景水平偏移比例 (-0.5..0.5) */
-    suspend fun setBackgroundOffsetX(offset: Float) = updateStyle { backgroundOffsetX = offset.coerceIn(-0.5f, 0.5f) }
+    suspend fun setBackgroundOffsetX(offset: Float) = updateStyle { it.copy(background_offset_x = offset.coerceIn(-0.5f, 0.5f)) }
     /** 设置背景垂直偏移比例 (-0.5..0.5) */
-    suspend fun setBackgroundOffsetY(offset: Float) = updateStyle { backgroundOffsetY = offset.coerceIn(-0.5f, 0.5f) }
+    suspend fun setBackgroundOffsetY(offset: Float) = updateStyle { it.copy(background_offset_y = offset.coerceIn(-0.5f, 0.5f)) }
 
     /** 原子化设置背景缩放与偏移，避免连续写入导致卡顿 */
     suspend fun setBackgroundTransform(scale: Float, offsetX: Float, offsetY: Float) = updateStyle {
-        backgroundScale = scale.coerceIn(0.8f, 5f)
-        backgroundOffsetX = offsetX.coerceIn(-0.5f, 0.5f)
-        backgroundOffsetY = offsetY.coerceIn(-0.5f, 0.5f)
+        it.copy(
+            background_scale = scale.coerceIn(0.8f, 5f),
+            background_offset_x = offsetX.coerceIn(-0.5f, 0.5f),
+            background_offset_y = offsetY.coerceIn(-0.5f, 0.5f)
+        )
     }
 
-    /** 设置冲突颜色 (ARGB Long 值) */
-    suspend fun setConflictCourseColorLong(longColor: Long, isDark: Boolean) = updateStyle {
-        if (isDark) {
-            conflictCourseColorDarkLong = longColor
-        } else {
-            conflictCourseColorLong = longColor
-        }
+    // ── 上游同步字段 setter ──
+
+    /** 设置页面文字颜色 (null = 跟随主题) */
+    suspend fun setPageTextColor(color: Long?) = updateStyle {
+        it.copy(page_text_color_long = color)
+    }
+
+    /** 设置课程块文字颜色 (null = 跟随主题) */
+    suspend fun setCourseTextColor(color: Long?) = updateStyle {
+        it.copy(course_text_color_long = color)
+    }
+
+    /** 设置课程块文字水平居中 */
+    suspend fun setTextAlignCenterHorizontal(enabled: Boolean) = updateStyle {
+        it.copy(text_align_center_horizontal = enabled)
+    }
+
+    /** 设置课程块文字垂直居中 */
+    suspend fun setTextAlignCenterVertical(enabled: Boolean) = updateStyle {
+        it.copy(text_align_center_vertical = enabled)
+    }
+
+    /** 设置课程块边框类型 */
+    suspend fun setBorderType(type: BorderTypeProto) = updateStyle {
+        it.copy(border_type = type)
+    }
+
+    /** 设置课表时间段模式 */
+    suspend fun setScheduleMode(mode: ScheduleModeProto) = updateStyle {
+        it.copy(schedule_mode = mode)
     }
 
     /** 设置颜色列表映射 */
     suspend fun setCourseColorMaps(maps: List<DualColor>) {
         updateStyle {
-            clearCourseColorMaps()
-            addAllCourseColorMaps(maps.map { it.toProto() })
+            it.copy(course_color_maps = maps.map { map -> map.toProto() })
         }
         com.xingheyuzhuan.shiguangschedule.widget.updateAllWidgets(context)
     }
@@ -133,7 +224,7 @@ class StyleSettingsRepository(
     /** 重置为默认样式 */
     suspend fun resetAllStyleSettings() {
         dataStore.updateData {
-            ScheduleGridStyleProto.getDefaultInstance()
+            ScheduleGridStyleProto()
         }
         com.xingheyuzhuan.shiguangschedule.widget.updateAllWidgets(context)
     }
@@ -142,14 +233,14 @@ class StyleSettingsRepository(
      * @param hide true 表示隐藏，false 表示显示 (默认)
      */
     suspend fun setHideSectionTime(hide: Boolean) = updateStyle {
-        hideSectionTime = hide
+        it.copy(hide_section_time = hide)
     }
 
     /** * 设置是否隐藏星期栏下的日期
      * @param hide true 表示隐藏，false 表示显示 (默认)
      */
     suspend fun setHideDateUnderDay(hide: Boolean) = updateStyle {
-        hideDateUnderDay = hide
+        it.copy(hide_date_under_day = hide)
     }
 
     /**
@@ -157,25 +248,25 @@ class StyleSettingsRepository(
      * @param hide true 表示隐藏，false 表示显示 (默认)
      */
     suspend fun setHideGridLines(hide: Boolean) = updateStyle {
-        hideGridLines = hide
+        it.copy(hide_grid_lines = hide)
     }
 
     /** * 设置是否在课程格内显示开始时间
      * @param show true 表示显示，false 表示不显示 (默认)
      */
     suspend fun setShowStartTime(show: Boolean) = updateStyle {
-        showStartTime = show
+        it.copy(show_start_time = show)
     }
 
     /** * 设置课程块字体的缩放比例
      * @param scale 缩放因子，例如 1.0 为原始大小
      */
     suspend fun setCourseBlockFontScale(scale: Float) = updateStyle {
-        courseBlockFontScale = scale
+        it.copy(course_block_font_scale = scale)
     }
 
     suspend fun setCourseFontFamilyPreset(preset: Int) = updateStyle {
-        courseFontFamilyPreset = preset.coerceIn(0, 3)
+        it.copy(course_font_family_preset = preset.coerceIn(0, 3))
     }
 
     /**
@@ -183,7 +274,7 @@ class StyleSettingsRepository(
      * @param hide true 表示隐藏，false 表示显示 (默认)
      */
     suspend fun setHideLocation(hide: Boolean) = updateStyle {
-        hideLocation = hide
+        it.copy(hide_location = hide)
     }
 
     /**
@@ -191,7 +282,7 @@ class StyleSettingsRepository(
      * @param hide true 表示隐藏，false 表示显示 (默认)
      */
     suspend fun setHideTeacher(hide: Boolean) = updateStyle {
-        hideTeacher = hide
+        it.copy(hide_teacher = hide)
     }
 
     /**
@@ -199,13 +290,13 @@ class StyleSettingsRepository(
      * @param remove true 表示移除，false 表示保留 (默认)
      */
     suspend fun setRemoveLocationAt(remove: Boolean) = updateStyle {
-        removeLocationAt = remove
+        it.copy(remove_location_at = remove)
     }
 
     /** * 设置背景壁纸的物理路径
      */
     suspend fun setBackgroundImagePath(path: String) = updateStyle {
-        backgroundImagePath = path
+        it.copy(background_image_path = path)
     }
 
     /**
@@ -215,12 +306,10 @@ class StyleSettingsRepository(
     suspend fun resetAllStyleSettingsExceptWallpaper() {
         dataStore.updateData { currentProto ->
             // 1. 先把当前的壁纸路径备份下来
-            val currentPath = currentProto.backgroundImagePath
+            val currentPath = currentProto.background_image_path
 
-            // 2. 获取一个全默认的 Builder，然后把路径塞回去
-            ScheduleGridStyleProto.newBuilder()
-                .setBackgroundImagePath(currentPath)
-                .build()
+            // 2. 创建一个全默认对象，再 copy 之前的路径进去
+            ScheduleGridStyleProto().copy(background_image_path = currentPath)
         }
         com.xingheyuzhuan.shiguangschedule.widget.updateAllWidgets(context)
     }

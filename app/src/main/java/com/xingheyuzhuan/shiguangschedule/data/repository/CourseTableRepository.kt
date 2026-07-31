@@ -10,6 +10,7 @@ import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWeek
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWeekDao
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
+import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
@@ -19,7 +20,7 @@ import java.util.UUID
  * 课表数据仓库，负责处理所有与课表、课程相关的业务逻辑和数据操作。
  * 它封装了底层 DAO，为 ViewModel 提供高层次的业务接口。
  */
-class CourseTableRepository(
+class CourseTableRepository @Inject constructor(
     private val courseTableDao: CourseTableDao,
     private val courseDao: CourseDao,
     private val courseWeekDao: CourseWeekDao,

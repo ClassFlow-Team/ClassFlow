@@ -36,5 +36,6 @@ data class Course(
     val customStartTime: String?, // 自定义起始时间，格式为 "HH:MM"
     val customEndTime: String?,   // 自定义结束时间，格式为 "HH:MM"
 
-    val colorInt: Int // 课程卡片的颜色索引
+    val colorInt: Int, // 课程卡片的颜色索引
+    val remark: String? = null // 课程备注信息，限 300 字以内
 )

@@ -1,20 +1,13 @@
 package com.xingheyuzhuan.shiguangschedule
 
 import android.app.Application
+import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
-import com.xingheyuzhuan.shiguangschedule.data.db.main.MainAppDatabase
-import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetDatabase
-import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
-import com.xingheyuzhuan.shiguangschedule.data.repository.CourseConversionRepository
-import com.xingheyuzhuan.shiguangschedule.data.repository.CourseTableRepository
-import com.xingheyuzhuan.shiguangschedule.data.repository.StyleSettingsRepository
-import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
-import com.xingheyuzhuan.shiguangschedule.data.repository.WidgetRepository
-import com.xingheyuzhuan.shiguangschedule.data.repository.scheduleGridStyleDataStore
-import com.xingheyuzhuan.shiguangschedule.data.sync.SyncManager
-import com.xingheyuzhuan.shiguangschedule.data.sync.WidgetDataSynchronizer
-import com.xingheyuzhuan.shiguangschedule.service.AppWorkerFactory
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
+import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
+import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
+import com.xingheyuzhuan.shiguangschedule.data.sync.SyncManager
+import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -23,80 +16,19 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import javax.inject.Inject
 
+@HiltAndroidApp
 class MyApplication : Application(), Configuration.Provider {
 
-    // 主数据库
-    val database: MainAppDatabase by lazy { MainAppDatabase.getDatabase(this) }
-    // Widget 数据库
-    val widgetDatabase: WidgetDatabase by lazy { WidgetDatabase.getDatabase(this) }
+    @Inject lateinit var workerFactory: HiltWorkerFactory
+    @Inject lateinit var syncManager: SyncManager
+    @Inject lateinit var appSettingsRepository: AppSettingsRepository
+    @Inject lateinit var timeSlotRepository: TimeSlotRepository
 
-
-    // 样式设置仓库
-    val styleSettingsRepository: StyleSettingsRepository by lazy {
-        StyleSettingsRepository(scheduleGridStyleDataStore, applicationContext)
-    }
-    // 主数据库仓库
-    val appSettingsRepository: AppSettingsRepository by lazy {
-        AppSettingsRepository(
-            appSettingsDao = database.appSettingsDao(),
-            courseTableConfigDao = database.courseTableConfigDao()
-        )
-    }
-
-    val timeSlotRepository: TimeSlotRepository by lazy {
-        TimeSlotRepository(database.timeSlotDao())
-    }
-
-    val courseTableRepository: CourseTableRepository by lazy {
-        CourseTableRepository(
-            database.courseTableDao(),
-            database.courseDao(),
-            database.courseWeekDao(),
-            timeSlotRepository,
-            appSettingsRepository
-        )
-    }
-
-    val courseConversionRepository: CourseConversionRepository by lazy {
-        CourseConversionRepository(
-            courseDao = database.courseDao(),
-            courseWeekDao = database.courseWeekDao(),
-            timeSlotDao = database.timeSlotDao(),
-            appSettingsRepository = appSettingsRepository,
-            styleSettingsRepository = styleSettingsRepository
-        )
-    }
-    // Widget 数据库仓库
-    val widgetRepository: WidgetRepository by lazy {
-        WidgetRepository(
-            widgetDatabase.widgetCourseDao(),
-            widgetDatabase.widgetAppSettingsDao(),
-            this
-        )
-    }
-
-    // 公开 WidgetDataSynchronizer 实例
-    val widgetDataSynchronizer by lazy {
-        WidgetDataSynchronizer(
-            appContext = this,
-            appSettingsRepository = appSettingsRepository,
-            courseTableRepository = courseTableRepository,
-            timeSlotRepository = timeSlotRepository,
-            widgetRepository = widgetRepository
-        )
-    }
-
-    // WorkManager 配置，现在将 widgetDataSynchronizer 传入工厂
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
-            .setWorkerFactory(
-                AppWorkerFactory(
-                    appSettingsRepository = appSettingsRepository,
-                    widgetRepository = widgetRepository,
-                    widgetDataSynchronizer = widgetDataSynchronizer
-                )
-            )
+            .setWorkerFactory(workerFactory)
             .build()
 
     override fun onCreate() {
@@ -105,20 +37,15 @@ class MyApplication : Application(), Configuration.Provider {
         // 在应用启动时清理临时分享文件
         clearShareTempFiles()
 
-        // 1. 触发主数据库的初始化。
-        database.courseTableDao()
+        // Room → DataStore 一次性迁移（幂等：DataStore 已有数据时跳过）
+        CoroutineScope(Dispatchers.IO).launch {
+            appSettingsRepository.migrateFromRoomOnce()
+        }
 
-        // 2. 创建并启动同步管理器。
-        val syncManager = SyncManager(
-            appContext = this,
-            appSettingsRepository = appSettingsRepository,
-            courseTableRepository = courseTableRepository,
-            timeSlotRepository = timeSlotRepository,
-            widgetRepository = widgetRepository
-        )
+        // 创建并启动同步管理器（由 Hilt 注入后直接使用）
         syncManager.startAllSynchronizers()
 
-        // 3. 在应用启动时初始化离线仓库
+        // 在应用启动时初始化离线仓库
         CoroutineScope(Dispatchers.IO).launch {
             initOfflineRepo()
             migrateLegacyDefaultTimeSlotsIfNeeded()

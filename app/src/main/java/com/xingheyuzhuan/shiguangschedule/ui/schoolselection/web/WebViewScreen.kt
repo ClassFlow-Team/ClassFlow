@@ -66,7 +66,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.navigation.NavController
+import com.xingheyuzhuan.shiguangschedule.Destination
+import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.BuildConfig
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSyncEngine
@@ -95,13 +96,12 @@ private val WBU_TIMETABLE_PATH_HINTS = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WebViewScreen(
-    navController: NavController,
+    navBridge: NavBridge,
     initialUrl: String?,
     assetJsPath: String?,
     courseConversionRepository: CourseConversionRepository,
     timeSlotRepository: TimeSlotRepository,
     appSettingsRepository: AppSettingsRepository,
-    courseScheduleRoute: String,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -208,10 +208,7 @@ fun WebViewScreen(
                 onTaskCompleted = {
                     // 使用预取的字符串
                     Toast.makeText(context, toastImportFinished, Toast.LENGTH_LONG).show()
-                    navController.popBackStack(
-                        route = courseScheduleRoute,
-                        inclusive = false
-                    )
+                    navBridge.navigateToMain(Destination.CourseSchedule)
                 }
             )
             addJavascriptInterface(androidBridge!!, "AndroidBridge")
@@ -407,7 +404,7 @@ fun WebViewScreen(
                             inputUrl = webView.url ?: currentUrl
                             keyboardController?.hide()
                         } else {
-                            navController.popBackStack()
+                            navBridge.popBackStack()
                         }
                     }) {
                         Icon(

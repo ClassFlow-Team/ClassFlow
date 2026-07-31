@@ -38,7 +38,7 @@ object SchoolRepository {
 
             try {
                 internalFile.inputStream().use { stream ->
-                    val index = SchoolIndex.parseFrom(stream)
+                    val index = SchoolIndex.ADAPTER.decode(stream)
                     return@withContext index
                 }
             } catch (ioException: IOException) {
@@ -57,15 +57,15 @@ object SchoolRepository {
     suspend fun getSchools(context: Context): List<School> {
         val index = loadIndex(context) ?: return emptyList()
 
-        val wbuOnly = index.schoolsList.filter { it.id.equals(TARGET_SCHOOL_ID, ignoreCase = true) }
+        val wbuOnly = index.schools.filter { it.id.equals(TARGET_SCHOOL_ID, ignoreCase = true) }
         if (wbuOnly.isNotEmpty()) {
             return wbuOnly.sortedBy { it.initial.uppercase() + it.name }
         }
 
         // 1. 过滤：筛选出包含相关教务适配器的学校
-        val filteredSchools = index.schoolsList.filter { school ->
+        val filteredSchools = index.schools.filter { school ->
             // 检查该学校的适配器列表中，是否存在任一个适配器类别在目标集合中
-            school.adaptersList.any { adapter ->
+            school.adapters.any { adapter ->
                 adapter.category in RELEVANT_MENU_CATEGORIES
             }
         }
@@ -82,10 +82,10 @@ object SchoolRepository {
             val index = loadIndex(context)
 
             // 查找对应的学校
-            val school = index?.schoolsList?.find { it.id == schoolId }
+            val school = index?.schools?.find { it.id == schoolId }
 
             // 返回该学校下的所有适配器
-            return@withContext school?.adaptersList ?: emptyList()
+            return@withContext school?.adapters ?: emptyList()
         }
     }
 
@@ -96,7 +96,7 @@ object SchoolRepository {
         return withContext(Dispatchers.IO) {
             val index = loadIndex(context)
             // 查找对应的学校
-            return@withContext index?.schoolsList?.find { it.id == id }
+            return@withContext index?.schools?.find { it.id == id }
         }
     }
 }

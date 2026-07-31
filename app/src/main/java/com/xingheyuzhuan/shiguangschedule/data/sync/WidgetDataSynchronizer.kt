@@ -1,12 +1,15 @@
 package com.xingheyuzhuan.shiguangschedule.data.sync
 
 import android.content.Context
-import com.xingheyuzhuan.shiguangschedule.data.db.main.AppSettings
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetCourse
 import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetAppSettings
+import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseTableRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
@@ -29,8 +32,9 @@ import java.util.Locale
  * 负责主数据库和 Widget 数据库之间的数据同步。
  * 它持续监听数据变化，并自动将数据处理后存入为 Widget 优化的数据库。
  */
-class WidgetDataSynchronizer(
-    private val appContext: Context,
+@Singleton
+class WidgetDataSynchronizer @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val appSettingsRepository: AppSettingsRepository,
     private val courseTableRepository: CourseTableRepository,
     private val timeSlotRepository: TimeSlotRepository,
@@ -114,7 +118,7 @@ class WidgetDataSynchronizer(
      * 实际执行同步逻辑的私有方法，避免代码重复。
      */
     private suspend fun performSync(
-        appSettings: AppSettings,
+        appSettings: AppSettingsModel,
         courseConfig: CourseTableConfig,
         coursesWithWeeks: List<CourseWithWeeks>,
         timeSlots: List<TimeSlot>

@@ -1,6 +1,7 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.style
 
 import android.content.res.Configuration
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -42,21 +43,27 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
-import coil.compose.AsyncImage
+import com.xingheyuzhuan.shiguangschedule.NavBridge
+import coil3.compose.AsyncImage
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.Destination
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.BorderTypeProto
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleModeProto
 import com.xingheyuzhuan.shiguangschedule.ui.components.AdvancedColorPicker
 import com.xingheyuzhuan.shiguangschedule.ui.components.ColorPickerConfig
+import com.xingheyuzhuan.shiguangschedule.ui.schedule.MergedCourseBlock
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.WeeklyScheduleUiState
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGrid
+import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGridActions
+import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGridViewState
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGridStyleComposed
+import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.rememberScheduleGridState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StyleSettingsScreen(
-    navController: NavController,
-    viewModel: StyleSettingsViewModel = viewModel(factory = StyleSettingsViewModelFactory)
+    navBridge: NavBridge,
+    viewModel: StyleSettingsViewModel = hiltViewModel()
 ) {
     val styleState by viewModel.styleState.collectAsStateWithLifecycle()
     val demoUiState by viewModel.demoUiState.collectAsStateWithLifecycle()
@@ -65,7 +72,6 @@ fun StyleSettingsScreen(
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     var showColorPicker by remember { mutableStateOf(false) }
-    var pickingCategory by remember { mutableIntStateOf(0) }
     var isDarkTarget by remember { mutableStateOf(false) }
     var selectedColorIndex by remember { mutableIntStateOf(0) }
 
@@ -76,7 +82,7 @@ fun StyleSettingsScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.item_personalization)) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navBridge.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.a11y_back))
                     }
                 }
@@ -100,11 +106,12 @@ fun StyleSettingsScreen(
             if (isLandscape) {
                 Row(modifier = contentModifier) {
                     previewContent(Modifier.fillMaxHeight().weight(0.4f))
-                    Card(modifier = Modifier.fillMaxHeight().weight(0.6f), shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp)) {
+                    // 去掉外侧卡片圆角，消除"卡片套卡片"的视觉（上游同步）
+                    Card(modifier = Modifier.fillMaxHeight().weight(0.6f), shape = RoundedCornerShape(0.dp)) {
                         SettingsListContent(currentStyle, viewModel, onNavigateToAdjust = {
-                            navController.navigate(Screen.WallpaperAdjust.route)
-                        }) { cat, isDark, idx ->
-                            pickingCategory = cat; isDarkTarget = isDark; selectedColorIndex = idx
+                            navBridge.navigate(Destination.WallpaperAdjust)
+                        }) { isDark, idx ->
+                            isDarkTarget = isDark; selectedColorIndex = idx
                             showColorPicker = true
                         }
                     }
@@ -112,11 +119,12 @@ fun StyleSettingsScreen(
             } else {
                 Column(modifier = contentModifier) {
                     previewContent(Modifier.fillMaxWidth().weight(0.38f))
-                    Card(modifier = Modifier.fillMaxWidth().weight(0.62f), shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)) {
+                    // 去掉外侧卡片圆角，消除"卡片套卡片"的视觉（上游同步）
+                    Card(modifier = Modifier.fillMaxWidth().weight(0.62f), shape = RoundedCornerShape(0.dp)) {
                         SettingsListContent(currentStyle, viewModel, onNavigateToAdjust = {
-                            navController.navigate(Screen.WallpaperAdjust.route)
-                        }) { cat, isDark, idx ->
-                            pickingCategory = cat; isDarkTarget = isDark; selectedColorIndex = idx
+                            navBridge.navigate(Destination.WallpaperAdjust)
+                        }) { isDark, idx ->
+                            isDarkTarget = isDark; selectedColorIndex = idx
                             showColorPicker = true
                         }
                     }
@@ -131,9 +139,7 @@ fun StyleSettingsScreen(
                     tonalElevation = 2.dp,
                     shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
                 ) {
-                    val initialColor = if (pickingCategory == 1) {
-                        if (isDarkTarget) currentStyle.conflictCourseColorDark else currentStyle.conflictCourseColor
-                    } else {
+                    val initialColor = run {
                         val pair = currentStyle.courseColorMaps.getOrNull(selectedColorIndex)
                         if (isDarkTarget) pair?.dark ?: Color.Gray else pair?.light ?: Color.Gray
                     }
@@ -145,11 +151,7 @@ fun StyleSettingsScreen(
                         config = ColorPickerConfig(showAlpha = false),
                         onColorChanged = { newColor ->
                             currentColorInPicker = newColor
-                            if (pickingCategory == 1) {
-                                viewModel.updateConflictColor(newColor, isDarkTarget)
-                            } else {
-                                viewModel.updatePrimaryColor(selectedColorIndex, newColor, isDarkTarget)
-                            }
+                            viewModel.updatePrimaryColor(selectedColorIndex, newColor, isDarkTarget)
                         },
                         previewContent = {
                             ColorPreviewBox(currentColorInPicker, !isDarkTarget)
@@ -167,7 +169,7 @@ private fun SettingsListContent(
     currentStyle: ScheduleGridStyleComposed,
     viewModel: StyleSettingsViewModel,
     onNavigateToAdjust: () -> Unit,
-    onPick: (category: Int, isDark: Boolean, index: Int) -> Unit
+    onPick: (isDark: Boolean, index: Int) -> Unit
 ) {
     var showResetDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -202,15 +204,27 @@ private fun SettingsListContent(
     ) {
         // ── Interface ──
         SettingsGroup(title = stringResource(R.string.style_category_interface)) {
+            // 24小时时间轴模式（上游同步）
+            StyleSwitchItem(stringResource(R.string.label_schedule_mode_24h), currentStyle.scheduleMode == ScheduleModeProto.TIME_24H_MODE) {
+                viewModel.updateScheduleMode(if (it) ScheduleModeProto.TIME_24H_MODE else ScheduleModeProto.SECTION_MODE)
+            }
             WallpaperItem(
                 path = currentStyle.backgroundImagePath,
                 onClick = { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                 onLongClick = { viewModel.removeWallpaper(context) },
                 onAdjust = if (currentStyle.backgroundImagePath.isNotEmpty()) onNavigateToAdjust else null
             )
+            StyleSliderItem(stringResource(R.string.label_background_dim), currentStyle.backgroundDimAlpha, 0f..0.7f) { viewModel.updateBackgroundDimAlpha(it) }
             StyleSwitchItem(stringResource(R.string.label_hide_section_time), currentStyle.hideSectionTime) { viewModel.updateHideSectionTime(it) }
             StyleSwitchItem(stringResource(R.string.label_hide_date_under_day), currentStyle.hideDateUnderDay) { viewModel.updateHideDateUnderDay(it) }
             StyleSwitchItem(stringResource(R.string.label_hide_grid_lines), currentStyle.hideGridLines) { viewModel.updateHideGridLines(it) }
+            // 页面文字颜色（上游同步）
+            ColorPickerItem(
+                label = stringResource(R.string.label_page_text_color),
+                currentColor = currentStyle.pageTextColor,
+                onColorChanged = { viewModel.updatePageTextColor(it) },
+                onReset = { viewModel.updatePageTextColor(null) }
+            )
         }
 
         // ── Grid size ──
@@ -238,20 +252,29 @@ private fun SettingsListContent(
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
+            // 课程块文字颜色（上游同步）
+            ColorPickerItem(
+                label = stringResource(R.string.label_course_text_color),
+                currentColor = currentStyle.courseTextColor,
+                onColorChanged = { viewModel.updateCourseTextColor(it) },
+                onReset = { viewModel.updateCourseTextColor(null) }
+            )
             StyleSwitchItem(stringResource(R.string.label_show_start_time), currentStyle.showStartTime) { viewModel.updateShowStartTime(it) }
             StyleSwitchItem(stringResource(R.string.label_hide_location), currentStyle.hideLocation) { viewModel.updateHideLocation(it) }
             StyleSwitchItem(stringResource(R.string.label_hide_teacher), currentStyle.hideTeacher) { viewModel.updateHideTeacher(it) }
             StyleSwitchItem(stringResource(R.string.label_remove_location_at), currentStyle.removeLocationAt) { viewModel.updateRemoveLocationAt(it) }
-        }
+            // 文字对齐（上游同步）
+            StyleSwitchItem(stringResource(R.string.label_text_align_center_h), currentStyle.textAlignCenterHorizontal) { viewModel.updateTextAlignCenterHorizontal(it) }
+            StyleSwitchItem(stringResource(R.string.label_text_align_center_v), currentStyle.textAlignCenterVertical) { viewModel.updateTextAlignCenterVertical(it) }
+            // 边框样式（上游同步）
+            BorderTypeSelector(currentStyle.borderType) { viewModel.updateBorderType(it) }
 
-        // ── Fine-tuning ──
-        SettingsGroup(title = stringResource(R.string.label_font_style)) {
+            // 文字与几何微调（跟随上游：与课程块外观同组）
             StyleSliderItem(stringResource(R.string.label_font_scale), currentStyle.fontScale, 0.5f..2.0f) { viewModel.updateCourseBlockFontScale(it) }
             StyleSliderItem(stringResource(R.string.label_corner_radius), currentStyle.courseBlockCornerRadius.value, 0f..24f) { viewModel.updateCornerRadius(it) }
             StyleSliderItem(stringResource(R.string.label_inner_padding), currentStyle.courseBlockInnerPadding.value, 0f..12f) { viewModel.updateInnerPadding(it) }
             StyleSliderItem(stringResource(R.string.label_outer_padding), currentStyle.courseBlockOuterPadding.value, 0f..8f) { viewModel.updateOuterPadding(it) }
-            StyleSliderItem(stringResource(R.string.label_opacity), currentStyle.courseBlockAlpha, 0.1f..1f) { viewModel.updateAlpha(it) }
-            StyleSliderItem(stringResource(R.string.label_background_dim), currentStyle.backgroundDimAlpha, 0f..0.7f) { viewModel.updateBackgroundDimAlpha(it) }
+            StyleSliderItem(stringResource(R.string.label_opacity), currentStyle.courseBlockAlpha, 0.1f..1f, 0.1f) { viewModel.updateAlpha(it) }
         }
 
         // ── Color scheme ──
@@ -261,9 +284,7 @@ private fun SettingsListContent(
                 bgColor = lightColorScheme().surfaceContainerLow,
                 isDarkSection = false,
                 colors = currentStyle.courseColorMaps.map { it.light },
-                conflictColor = currentStyle.conflictCourseColor,
-                onEditColor = { onPick(0, false, it) },
-                onEditConflict = { onPick(1, false, 0) }
+                onEditColor = { onPick(false, it) }
             )
             Spacer(modifier = Modifier.height(8.dp))
             ColorSchemeSection(
@@ -271,9 +292,7 @@ private fun SettingsListContent(
                 bgColor = darkColorScheme().surfaceContainerLow,
                 isDarkSection = true,
                 colors = currentStyle.courseColorMaps.map { it.dark },
-                conflictColor = currentStyle.conflictCourseColorDark,
-                onEditColor = { onPick(0, true, it) },
-                onEditConflict = { onPick(1, true, 0) }
+                onEditColor = { onPick(true, it) }
             )
         }
 
@@ -288,6 +307,28 @@ private fun SettingsListContent(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun BorderTypeSelector(
+    currentType: BorderTypeProto,
+    onTypeChange: (BorderTypeProto) -> Unit
+) {
+    val types = listOf(
+        BorderTypeProto.BORDER_TYPE_NONE to stringResource(R.string.label_none),
+        BorderTypeProto.BORDER_TYPE_SOLID to stringResource(R.string.border_type_solid),
+        BorderTypeProto.BORDER_TYPE_DASHED to stringResource(R.string.border_type_dashed)
+    )
+    Text(stringResource(R.string.label_border_type), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(bottom = 4.dp))
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        types.forEachIndexed { index, (type, label) ->
+            SegmentedButton(
+                selected = currentType == type,
+                onClick = { onTypeChange(type) },
+                shape = SegmentedButtonDefaults.itemShape(index, types.size)
+            ) { Text(label) }
+        }
     }
 }
 
@@ -314,9 +355,7 @@ private fun ColorSchemeSection(
     bgColor: Color,
     isDarkSection: Boolean,
     colors: List<Color>,
-    conflictColor: Color,
-    onEditColor: (Int) -> Unit,
-    onEditConflict: () -> Unit
+    onEditColor: (Int) -> Unit
 ) {
     val contentColor = if (isDarkSection) Color.White else Color.Black
 
@@ -325,13 +364,6 @@ private fun ColorSchemeSection(
         Spacer(modifier = Modifier.height(16.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(modifier = Modifier.size(44.dp).clip(CircleShape).background(conflictColor).border(2.dp, contentColor.copy(0.3f), CircleShape).clickable { onEditConflict() })
-                Text(stringResource(R.string.label_color_conflict), style = MaterialTheme.typography.labelSmall, color = contentColor.copy(0.6f), modifier = Modifier.padding(top = 4.dp))
-            }
-
-            VerticalDivider(modifier = Modifier.height(40.dp).padding(horizontal = 12.dp), color = contentColor.copy(0.1f))
-
             Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 colors.forEachIndexed { index, color ->
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -341,18 +373,6 @@ private fun ColorSchemeSection(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun ColorPreviewBox(color: Color, isLightModeUI: Boolean) {
-    Box(modifier = Modifier.fillMaxWidth().height(100.dp).padding(horizontal = 16.dp).clip(RoundedCornerShape(16.dp)).background(color), contentAlignment = Alignment.Center) {
-        Text(
-            text = if (isLightModeUI) stringResource(R.string.preview_light_mode) else stringResource(R.string.preview_dark_mode),
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = if (isLightModeUI) lightColorScheme().onSurface else Color.White
-        )
     }
 }
 
@@ -373,6 +393,30 @@ internal fun ScheduleGridContent(
         localDates.map { it.format(formatter) }
     }
     val dynamicTodayIndex = remember(localDates) { localDates.indexOf(today) }
+    val previewWeekStr = stringResource(id = R.string.format_week_display, 1)
+    val gridScrollState = rememberScrollState()
+    val gridState = rememberScheduleGridState(gridScrollState = gridScrollState)
+    val gridViewState = remember(dummyDates, demoUiState, dynamicTodayIndex, previewWeekStr) {
+        ScheduleGridViewState(
+            dates = dummyDates,
+            currentYear = today.year.toString(),
+            currentWeek = previewWeekStr,
+            timeSlots = demoUiState.timeSlots,
+            mergedCourses = demoUiState.currentMergedCourses,
+            showWeekends = demoUiState.showWeekends,
+            todayIndex = dynamicTodayIndex,
+            firstDayOfWeek = demoUiState.firstDayOfWeek,
+            currentSectionIndex = -1
+        )
+    }
+
+    val gridActions = remember {
+        object : ScheduleGridActions {
+            override fun onCourseBlockClicked(block: MergedCourseBlock) {}
+            override fun onGridCellClicked(day: Int, section: Int) {}
+            override fun onTimeSlotClicked() {}
+        }
+    }
 
     var bgContainerSize by remember { mutableStateOf(IntSize.Zero) }
 
@@ -405,136 +449,12 @@ internal fun ScheduleGridContent(
             )
         }
         ScheduleGrid(
-            style = style,
-            dates = dummyDates,
-            timeSlots = demoUiState.timeSlots,
-            mergedCourses = demoUiState.currentMergedCourses,
-            showWeekends = demoUiState.showWeekends,
-            todayIndex = dynamicTodayIndex,
-            firstDayOfWeek = demoUiState.firstDayOfWeek,
-            onCourseBlockClicked = { },
-            onGridCellClicked = { _, _ -> },
-            onTimeSlotClicked = { }
+            state = gridState,
+            viewState = gridViewState,
+            actions = gridActions,
+            style = style
         )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun StyleSliderItem(
-    label: String,
-    value: Float,
-    range: ClosedFloatingPointRange<Float>,
-    onValueChange: (Float) -> Unit
-) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(label, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                text = if (value < 100f && value > 0.01f) "%.2f".format(value) else "${value.toInt()}",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = range,
-            modifier = Modifier.height(32.dp),
-            thumb = {
-                Surface(
-                    modifier = Modifier.size(16.dp),
-                    shape = CircleShape,
-                    color = Color.White,
-                    shadowElevation = 1.dp,
-                    border = BorderStroke(0.5.dp, Color.LightGray.copy(alpha = 0.5f))
-                ) {}
-            },
-            track = { sliderState ->
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(22.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    SliderDefaults.Track(
-                        sliderState = sliderState,
-                        modifier = Modifier.fillMaxWidth().height(22.dp),
-                        colors = SliderDefaults.colors(
-                            activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                            inactiveTrackColor = Color.Transparent
-                        ),
-                        thumbTrackGapSize = 0.dp,
-                        trackInsideCornerSize = 0.dp
-                    )
-                }
-            }
-        )
-    }
-}
-
-@Composable
-private fun StyleSwitchItem(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            thumbContent = if (checked) {
-                { Icon(modifier = Modifier.size(SwitchDefaults.IconSize), imageVector = Icons.Filled.Check, contentDescription = null) }
-            } else null
-        )
-    }
-}
-
-@Composable
-private fun WallpaperItem(
-    path: String,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    onAdjust: (() -> Unit)? = null
-) {
-    val hasWallpaper = path.isNotEmpty()
-
-    Row(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(vertical = 12.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(stringResource(R.string.label_wallpaper), style = MaterialTheme.typography.bodyMedium)
-            Text(
-                text = if (hasWallpaper) stringResource(R.string.desc_wallpaper_set)
-                else stringResource(R.string.desc_wallpaper_unset),
-                style = MaterialTheme.typography.labelSmall,
-                color = if (hasWallpaper) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        if (onAdjust != null) {
-            IconButton(onClick = onAdjust) {
-                Icon(
-                    imageVector = Icons.Rounded.Tune,
-                    contentDescription = stringResource(R.string.action_adjust_wallpaper),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-        Icon(
-            imageVector = Icons.Default.Image,
-            contentDescription = null,
-            tint = if (hasWallpaper) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-        )
-    }
-}
+// StyleSliderItem, StyleSwitchItem, WallpaperItem 已移至 StyleSettingsComponents.kt（共用）

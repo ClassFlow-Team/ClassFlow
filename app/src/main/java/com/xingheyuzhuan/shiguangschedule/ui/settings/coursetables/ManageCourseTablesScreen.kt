@@ -1,6 +1,7 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.coursetables
 
 import android.app.Application
+import androidx.hilt.navigation.compose.hiltViewModel
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -45,7 +46,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavHostController
+import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTable
 import java.text.SimpleDateFormat
@@ -55,10 +56,8 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ManageCourseTablesScreen(
-    navController: NavHostController,
-    viewModel: ManageCourseTablesViewModel = viewModel(
-        factory = ManageCourseTablesViewModel.provideFactory(LocalContext.current.applicationContext as Application)
-    )
+    navBridge: NavBridge,
+    viewModel: ManageCourseTablesViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
 
@@ -99,7 +98,7 @@ fun ManageCourseTablesScreen(
             TopAppBar(
                 title = { Text(titleManageTables) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navBridge.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = a11yBack)
                     }
                 },

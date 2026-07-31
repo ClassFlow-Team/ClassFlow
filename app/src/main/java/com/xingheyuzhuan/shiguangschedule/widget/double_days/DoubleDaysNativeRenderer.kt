@@ -32,7 +32,7 @@ object DoubleDaysNativeRenderer {
         rv.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
 
         // --- 2. 全局状态判断 (假期/开学) ---
-        val currentWeek = if (snapshot.currentWeek == 0) null else snapshot.currentWeek
+        val currentWeek = if (snapshot.current_week == 0) null else snapshot.current_week
         if (currentWeek == null) {
             rv.setViewVisibility(R.id.inner_content_card, View.GONE)
             rv.setViewVisibility(R.id.container_vacation, View.VISIBLE)
@@ -48,12 +48,12 @@ object DoubleDaysNativeRenderer {
         val now = LocalTime.now()
         val today = LocalDate.now()
         val tomorrow = today.plusDays(1)
-        val allCourses = snapshot.coursesList
+        val allCourses = snapshot.courses
 
         // 渲染左侧：今日
         val todayCourses = allCourses.filter { it.date == today.toString() || it.date.isBlank() }
         val remainingToday = todayCourses.filter {
-            !it.isSkipped && try { LocalTime.parse(it.endTime) > now } catch (e: Exception) { true }
+            !it.is_skipped && try { LocalTime.parse(it.end_time) > now } catch (e: Exception) { true }
         }
         renderColumn(
             context, rv,
@@ -64,7 +64,7 @@ object DoubleDaysNativeRenderer {
 
         // 渲染右侧：明日
         val tomorrowCourses = allCourses.filter { it.date == tomorrow.toString() }
-        val effectiveTomorrow = tomorrowCourses.filter { !it.isSkipped }
+        val effectiveTomorrow = tomorrowCourses.filter { !it.is_skipped }
         renderColumn(
             context, rv,
             R.id.container_tomorrow, R.id.tv_tomorrow_date, R.id.tv_tomorrow_footer, R.id.empty_tomorrow,
@@ -113,7 +113,7 @@ object DoubleDaysNativeRenderer {
                 itemRv.setTextViewText(R.id.tv_course_name, course.name)
                 itemRv.setTextViewText(R.id.tv_course_position, course.position)
 
-                val timeInterval = try { "${course.startTime.take(5)}-${course.endTime.take(5)}" } catch (e: Exception) { "" }
+                val timeInterval = try { "${course.start_time.take(5)}-${course.end_time.take(5)}" } catch (e: Exception) { "" }
                 itemRv.setTextViewText(R.id.tv_course_time, timeInterval)
 
                 if (course.teacher.isNotBlank()) {
@@ -124,16 +124,16 @@ object DoubleDaysNativeRenderer {
                 }
 
                 // --- 核心改动：发送两条颜色指令 ---
-                val style = snapshot.style
-                if (course.colorInt < style.courseColorMapsCount) {
-                    val colorPair = style.getCourseColorMaps(course.colorInt)
+                val style = snapshot.style ?: return@forEachIndexed
+                if (course.color_int < style.course_color_maps.size) {
+                    val colorPair = style.course_color_maps[course.color_int]
 
                     // 指令 1: 发送给白天版的 ID
-                    val lightC = colorPair.lightColor.toInt()
+                    val lightC = colorPair.light_color.toInt()
                     itemRv.setInt(R.id.course_indicator, "setBackgroundColor", lightC)
 
                     // 指令 2: 发送给深色版的 ID (对应 layout-night 里的新 ID)
-                    val darkC = colorPair.darkColor.toInt()
+                    val darkC = colorPair.dark_color.toInt()
                     itemRv.setInt(R.id.course_indicator_dark, "setBackgroundColor", darkC)
                 } else {
                     // 如果溢出，同样发送两条，或者直接用资源 ID（系统会自动换资源）

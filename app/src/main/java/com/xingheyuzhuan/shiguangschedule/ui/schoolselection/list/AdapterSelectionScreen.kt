@@ -42,7 +42,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
+import com.xingheyuzhuan.shiguangschedule.Destination
+import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
 import school_index.Adapter
 import school_index.AdapterCategory
@@ -62,7 +63,7 @@ object WebViewNavigationHelper {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdapterSelectionScreen(
-    navController: NavController,
+    navBridge: NavBridge,
     schoolId: String,
     schoolName: String,
     categoryNumber: Int,
@@ -74,7 +75,7 @@ fun AdapterSelectionScreen(
     var isLoading by remember { mutableStateOf(true) }
 
     // 关键修正：从传入的 number 参数计算出当前的 AdapterCategory
-    val currentCategory = AdapterCategory.forNumber(categoryNumber)
+    val currentCategory = AdapterCategory.fromValue(categoryNumber)
         ?: AdapterCategory.BACHELOR_AND_ASSOCIATE
 
 
@@ -112,7 +113,7 @@ fun AdapterSelectionScreen(
             TopAppBar(
                 title = { Text("$schoolName - $categoryDisplayName", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navBridge.popBackStack() }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.a11y_back_to_school_list)
@@ -145,25 +146,22 @@ fun AdapterSelectionScreen(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(adapters, key = { it.adapterId }) { adapter ->
+                        items(adapters, key = { it.adapter_id }) { adapter ->
                             AdapterCard(
                                 adapter = adapter,
                                 onClick = { selectedAdapter ->
-                                    val initialUrl = selectedAdapter.importUrl.ifBlank { "about:blank" }
+                                    val initialUrl = (selectedAdapter.import_url ?: "").ifBlank { "about:blank" }
 
-                                    val jsFileName = selectedAdapter.assetJsPath
+                                    val jsFileName = selectedAdapter.asset_js_path
 
                                     val assetJsPath = if (jsFileName.isNotBlank()) {
                                         "$resourceFolder/$jsFileName"
                                     } else {
-                                        "$resourceFolder/${selectedAdapter.adapterId}.js"
+                                        "$resourceFolder/${selectedAdapter.adapter_id}.js"
                                     }
                                     // 导航到 WebView，传递 URL 和正确构建的 JS 路径
-                                    navController.navigate(
-                                        WebViewNavigationHelper.createRoute(
-                                            initialUrl = initialUrl,
-                                            assetJsPath = assetJsPath
-                                        )
+                                    navBridge.navigate(
+                                        Destination.WebView(initialUrl = initialUrl, assetJsPath = assetJsPath)
                                     )
                                 }
                             )
@@ -194,7 +192,7 @@ fun AdapterCard(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = adapter.adapterName,
+                    text = adapter.adapter_name,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,

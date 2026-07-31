@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ClassFlow 定制字符串（独立文件，保持 strings.xml 与上游逐字一致，避免 merge 冲突） -->
+    <string name="action_adjust_wallpaper">調整</string>
+    <string name="dialog_option_on_vacation">假期中</string>
+    <string name="font_style_apple">平方</string>
+    <string name="font_style_default">預設</string>
+    <string name="font_style_rounded">圓潤</string>
+    <string name="font_style_serif">襯線</string>
+    <string name="hint_wallpaper_pinch">雙指縮放和拖動\n調整背景位置</string>
+    <string name="label_font_style">字體風格</string>
+    <string name="onboarding_body_1">輕量課程表，專為武漢商學院\n∠・ω&lt; )⌒☆ Ciallo～</string>
+    <string name="onboarding_body_2">手指左右滑動課表，即可查看不同週的課程</string>
+    <string name="onboarding_body_3">點擊右上角按鈕，一鍵匯入教務系統課表</string>
+    <string name="onboarding_body_4">「今日課表」看今天 · 「課表」看整週 · 「我的」管理設定</string>
+    <string name="onboarding_body_5">設定日期後，課表才能準確顯示當前是第幾週</string>
+    <string name="onboarding_finish">開始使用</string>
+    <string name="onboarding_next">下一步</string>
+    <string name="onboarding_skip">跳過引導</string>
+    <string name="onboarding_title_1">歡迎來到 ClassFlow</string>
+    <string name="onboarding_title_2">左右滑動切換週次</string>
+    <string name="onboarding_title_3">一鍵同步課表</string>
+    <string name="onboarding_title_4">底部快速切換</string>
+    <string name="onboarding_title_5">設置開學日期</string>
+    <string name="status_on_vacation">假期中</string>
+    <string name="title_wallpaper_adjust">調整背景</string>
+    <string name="widget_date_dayofweek_format">%1$s %2$s</string>
+    <string name="widget_name_large">今日課程4x3</string>
+    <string name="widget_name_moderate">今日課程4x2</string>
+</resources>

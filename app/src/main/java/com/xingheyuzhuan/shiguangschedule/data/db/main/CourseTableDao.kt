@@ -50,4 +50,10 @@ interface CourseTableDao {
      */
     @Query("DELETE FROM course_tables WHERE id = :tableId")
     suspend fun deleteById(tableId: String)
+
+    /**
+     * 获取创建时间最早的课表（用于确定默认显示的课表 ID）。
+     */
+    @Query("SELECT * FROM course_tables ORDER BY createdAt ASC LIMIT 1")
+    suspend fun getFirstTableOnce(): CourseTable?
 }

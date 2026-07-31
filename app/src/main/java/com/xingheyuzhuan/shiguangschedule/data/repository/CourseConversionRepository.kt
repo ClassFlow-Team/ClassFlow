@@ -1,5 +1,7 @@
 package com.xingheyuzhuan.shiguangschedule.data.repository
 
+import android.content.Context
+import android.provider.CalendarContract
 import androidx.room.Transaction
 import com.xingheyuzhuan.shiguangschedule.data.db.main.Course
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseDao
@@ -15,12 +17,16 @@ import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.Cou
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.ExportCourseJsonModel
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.ImportCourseJsonModel
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseImportExport.TimeSlotJsonModel
+import com.xingheyuzhuan.shiguangschedule.tool.CalendarAccountManager
 import com.xingheyuzhuan.shiguangschedule.tool.IcsExportTool
+import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.util.UUID
 
-class CourseConversionRepository(
+class CourseConversionRepository @Inject constructor(
     private val courseDao: CourseDao,
     private val courseWeekDao: CourseWeekDao,
     private val timeSlotDao: TimeSlotDao,
@@ -97,7 +103,8 @@ class CourseConversionRepository(
                     isCustomTime = jsonCourse.isCustomTime,
                     customStartTime = jsonCourse.customStartTime,
                     customEndTime = jsonCourse.customEndTime,
-                    colorInt = courseIndex
+                    colorInt = courseIndex,
+                    remark = jsonCourse.remark
                 )
             )
 
@@ -131,7 +138,12 @@ class CourseConversionRepository(
         val timeSlotEntities = mutableListOf<TimeSlot>()
 
         courseTableJsonModel.courses.forEach { jsonCourse ->
-            val courseId = jsonCourse.id ?: UUID.randomUUID().toString()
+            // ⚠️ 上游问题规避（已反馈上游，后续提交 PR）：
+            // 上游 importCourseTableFromJson 沿用 JSON id（jsonCourse.id ?: UUID），
+            // 空字符串 id 或目标课表残留数据（courseTableId 错乱）会导致
+            // UNIQUE constraint failed: courses.id 导入失败。
+            // 本实现一律重新生成 id（与上游 importCoursesFromList 语义一致），免疫主键冲突。
+            val courseId = UUID.randomUUID().toString()
 
             val courseIndex = getValidatedOrRandomColorIndex(
                 importColor = jsonCourse.color,
@@ -153,7 +165,8 @@ class CourseConversionRepository(
                     isCustomTime = jsonCourse.isCustomTime,
                     customStartTime = jsonCourse.customStartTime,
                     customEndTime = jsonCourse.customEndTime,
-                    colorInt = courseIndex
+                    colorInt = courseIndex,
+                    remark = jsonCourse.remark
                 )
             )
 
@@ -164,7 +177,7 @@ class CourseConversionRepository(
             }
         }
 
-        courseTableJsonModel.timeSlots.forEach { jsonTimeSlot ->
+        courseTableJsonModel.timeSlots?.forEach { jsonTimeSlot ->
             timeSlotEntities.add(
                 TimeSlot(
                     number = jsonTimeSlot.number,
@@ -254,7 +267,10 @@ class CourseConversionRepository(
             val colorIndex = course.colorInt
 
             ExportCourseJsonModel(
-                id = course.id,
+                // ⚠️ 上游问题规避（已反馈上游，后续提交 PR）：
+                // 上游导入对空字符串 id 不防御（jsonCourse.id ?: UUID 只处理 null），
+                // 历史数据中的空 id 课程导出后会破坏对方导入。此处导出时保证 id 有效。
+                id = course.id.ifBlank { UUID.randomUUID().toString() },
                 name = course.name,
                 teacher = course.teacher,
                 position = course.position,
@@ -265,7 +281,8 @@ class CourseConversionRepository(
                 weeks = weeks,
                 isCustomTime = course.isCustomTime,
                 customStartTime = course.customStartTime,
-                customEndTime = course.customEndTime
+                customEndTime = course.customEndTime,
+                remark = course.remark
             )
         }
 
@@ -329,8 +346,72 @@ class CourseConversionRepository(
             timeSlots = timeSlots,
             semesterStartDate = semesterStartDate,
             semesterTotalWeeks = courseConfig.semesterTotalWeeks,
+            firstDayOfWeekInt = courseConfig.firstDayOfWeek,
             alarmMinutes = alarmMinutes,
             skippedDates = skippedDates
         )
+    }
+
+    /**
+     * 一键同步当前课表到系统日历。
+     * 先清空本应用专属日历账户下的事件，再按当前课表配置批量写入。
+     */
+    suspend fun syncCurrentTableToSystemCalendar(context: Context): Boolean {
+        val appSettings = appSettingsRepository.getAppSettingsOnce()
+        val currentTableId = appSettings.currentCourseTableId
+        if (currentTableId.isEmpty()) return false
+
+        val courses = courseDao.getCoursesWithWeeksByTableId(currentTableId).first()
+        val timeSlots = timeSlotDao.getTimeSlotsByCourseTableId(currentTableId).first()
+        val alarmMinutes = appSettings.remindBeforeMinutes
+        val skippedDates = appSettings.skippedDates
+        val courseConfig = appSettingsRepository.getCourseConfigOnce(currentTableId)
+        val semesterStartDate = courseConfig?.semesterStartDate?.let {
+            try {
+                LocalDate.parse(it)
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val calendarId = CalendarAccountManager.getOrCreateCalendarId(context)
+                if (calendarId == -1L) return@withContext false
+
+                val resolver = context.contentResolver
+                resolver.delete(
+                    CalendarContract.Events.CONTENT_URI,
+                    "${CalendarContract.Events.CALENDAR_ID} = ?",
+                    arrayOf(calendarId.toString())
+                )
+
+                if (semesterStartDate == null ||
+                    courseConfig == null ||
+                    courseConfig.semesterTotalWeeks <= 0 ||
+                    courses.isEmpty()
+                ) {
+                    // 配置不完整或无课时：已清空旧事件也算成功
+                    return@withContext true
+                }
+
+                val ops = IcsExportTool.generateCalendarOps(
+                    courses = courses,
+                    timeSlots = timeSlots,
+                    semesterStartDate = semesterStartDate,
+                    semesterTotalWeeks = courseConfig.semesterTotalWeeks,
+                    firstDayOfWeekInt = courseConfig.firstDayOfWeek,
+                    calendarId = calendarId,
+                    alarmMinutes = alarmMinutes,
+                    skippedDates = skippedDates
+                )
+                if (ops.isNotEmpty()) {
+                    resolver.applyBatch(CalendarContract.AUTHORITY, ops)
+                }
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
     }
 }

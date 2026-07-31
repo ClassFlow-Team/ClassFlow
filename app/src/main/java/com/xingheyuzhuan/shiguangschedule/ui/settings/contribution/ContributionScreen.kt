@@ -20,8 +20,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavHostController
-import coil.compose.AsyncImage
+import com.xingheyuzhuan.shiguangschedule.NavBridge
+import coil3.compose.AsyncImage
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.model.ContributionList
 
@@ -31,7 +31,7 @@ private typealias Contributor = ContributionList.Contributor
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContributionScreen(
-    navController: NavHostController,
+    navBridge: NavBridge,
     viewModel: ContributionViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -43,7 +43,7 @@ fun ContributionScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.title_contribution_list)) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navBridge.popBackStack() }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.a11y_back_to_previous)

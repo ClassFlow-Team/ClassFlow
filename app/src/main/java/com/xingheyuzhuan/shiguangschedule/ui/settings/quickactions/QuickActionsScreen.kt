@@ -26,9 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavHostController
+import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.Destination
 
 /**
  * 快捷操作二级页面
@@ -37,14 +37,14 @@ import com.xingheyuzhuan.shiguangschedule.Screen
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuickActionsScreen(
-    navController: NavHostController
+    navBridge: NavBridge
 ) {
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text(stringResource(R.string.item_quick_actions)) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navBridge.popBackStack() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.a11y_back)
@@ -85,14 +85,14 @@ fun QuickActionsScreen(
                         QuickActionItem(
                             title = stringResource(R.string.item_schedule_tweak),
                             subtitle = stringResource(R.string.desc_schedule_tweak),
-                            onClick = { navController.navigate(Screen.TweakSchedule.route) }
+                            onClick = { navBridge.navigate(Destination.TweakSchedule) }
                         )
 
                         // 2. 快速删除功能项
                         QuickActionItem(
                             title = stringResource(R.string.item_quick_delete),
                             subtitle = stringResource(R.string.quick_delete_subtitle),
-                            onClick = { navController.navigate(Screen.QuickDelete.route) }
+                            onClick = { navBridge.navigate(Destination.QuickDelete) }
                         )
                     }
                 }

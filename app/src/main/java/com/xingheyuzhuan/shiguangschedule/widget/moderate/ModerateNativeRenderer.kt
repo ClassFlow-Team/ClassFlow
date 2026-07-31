@@ -27,8 +27,8 @@ object ModerateNativeRenderer {
         rv.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
 
         // 2. 数据准备
-        val currentWeek = if (snapshot.currentWeek <= 0) null else snapshot.currentWeek
-        val allCourses = snapshot.coursesList
+        val currentWeek = if (snapshot.current_week <= 0) null else snapshot.current_week
+        val allCourses = snapshot.courses
         val now = LocalTime.now()
         val today = LocalDate.now()
         val tomorrow = today.plusDays(1)
@@ -52,12 +52,12 @@ object ModerateNativeRenderer {
 
         // A. 筛选今天还没上的课
         val todayRemaining = allCourses.filter {
-            (it.date == todayStr || it.date.isBlank()) && !it.isSkipped &&
-                    try { LocalTime.parse(it.endTime) > now } catch (e: Exception) { true }
+            (it.date == todayStr || it.date.isBlank()) && !it.is_skipped &&
+                    try { LocalTime.parse(it.end_time) > now } catch (e: Exception) { true }
         }
 
         // B. 筛选明天的课
-        val tomorrowCourses = allCourses.filter { it.date == tomorrowStr && !it.isSkipped }
+        val tomorrowCourses = allCourses.filter { it.date == tomorrowStr && !it.is_skipped }
 
         val (displayCourses, isShowingTomorrow, totalCount) = when {
             todayRemaining.isNotEmpty() -> {
@@ -95,13 +95,13 @@ object ModerateNativeRenderer {
             val itemRv = RemoteViews(context.packageName, R.layout.widget_item_course_common)
             itemRv.setTextViewText(R.id.tv_course_name, course.name)
             itemRv.setTextViewText(R.id.tv_course_position, course.position)
-            itemRv.setTextViewText(R.id.tv_course_time, "${course.startTime.take(5)}-${course.endTime.take(5)}")
+            itemRv.setTextViewText(R.id.tv_course_time, "${course.start_time.take(5)}-${course.end_time.take(5)}")
 
-            val style = snapshot.style
-            if (course.colorInt < style.courseColorMapsCount) {
-                val colors = style.getCourseColorMaps(course.colorInt)
-                itemRv.setInt(R.id.course_indicator, "setBackgroundColor", colors.lightColor.toInt())
-                itemRv.setInt(R.id.course_indicator_dark, "setBackgroundColor", colors.darkColor.toInt())
+            val style = snapshot.style ?: return@forEachIndexed
+            if (course.color_int < style.course_color_maps.size) {
+                val colors = style.course_color_maps[course.color_int]
+                itemRv.setInt(R.id.course_indicator, "setBackgroundColor", colors.light_color.toInt())
+                itemRv.setInt(R.id.course_indicator_dark, "setBackgroundColor", colors.dark_color.toInt())
             }
 
             if (i % 2 == 0) {

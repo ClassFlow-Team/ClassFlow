@@ -1,6 +1,11 @@
 package com.xingheyuzhuan.shiguangschedule.widget
 
 import android.content.Context
+import androidx.hilt.work.HiltWorker
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
+import dagger.hilt.android.qualifiers.ApplicationContext
+
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -10,9 +15,10 @@ import com.xingheyuzhuan.shiguangschedule.data.sync.WidgetDataSynchronizer
  * 负责每15分钟更新一次小组件UI的Worker。
  * 它直接调用所有小组件的UI更新，确保UI及时刷新。
  */
-class WidgetUiUpdateWorker(
-    appContext: Context,
-    workerParams: WorkerParameters
+@HiltWorker
+class WidgetUiUpdateWorker @AssistedInject constructor(
+    @Assisted appContext: Context,
+    @Assisted workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
     override suspend fun doWork(): Result {
         Log.d("WidgetSync", "WidgetUiUpdateWorker 开始执行")
@@ -26,10 +32,10 @@ class WidgetUiUpdateWorker(
  * 负责每天执行一次完整数据同步的Worker。
  * 它调用 WidgetDataSynchronizer 的 syncNow() 方法，同步主数据库数据。
  */
-class FullDataSyncWorker(
-    appContext: Context,
-    workerParams: WorkerParameters,
-    // 通过构造函数注入依赖，与 AppWorkerFactory 匹配
+@HiltWorker
+class FullDataSyncWorker @AssistedInject constructor(
+    @Assisted appContext: Context,
+    @Assisted workerParams: WorkerParameters,
     private val widgetDataSynchronizer: WidgetDataSynchronizer
 ) : CoroutineWorker(appContext, workerParams) {
     override suspend fun doWork(): Result {

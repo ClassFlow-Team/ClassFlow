@@ -156,8 +156,32 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
 }
 
 
+/**
+ * 数据库版本 3 迁移到 版本 4 的迁移代码。
+ * 在 courses 表中添加 remark 备注字段。
+ */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE courses ADD COLUMN `remark` TEXT")
+    }
+}
+
+/**
+ * 数据库版本 4 迁移到 版本 5 的迁移代码（版本号收敛后的新 5）。
+ * 一次性完成：time_slots 添加 alias 别名字段 + app_settings 添加 compatWearableSync 字段。
+ * （原版本 5 的 alias 单独层与版本 6 的 compatWearableSync 层已合并到此。）
+ */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE time_slots ADD COLUMN `alias` TEXT")
+        db.execSQL("ALTER TABLE app_settings ADD COLUMN `compatWearableSync` INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 // 【集中管理所有迁移对象】
 val ALL_MIGRATIONS = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
+    MIGRATION_3_4,
+    MIGRATION_4_5,
 )

@@ -1,9 +1,10 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.coursemanagement
+import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
+import androidx.hilt.navigation.compose.hiltViewModel
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -42,9 +43,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
+import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.model.DualColor
 import com.xingheyuzhuan.shiguangschedule.navigation.AddEditCourseChannel
@@ -64,8 +65,8 @@ fun CourseInstanceListScreen(
     courseName: String,
     onNavigateBack: () -> Unit,
     // 接收 NavController，用于在 Composable 内部处理导航
-    navController: NavController,
-    viewModel: CourseInstanceListViewModel = viewModel(factory = CourseInstanceListViewModel.Factory)
+    navBridge: NavBridge,
+    viewModel: CourseInstanceListViewModel = hiltViewModel()
 ) {
     // 使用 collectAsStateWithLifecycle 观察 UI 状态（包含颜色列表）
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -87,8 +88,7 @@ fun CourseInstanceListScreen(
             AddEditCourseChannel.sendEvent(presetData)
 
             // 3. 执行导航到新增课程页面
-            val route = Screen.AddEditCourse.createRouteForNewCourse()
-            navController.navigate(route)
+            navBridge.navigate(Destination.AddEditCourse())
         }
     }
 
@@ -96,8 +96,7 @@ fun CourseInstanceListScreen(
      * 处理编辑课程（通过卡片点击），通过路由参数传递 courseId。
      */
     val onNavigateToEditCourse: (courseId: String) -> Unit = { courseId ->
-        val route = Screen.AddEditCourse.createRouteWithCourseId(courseId)
-        navController.navigate(route)
+        navBridge.navigate(Destination.AddEditCourse(courseId = courseId))
     }
 
     Scaffold(
@@ -228,7 +227,7 @@ fun CourseInstanceCard(
     val course = courseWithWeeks.course
     val courseId = course.id
 
-    val isDarkTheme = isSystemInDarkTheme()
+    val isDarkTheme = LocalIsDarkTheme.current
 
     // 如果索引不存在，则取列表第一项；如果列表为空，则使用 MaterialTheme 的 SurfaceVariant 颜色兜底
     val fallbackColor = DualColor(

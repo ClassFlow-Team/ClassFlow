@@ -1,10 +1,11 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings
+import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
+import androidx.hilt.navigation.compose.hiltViewModel
 
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -28,9 +29,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavHostController
+import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.Screen
+import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.ui.components.DatePickerModal
 import com.xingheyuzhuan.shiguangschedule.ui.components.DockSafeBottomPadding
 import com.xingheyuzhuan.shiguangschedule.ui.components.NativeNumberPicker
@@ -44,14 +45,15 @@ import java.time.format.DateTimeParseException
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    navController: NavHostController,
+    navBridge: NavBridge,
     semesterStartDateItemModifier: Modifier = Modifier,
     forceShowSemesterStartDateCard: Boolean = false,
     onSemesterStartDateSet: (() -> Unit)? = null,
-    viewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory)
+    viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val courseTableConfig by viewModel.courseTableConfigState.collectAsState()
 
+    val showNonCurrentWeek = viewModel.appSettingsState.collectAsState().value.showNonCurrentWeekCourses
     val showWeekends = courseTableConfig?.showWeekends ?: false
     val semesterStartDateString = courseTableConfig?.semesterStartDate
     val semesterTotalWeeks = courseTableConfig?.semesterTotalWeeks ?: 20
@@ -108,7 +110,26 @@ fun SettingsScreen(
             }
 
             item {
-                SettingsCard(title = "常规偏好") {
+                SettingsCard(title = stringResource(R.string.section_title_general_settings)) {
+                    SettingTile(
+                        icon = Icons.Rounded.ViewWeek,
+                        title = stringResource(R.string.item_show_non_current_week),
+                        subtitle = stringResource(R.string.desc_show_non_current_week),
+                        trailingContent = {
+                            Switch(
+                                checked = showNonCurrentWeek,
+                                onCheckedChange = { viewModel.onShowNonCurrentWeekChanged(it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                    uncheckedThumbColor = Color.White.copy(alpha = 0.9f),
+                                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    uncheckedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                                )
+                            )
+                        }
+                    )
+                    SettingDivider()
                     SettingTile(
                         icon = Icons.Rounded.EventAvailable,
                         title = stringResource(R.string.item_show_weekends),
@@ -172,34 +193,72 @@ fun SettingsScreen(
                         subtitle = "一周的开始设为 $dayText",
                         onClick = { showFirstDayOfWeekDialog = true }
                     )
-                }
-            }
-
-            item {
-                SettingsCard(title = "课表数据") {
-                    SettingTile(
-                        icon = Icons.Rounded.FolderZip,
-                        title = "文件导入 / 导出",
-                        subtitle = "从本地文件恢复或备份您的课表数据",
-                        onClick = { navController.navigate(Screen.CourseTableConversion.route) }
-                    )
-                }
-            }
-
-            item {
-                SettingsCard(title = "个性化与关于") {
-                    SettingTile(
-                        icon = Icons.Rounded.Palette,
-                        title = "个性化主题",
-                        subtitle = "自定义颜色、字号与挂件风格",
-                        onClick = { navController.navigate(Screen.StyleSettings.route) }
-                    )
                     SettingDivider()
                     SettingTile(
+                        icon = Icons.Rounded.SwapHoriz,
+                        title = stringResource(R.string.item_quick_actions),
+                        subtitle = stringResource(R.string.desc_quick_actions),
+                        onClick = { navBridge.navigate(Destination.QuickActions) }
+                    )
+                }
+            }
+
+            item {
+                SettingsCard(title = stringResource(R.string.section_title_advanced_features)) {
+                    // 课表导入/导出设置项
+                    SettingTile(
+                        icon = Icons.Rounded.FolderZip,
+                        title = stringResource(R.string.item_course_conversion),
+                        subtitle = stringResource(R.string.desc_course_conversion),
+                        onClick = { navBridge.navigate(Destination.CourseTableConversion) }
+                    )
+                    SettingDivider()
+                    // 课程提醒设置项
+                    SettingTile(
+                        icon = Icons.Rounded.Notifications,
+                        title = stringResource(R.string.title_course_notification_settings),
+                        subtitle = stringResource(R.string.desc_notification_settings),
+                        onClick = { navBridge.navigate(Destination.NotificationSettings) }
+                    )
+                    SettingDivider()
+                    // 管理课表设置项
+                    SettingTile(
+                        icon = Icons.Rounded.Book,
+                        title = stringResource(R.string.title_manage_course_tables),
+                        subtitle = stringResource(R.string.desc_manage_course_tables),
+                        onClick = { navBridge.navigate(Destination.ManageCourseTables) }
+                    )
+                    SettingDivider()
+                    // 课程管理设置项
+                    SettingTile(
+                        icon = Icons.Rounded.School,
+                        title = stringResource(R.string.item_course_management),
+                        subtitle = stringResource(R.string.desc_course_management),
+                        onClick = { navBridge.navigate(Destination.CourseManagementList) }
+                    )
+                    SettingDivider()
+                    // 自定义时间段设置项
+                    SettingTile(
+                        icon = Icons.Rounded.Schedule,
+                        title = stringResource(R.string.item_time_slot_customization),
+                        subtitle = stringResource(R.string.desc_time_slot_customization),
+                        onClick = { navBridge.navigate(Destination.TimeSlotSettings) }
+                    )
+                    SettingDivider()
+                    // 个性化配置
+                    SettingTile(
+                        icon = Icons.Rounded.Palette,
+                        title = stringResource(R.string.item_personalization),
+                        subtitle = stringResource(R.string.desc_personalization),
+                        onClick = { navBridge.navigate(Destination.StyleSettings) }
+                    )
+                    SettingDivider()
+                    // 更多选项设置项
+                    SettingTile(
                         icon = Icons.Rounded.Info,
-                        title = "更多选项",
-                        subtitle = "关于应用、更新日志和开源协议",
-                        onClick = { navController.navigate(Screen.MoreOptions.route) }
+                        title = stringResource(R.string.item_more_options),
+                        subtitle = stringResource(R.string.desc_more_options),
+                        onClick = { navBridge.navigate(Destination.MoreOptions) }
                     )
                 }
             }
@@ -258,7 +317,7 @@ fun SettingsScreen(
 
 @Composable
 fun ProfileHeader() {
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalIsDarkTheme.current
     val glassBg = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.55f)
     val borderTop = if (isDark) Color.White.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.6f)
     val borderBottom = if (isDark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.15f)
@@ -314,7 +373,7 @@ fun SettingsCard(
     title: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalIsDarkTheme.current
     val glassBg = if (isDark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.50f)
     val borderTop = if (isDark) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.55f)
     val borderBottom = if (isDark) Color.White.copy(alpha = 0.03f) else Color.White.copy(alpha = 0.12f)
@@ -354,7 +413,7 @@ fun SettingTile(
     contentHighlightModifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     trailingContent: @Composable (() -> Unit)? = {
-        val dark = isSystemInDarkTheme()
+        val dark = LocalIsDarkTheme.current
         Box(
             modifier = Modifier
                 .size(26.dp)
@@ -376,7 +435,7 @@ fun SettingTile(
         }
     }
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalIsDarkTheme.current
     val tileBg = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.34f)
     val tileBorderTop = if (isDark) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.48f)
     val tileBorderBottom = if (isDark) Color.White.copy(alpha = 0.04f) else Color.White.copy(alpha = 0.12f)

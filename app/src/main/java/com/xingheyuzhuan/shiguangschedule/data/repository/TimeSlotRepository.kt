@@ -2,11 +2,12 @@ package com.xingheyuzhuan.shiguangschedule.data.repository
 
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlotDao
+import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class TimeSlotRepository(
+class TimeSlotRepository @Inject constructor(
     private val timeSlotDao: TimeSlotDao
 ) {
     /**

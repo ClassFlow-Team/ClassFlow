@@ -2,6 +2,7 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.quickactions.tweaks
 
 import android.content.res.Configuration
+import androidx.hilt.navigation.compose.hiltViewModel
 import android.text.format.DateFormat
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -51,7 +52,7 @@ import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
+import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseTableRepository.TweakMode
@@ -66,8 +67,8 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TweakScheduleScreen(
-    viewModel: TweakScheduleViewModel = viewModel(factory = TweakScheduleViewModelFactory),
-    navController: NavController
+    viewModel: TweakScheduleViewModel = hiltViewModel(),
+    navBridge: NavBridge
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -108,7 +109,7 @@ fun TweakScheduleScreen(
             TopAppBar(
                 title = { Text(titleTweakSchedule) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navBridge.popBackStack() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = a11yBack

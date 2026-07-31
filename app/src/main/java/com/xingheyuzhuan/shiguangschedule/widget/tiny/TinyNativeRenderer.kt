@@ -25,15 +25,15 @@ object TinyNativeRenderer {
         rv.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
 
         // 2. 数据处理
-        val allCourses = snapshot.coursesList
-        val currentWeek = if (snapshot.currentWeek <= 0) null else snapshot.currentWeek
+        val allCourses = snapshot.courses
+        val currentWeek = if (snapshot.current_week <= 0) null else snapshot.current_week
         val now = LocalTime.now()
         val todayStr = LocalDate.now().toString()
 
         // 核心修正：先找出今天所有的课
         val todayAllCourses = allCourses.filter { it.date == todayStr || it.date.isBlank() }
         // 再找下一节课
-        val nextCourse = todayAllCourses.firstOrNull { !it.isSkipped && LocalTime.parse(it.endTime) > now }
+        val nextCourse = todayAllCourses.firstOrNull { !it.is_skipped && LocalTime.parse(it.end_time) > now }
 
         // 3. 状态渲染
         if (currentWeek == null) {
@@ -48,18 +48,18 @@ object TinyNativeRenderer {
             rv.setViewVisibility(R.id.container_status, View.GONE)
 
             rv.setTextViewText(R.id.tv_course_name, nextCourse.name)
-            rv.setTextViewText(R.id.tv_course_time, "${nextCourse.startTime.take(5)} - ${nextCourse.endTime.take(5)}")
+            rv.setTextViewText(R.id.tv_course_time, "${nextCourse.start_time.take(5)} - ${nextCourse.end_time.take(5)}")
             rv.setTextViewText(R.id.tv_course_position, nextCourse.position)
 
             val nextCourseIndex = todayAllCourses.indexOf(nextCourse)
             val remainingCount = todayAllCourses.size - nextCourseIndex
             rv.setTextViewText(R.id.tv_remaining_count, remainingCount.toString())
 
-            val style = snapshot.style
-            if (nextCourse.colorInt < style.courseColorMapsCount) {
-                val colorPair = style.getCourseColorMaps(nextCourse.colorInt)
-                rv.setInt(R.id.bubble_bg_image, "setColorFilter", colorPair.lightColor.toInt())
-                rv.setInt(R.id.bubble_bg_image_dark, "setColorFilter", colorPair.darkColor.toInt())
+            val style = snapshot.style ?: return rv
+            if (nextCourse.color_int < style.course_color_maps.size) {
+                val colorPair = style.course_color_maps[nextCourse.color_int]
+                rv.setInt(R.id.bubble_bg_image, "setColorFilter", colorPair.light_color.toInt())
+                rv.setInt(R.id.bubble_bg_image_dark, "setColorFilter", colorPair.dark_color.toInt())
             }
         } else {
             val tip = if (todayAllCourses.isEmpty()) {

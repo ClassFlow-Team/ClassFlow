@@ -6,6 +6,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.xingheyuzhuan.shiguangschedule.data.model.DualColor
 import com.xingheyuzhuan.shiguangschedule.data.model.ScheduleGridStyle
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.BorderTypeProto
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleModeProto
 
 /**
  * 【Presentation Layer Model】
@@ -30,8 +32,6 @@ data class ScheduleGridStyleComposed(
     val fontScale: Float,
 
     // 颜色 (Color)
-    val conflictCourseColor: Color,
-    val conflictCourseColorDark: Color,
     val courseColorMaps: List<DualColor>,
 
     // UI 渲染开关
@@ -48,7 +48,15 @@ data class ScheduleGridStyleComposed(
     val backgroundDimAlpha: Float,
     val backgroundScale: Float,
     val backgroundOffsetX: Float,
-    val backgroundOffsetY: Float
+    val backgroundOffsetY: Float,
+
+    // ── 上游同步字段 ──
+    val pageTextColor: Color?,
+    val courseTextColor: Color?,
+    val textAlignCenterHorizontal: Boolean,
+    val textAlignCenterVertical: Boolean,
+    val borderType: BorderTypeProto,
+    val scheduleMode: ScheduleModeProto
 ) {
     companion object {
         /**
@@ -63,8 +71,6 @@ data class ScheduleGridStyleComposed(
                 courseBlockOuterPadding = this.courseBlockOuterPaddingDp.dp,
                 courseBlockInnerPadding = this.courseBlockInnerPaddingDp.dp,
                 courseBlockAlpha = this.courseBlockAlphaFloat,
-                conflictCourseColor = Color(this.conflictCourseColorLong.toInt()),
-                conflictCourseColorDark = Color(this.conflictCourseColorDarkLong.toInt()),
                 fontScale = this.courseBlockFontScale,
                 courseColorMaps = this.courseColorMaps.map { dual ->
                     DualColor(
@@ -86,6 +92,12 @@ data class ScheduleGridStyleComposed(
                 backgroundOffsetX = this.backgroundOffsetX,
                 backgroundOffsetY = this.backgroundOffsetY,
                 backgroundImagePath = this.backgroundImagePath ?: "",
+                pageTextColor = this.pageTextColorLong?.let { Color(it.toInt()) },
+                courseTextColor = this.courseTextColorLong?.let { Color(it.toInt()) },
+                textAlignCenterHorizontal = this.textAlignCenterHorizontal,
+                textAlignCenterVertical = this.textAlignCenterVertical,
+                borderType = this.borderType,
+                scheduleMode = this.scheduleMode,
             )
         }
     }

@@ -1,18 +1,19 @@
 package com.xingheyuzhuan.shiguangschedule.ui.settings.style
 
 import android.content.Context
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import android.net.Uri
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.CreationExtras
-import com.xingheyuzhuan.shiguangschedule.MyApplication
 import com.xingheyuzhuan.shiguangschedule.data.db.main.Course
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.model.DualColor
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.BorderTypeProto
+import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleModeProto
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.StyleSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.MergedCourseBlock
@@ -35,7 +36,8 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
 
-class StyleSettingsViewModel(
+@HiltViewModel
+class StyleSettingsViewModel @Inject constructor(
     private val styleRepository: StyleSettingsRepository,
     private val appSettingsRepository: AppSettingsRepository
 ) : ViewModel() {
@@ -242,10 +244,6 @@ class StyleSettingsViewModel(
         styleRepository.setShowStartTime(show)
     }
 
-    fun updateConflictColor(color: Color, isDark: Boolean) = viewModelScope.launch {
-        styleRepository.setConflictCourseColorLong(color.toArgb().toLong(), isDark)
-    }
-
     /** * 更新课程块字体的缩放比例
      * @param scale 缩放倍数，通常范围在 0.5 - 2.0 之间
      */
@@ -278,6 +276,38 @@ class StyleSettingsViewModel(
      * @param color 新颜色
      * @param isDark 是否为深色模式下的颜色
      */
+    // ── 上游同步字段 ──
+
+    /** 切换课表时间段模式（节次 / 24小时时间轴） */
+    fun updateScheduleMode(mode: ScheduleModeProto) = viewModelScope.launch {
+        styleRepository.setScheduleMode(mode)
+    }
+
+    /** 设置页面文字颜色 (null = 跟随主题) */
+    fun updatePageTextColor(color: Color?) = viewModelScope.launch {
+        styleRepository.setPageTextColor(color?.toArgb()?.toLong())
+    }
+
+    /** 设置课程块文字颜色 (null = 跟随主题) */
+    fun updateCourseTextColor(color: Color?) = viewModelScope.launch {
+        styleRepository.setCourseTextColor(color?.toArgb()?.toLong())
+    }
+
+    /** 课程块文字水平居中 */
+    fun updateTextAlignCenterHorizontal(enabled: Boolean) = viewModelScope.launch {
+        styleRepository.setTextAlignCenterHorizontal(enabled)
+    }
+
+    /** 课程块文字垂直居中 */
+    fun updateTextAlignCenterVertical(enabled: Boolean) = viewModelScope.launch {
+        styleRepository.setTextAlignCenterVertical(enabled)
+    }
+
+    /** 课程块边框类型 */
+    fun updateBorderType(type: BorderTypeProto) = viewModelScope.launch {
+        styleRepository.setBorderType(type)
+    }
+
     fun updatePrimaryColor(index: Int, color: Color, isDark: Boolean) = viewModelScope.launch {
         // 1. 获取当前 Repository 中最新的样式快照
         val currentStyle = styleRepository.getStyleOnce()
@@ -367,13 +397,20 @@ class StyleSettingsViewModel(
                 courses = listOf(CourseWithWeeks(courseB, emptyList()))
             ),
 
-            // 冲突课程：第 1 节起(0.0)，第 2 节止(2.0)
+            // 重叠课程：子列并排（上游模型）
             MergedCourseBlock(
                 day = 3,
                 startSection = 0f,
                 endSection = 2f,
-                courses = listOf(CourseWithWeeks(courseC1, emptyList()), CourseWithWeeks(courseC2, emptyList())),
-                isConflict = true
+                courses = listOf(CourseWithWeeks(courseC1, emptyList())),
+                nonActiveRanges = listOf(0f to 2f)
+            ),
+            MergedCourseBlock(
+                day = 3,
+                startSection = 0f,
+                endSection = 2f,
+                courses = listOf(CourseWithWeeks(courseC2, emptyList())),
+                nonActiveRanges = listOf(1f to 2f)
             )
         )
     }
@@ -388,15 +425,4 @@ class StyleSettingsViewModel(
         TimeSlot(7, "16:00", "16:45", "demo"),
         TimeSlot(8, "16:55", "17:40", "demo")
     )
-}
-
-object StyleSettingsViewModelFactory : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-        val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]) as MyApplication
-        return StyleSettingsViewModel(
-            styleRepository = application.styleSettingsRepository,
-            appSettingsRepository = application.appSettingsRepository
-        ) as T
-    }
 }
