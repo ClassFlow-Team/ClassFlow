@@ -39,7 +39,7 @@ val hasReleaseSigning = listOf(
 ).all { !it.isNullOrBlank() }
 
 android {
-    namespace = "com.shiro.classflow"
+    namespace = "com.xingheyuzhuan.shiguangschedule"
     compileSdk = 36
 
     defaultConfig {

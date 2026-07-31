@@ -2,9 +2,9 @@
 
 syntax = "proto3";
 
-package com.shiro.classflow.data.model;
+package com.xingheyuzhuan.shiguangschedule.data.model;
 
-option java_package = "com.shiro.classflow.data.model.schedule_style";
+option java_package = "com.xingheyuzhuan.shiguangschedule.data.model.schedule_style";
 option java_multiple_files = true;
 
 // 颜色对：包含浅色和深色模式下的 ARGB 值
