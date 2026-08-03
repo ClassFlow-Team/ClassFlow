@@ -1,4 +1,4 @@
-﻿<resources>
+<resources>
     <!-- 應用基礎資訊 -->
     <string name="app_name">ClassFlow</string>
     
@@ -19,8 +19,15 @@
     <string name="a11y_state_selected">已選取</string>
     <string name="a11y_state_not_selected">未選取</string>
     <string name="confirm_delete">確認刪除</string>
+    <string name="common_dialog_title_abandon_changes">放棄更改？</string>
+    <string name="common_dialog_msg_unsaved_changes">目前內容已修改，退出將丟失未儲存的數據。</string>
+    <string name="common_action_exit_without_save">退出</string>
+    <string name="common_action_continue_editing">繼續編輯</string>
+    <string name="label_recent_visit">最近訪問</string>
     
     <!-- 主介面及今日課表 -->
+    <string name="action_reset">重置</string>
+    <string name="floating_course_hint">已掛起，左右滑周點擊空白處放下</string>
     <string name="nav_today_schedule">今日課表</string>
     <string name="nav_course_schedule">課表</string>
     <string name="nav_settings">我的</string>
@@ -49,7 +56,7 @@
     <string name="action_double_week">雙週</string>
     <string name="label_course_color">課程顏色</string>
     <string name="button_select_color">選擇顏色</string>
-    <string name="snackbar_add_course_after_start">請在開學後新增課程</string>
+    <string name="snackbar_add_course_within_semester">請在開學後新增課程</string>
     <string name="label_section_range_suffix">節</string>
     <string name="title_select_time">選擇上課時間</string>
     <string name="button_select_weeks">選擇週數</string>
@@ -65,11 +72,12 @@
     <string name="label_end_time">結束時間</string>
 
     <!-- 課程相關 -->
+    <string name="label_remark">備註</string>
     <string name="course_time_description">時間: 第%1$s-%2$s節 (%3$s-%4$s)</string>
     <string name="course_position_prefix">地點: %1$s</string>
     <string name="course_teacher_prefix">老師: %1$s</string>
-    <string name="title_course_conflict">課程衝突</string>
-    <string name="label_conflict">（衝突）</string>
+    <string name="title_course_overlap">重疊課程列表</string>
+    <string name="label_courses_overlap">%d門重疊</string>
     <string name="course_time_sections_count">(%1$s節)</string>
     <string name="title_select_week">選擇週次</string>
     <string name="title_current_week">第 %1$s 週</string>
@@ -78,6 +86,15 @@
     <string name="status_week_calc_error">週次計算錯誤</string>
     
     <!-- 時間與星期格式 -->
+    <string-array name="week_days_short_names">
+        <item>一</item>
+        <item>二</item>
+        <item>三</item>
+        <item>四</item>
+        <item>五</item>
+        <item>六</item>
+        <item>日</item>
+    </string-array>
     <string-array name="week_days_full_names">
         <item>週一</item>
         <item>週二</item>
@@ -89,6 +106,7 @@
     </string-array>
     
     <!-- 通知與鬧鐘 -->
+    <string name="format_week_display">%1$d週</string>
     <string name="notification_channel_desc_course_alert">上課提醒通知</string>
     <string name="notification_title_course_alert">上課提醒</string>
     <string name="item_auto_mode">上課自動模式</string>
@@ -96,24 +114,26 @@
     <string name="toast_enable_reminder_first">請先開啟「課程提醒」</string>
     <string name="alarm_option_none">不提醒</string>
     <string name="alarm_option_on_time">準時提醒</string>
+    <string name="notification_live_status_preparing">準備上課</string>
+    <string name="notification_unknown_course">未知課程</string>
+    <string name="notification_unknown_position">地點未知</string>
 
     <!-- 小工具相關 -->
     <string name="widget_name_tiny">超小課程2x1</string>
     <string name="widget_name_compact">緊湊課程2x2</string>
-    <string name="widget_name_moderate">今日課程4x2</string>
     <string name="widget_name_double_days">近日課程4x2</string>
-    <string name="widget_name_large">今日課程4x3</string>
+    <string name="widget_name_list_vertical">垂直列表課表4xN</string>
     <string name="widget_tomorrow_course_preview">明日預告</string>
     <string name="widget_no_courses_tomorrow">明天沒有課程</string>
     <string name="widget_today_courses_finished">今日課程已結束</string>
     <string name="widget_vacation_expecting">期待新學期</string>
     <string name="widget_remaining_courses_format_today">今日還有 %1$d 節課</string>
     <string name="widget_remaining_courses_format_tomorrow">明天有 %1$d 節課</string>
-    <string name="widget_date_dayofweek_format">%1$s %2$s</string>
     <string name="widget_title_today">今天</string>
     <string name="widget_title_tomorrow">明天</string>
     
     <!-- 通知設定 -->
+    <string name="widget_course_total_count">共有 %1$d 節</string>
     <string name="title_course_notification_settings">課程提醒設定</string>
     <string name="section_title_general">一般</string>
     <string name="section_title_advanced">進階</string>
@@ -162,10 +182,14 @@
     <string name="text_no_skipped_dates">沒有設定跳過的日期。</string>
     <string name="action_close">關閉</string>
     <string name="toast_notification_permission_denied">通知權限被拒絕，無法接收課程提醒。</string>
+    <string name="item_compat_wearable_sync">兼容穿戴設備同步通知</string>
+    <string name="desc_compat_wearable_sync">因 Android 16 實時通知特性與部分穿戴設備通知同步軟件存在兼容性衝突，開啟此項將優化同步兼容性，但會停用實時更新效果。</string>
     
     <!-- 設定選項 -->
     <string name="title_schedule_settings">課程表設定</string>
     <string name="section_title_general_settings">一般設定</string>
+    <string name="item_show_non_current_week">顯示非本週課程</string>
+    <string name="desc_show_non_current_week">在課表中展示當前週次以外的課程</string>
     <string name="item_show_weekends">是否顯示週末</string>
     <string name="desc_show_weekends">開啟後，課程表中將顯示週末的課程安排</string>
     <string name="item_set_start_date">設定開學日期</string>
@@ -177,7 +201,6 @@
     <string name="item_current_week">目前週數</string>
     <string name="desc_current_week_manual">手動調整目前週數</string>
     <string name="status_set_start_date_first">請設定開始日期</string>
-    <string name="status_on_vacation">假期中</string>
     <string name="status_current_week_format">第 %1$d 週</string>
     <string name="item_first_day_of_week">設定每週起始日</string>
     <string name="desc_first_day_of_week">設定一週從哪天開始計算和顯示</string>
@@ -198,7 +221,6 @@
     <string name="dialog_title_select_total_weeks">選擇總週數</string>
     <string name="dialog_title_manual_set_week">手動設定目前週數</string>
     <string name="dialog_title_set_first_day_of_week">設定每週起始日</string>
-    <string name="dialog_option_on_vacation">假期中</string>
     <string name="text_no_course_tables">目前沒有課表可選擇</string>
     <string name="course_table_id_prefix">ID: %s</string>
     <string name="course_table_created_at_prefix">建立於: %s</string>
@@ -256,6 +278,8 @@
     <string name="toast_slot_added_unsaved">時間段已新增至清單，請點選儲存以更新資料庫</string>
 
     <!-- 課表匯入/匯出 -->
+    <string name="label_time_slot_alias">別名 (選填)</string>
+    <string name="toast_time_conflict">選擇的時間超出了前後課時限制範圍</string>
     <string name="title_conversion">課表匯入/匯出</string>
     <string name="section_file_conversion">檔案匯入/匯出</string>
     <string name="item_import_course_file">課程檔案匯入</string>
@@ -285,12 +309,13 @@
     <string name="toast_import_success">課表匯入成功！</string>
     <string name="toast_ics_export_success">行事曆檔案匯出成功！</string>
     <string name="error_export_table_not_found">匯出失敗：找不到課表</string>
-    <string name="error_export_failed">匯出失敗：\%1$s</string>
-    <string name="error_import_failed">匯入失敗：\%1$s</string>
+    <string name="error_export_failed">匯出失敗：%1$s</string>
+    <string name="error_import_failed">匯入失敗：%1$s</string>
     <string name="error_ics_export_data_failed">行事曆檔案匯出失敗：取得資料失敗</string>
-    <string name="error_ics_export_failed">行事曆檔案匯出失敗：\%1$s</string>
+    <string name="error_ics_export_failed">行事曆檔案匯出失敗：%1$s</string>
     
     <!-- 更多設定 -->
+    <string name="error_sync_calendar_failed">同步失敗，請檢查行事曆權限</string>
     <string name="title_more_options">更多</string>
     <string name="a11y_app_icon">應用程式圖示</string>
     <string name="a11y_navigate">跳轉</string>
@@ -305,6 +330,8 @@
     <string name="label_version_prefix">版本: %1$s</string>
     <string name="default_app_name">未知應用程式</string>
     <string name="item_check_software_update">檢查軟體更新</string>
+    <string name="item_language_settings">語言設定</string>
+    <string name="language_follow_system">跟隨系統</string>
 
     <string name="dialog_checking_update">正在檢查更新...</string>
     <string name="tip_please_wait">正在連線伺服器，請稍候。</string>
@@ -318,6 +345,8 @@
     <string name="tip_non_mandatory_update">提示：強制更新不會顯示此取消按鈕。</string>
     <string name="dialog_select_update_channel">選擇更新渠道</string>
     <string name="a11y_selected">已選中</string>
+    <string name="item_start_screen_settings">啟動頁面設置</string>
+    <string name="dialog_select_start_screen">選擇啟動時顯示的頁面</string>
 
     <!-- 課程調動 -->
     <string name="title_tweak_schedule">調課</string>
@@ -372,7 +401,7 @@
     <string name="toast_url_empty_enter_first">URL為空，請先輸入網址。</string>
     <string name="item_devtools_debug">DevTools 網頁除錯</string>
     <string name="a11y_devtools">DevTools</string>
-    <string name="toast_devtools_enabled_format">DevTools 網頁除錯已 %1$s。</string>
+    <string name="toast_devtools_enabled_format">DevTools 網頁除錯 %1$s。</string>
     <string name="text_import_guide">請登入教務系統後切換到有課表顯示的頁面再點選匯入課程，點選右上角的更多檢視其他選項</string>
     <string name="action_execute_import">執行匯入</string>
     <string name="toast_no_script_manual_import">該適配器沒有指令碼，請手動匯入。</string>
@@ -423,7 +452,7 @@
     <string name="color_picker_label_alpha">透明度</string>
     <string name="a11y_switch_color_mode">切換輸入方式</string>
 
-    <!-- 個性化配置 -->
+    <!-- 客製化配置 -->
     <string name="item_personalization">個性化配置</string>
     <string name="desc_personalization">調整課表格子高度、圓角、間距及透明度</string>
     <string name="style_category_interface">介面顯示</string>
@@ -444,25 +473,29 @@
     <string name="label_hide_teacher">隱藏授課老師</string>
     <string name="label_remove_location_at">移除地點前的 @ 符號</string>
     <string name="label_font_scale">文字縮放比例</string>
-    <string name="label_font_style">字體風格</string>
-    <string name="font_style_default">預設</string>
-    <string name="font_style_rounded">圓潤</string>
-    <string name="font_style_apple">平方</string>
-    <string name="font_style_serif">襯線</string>
     <string name="label_corner_radius">圓角半徑</string>
     <string name="label_inner_padding">內部填充</string>
     <string name="label_outer_padding">外部間距</string>
     <string name="label_opacity">不透明度</string>
     <string name="title_light_color_pool">淺色模式顏色池</string>
     <string name="title_dark_color_pool">深色模式顏色池</string>
-    <string name="label_color_conflict">衝突</string>
     <string name="preview_light_mode">淺色模式預覽\n固定深色文字</string>
     <string name="preview_dark_mode">深色模式預覽\n固定淺色文字</string>
     <string name="action_reset_style">恢復預設樣式設置</string>
     <string name="dialog_reset_title">重置樣式</string>
     <string name="dialog_reset_message">確定要將所有樣式設置恢復為預設值嗎？此操作不可撤銷。</string>
+    <string name="action_confirm_crop">確定裁剪</string>
+    <string name="label_text_align_center_h">文字水平置中</string>
+    <string name="label_text_align_center_v">文字垂直置中</string>
+    <string name="label_border_type">邊框樣式</string>
+    <string name="border_type_solid">實線</string>
+    <string name="border_type_dashed">虛線</string>
+    <string name="label_range">範圍</string>
+    <string name="placeholder_input_value">請輸入數值</string>
 
     <!-- 快捷操作 -->
+    <string name="label_course_text_color">課程區塊文字顏色</string>
+    <string name="label_schedule_mode_24h">24小時時間軸模式</string>
     <string name="item_quick_actions">快捷操作</string>
     <string name="desc_quick_actions">包含調課、課程臨時變動等功能</string>
     <string name="label_quick_action_category_schedule">課表調整</string>
@@ -483,25 +516,57 @@
     <string name="quick_delete_success">課表清理成功</string>
     <string name="error_load_failed">初始化失敗，請重試</string>
     <string name="error_op_failed">操作失敗: %1$s</string>
+    <string name="theme_follow_system">跟隨系統</string>
+    <string name="theme_light">淺色模式</string>
+    <string name="theme_dark">深色模式</string>
+    <string name="theme_settings_title">主題設置</string>
+    <string name="theme_mode_label">主題模式切換</string>
+    <string name="dynamic_color_title">動態取色 (Material You)</string>
+    <string name="dynamic_color_desc">基於系統桌布自動生成配色方案（僅支持 Android 12+）</string>
+    <string name="custom_color_title">自定義主色調</string>
+    <string name="light_primary_color">淺色模式主色</string>
+    <string name="dark_primary_color">深色模式主色</string>
+    <string name="theme_color_hint">說明：改變此顏色後，系統將作為種子色重新計算全應用配色方案。</string>
+    <string name="label_page_text_color">課表頁面文字顏色</string>
+    <string name="widget_course_remaining_count">剩餘 %1$d 節</string>
+    <string name="section_sync">同步</string>
+    <string name="item_sync_to_system_calendar">同步至系統行事曆</string>
+    <string name="desc_sync_to_system_calendar">將目前课表一鍵同步至手機系統行事曆</string>
+    <string name="toast_sync_calendar_success">同步成功</string>
 
+    <string name="backup_err_empty">備份檔案為空，無法復原</string>
+    <string name="backup_err_corrupted">檔案解析失敗，數據可能已損壞</string>
+    <string name="backup_err_version_too_new">該備份數據版本過新，請升級 App 後再試</string>
+    <string name="item_backup_restore">備份與復原</string>
+    <string name="desc_backup_restore">支援雲端硬碟與本地檔案多管道備份，保障課表數據安全</string>
+    <string name="section_data_maintenance">數據維護</string>
+    <string name="item_backup_data">備份數據</string>
+    <string name="desc_backup_data">將目前的課表及設定打包儲存</string>
+    <string name="item_restore_data">復原數據</string>
+    <string name="desc_restore_data">下載並覆蓋本地課表設定數據</string>
+    <string name="section_service_config">服務設定</string>
+    <string name="item_webdav_config">WebDAV 參數設定</string>
+    <string name="desc_webdav_unconfigured">未設定網盤連線</string>
+    <string name="desc_webdav_connected">已連線: %1$s</string>
+    <string name="dialog_title_backup_target">選擇備份目標管道</string>
+    <string name="dialog_title_restore_source">選擇復原數據來源</string>
+    <string name="dialog_title_config_webdav">設定 WebDAV</string>
+    <string name="label_webdav_url">伺服器位址 (URL)</string>
+    <string name="label_webdav_account">帳號</string>
+    <string name="label_webdav_pwd_saved">密碼已儲存 (留空不修改)</string>
+    <string name="label_webdav_pwd_empty">應用程式獨立密碼</string>
+    <string name="label_webdav_path">雲端備份位置</string>
+    <string name="desc_webdav_path_hint">實際數據將隔離儲存在該目錄下的 /Backup 資料夾中</string>
+    <string name="toast_operation_success">操作成功完成</string>
+    <string name="toast_operation_failed">操作失敗: %1$s</string>
+    <string name="error_webdav_unconfigured">請先設定 WebDAV 服務</string>
+    <string name="error_stream_open_failed">無法開啟數據流</string>
+    <string name="backup_err_connect_failed">連線失敗，請檢查設定或網路</string>
+    <string name="backup_err_upload_failed">檔案上傳失敗</string>
+    <string name="backup_err_download_failed">下載備份失敗</string>
+    <string name="backup_err_local_export_failed">本地匯出失敗</string>
+    <string name="backup_err_restore_failed_prefix">還原失敗: %1$s</string>
+    <string name="backup_target_webdav">WebDAV 雲端同步</string>
+    <string name="backup_target_local_zip">本地 ZIP 檔案</string>
 
-    <!-- Onboarding -->
-    <string name="onboarding_title_1">歡迎來到 ClassFlow</string>
-    <string name="onboarding_body_1">輕量課程表，專為武漢商學院\n∠・ω&lt; )⌒☆ Ciallo～</string>
-    <string name="onboarding_title_2">左右滑動切換週次</string>
-    <string name="onboarding_body_2">手指左右滑動課表，即可查看不同週的課程</string>
-    <string name="onboarding_title_3">一鍵同步課表</string>
-    <string name="onboarding_body_3">點擊右上角按鈕，一鍵匯入教務系統課表</string>
-    <string name="onboarding_title_4">底部快速切換</string>
-    <string name="onboarding_body_4">「今日課表」看今天 · 「課表」看整週 · 「我的」管理設定</string>
-    <string name="onboarding_title_5">設置開學日期</string>
-    <string name="onboarding_body_5">設定日期後，課表才能準確顯示當前是第幾週</string>
-    <string name="onboarding_skip">跳過引導</string>
-    <string name="onboarding_next">下一步</string>
-    <string name="onboarding_finish">開始使用</string>
-
-    <!-- Wallpaper adjust -->
-    <string name="title_wallpaper_adjust">調整背景</string>
-    <string name="hint_wallpaper_pinch">雙指縮放和拖動\n調整背景位置</string>
-    <string name="action_adjust_wallpaper">調整</string>
 </resources>

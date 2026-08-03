@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ClassFlow 定制字符串（独立文件，保持 strings.xml 与上游逐字一致，避免 merge 冲突） -->
+    <string name="action_adjust_wallpaper">Adjust</string>
+    <string name="desc_wbu_vpn_webview_mode">When enabled, VPN login opens WebView for captcha and CAS manually. When disabled, automation remains the primary path.</string>
+    <string name="dialog_option_on_vacation">On vacation</string>
+    <string name="font_style_apple">PingFang</string>
+    <string name="font_style_default">Default</string>
+    <string name="font_style_rounded">Rounded</string>
+    <string name="font_style_serif">Serif</string>
+    <string name="hint_wallpaper_pinch">Pinch to zoom and drag\nto adjust background</string>
+    <string name="item_wbu_vpn_webview_mode">Use WebView Manual Flow for WBU VPN</string>
+    <string name="label_font_style">Font Style</string>
+    <string name="onboarding_body_1">Lightweight schedule\n∠・ω&lt; )⌒☆ Ciallo～</string>
+    <string name="onboarding_body_2">Swipe left or right to browse different weeks</string>
+    <string name="onboarding_body_3">Tap the top-right button to import your schedule</string>
+    <string name="onboarding_body_4">"Today" for today · "Schedule" for the week · "Me" for settings</string>
+    <string name="onboarding_body_5">Set the start date so weeks display correctly</string>
+    <string name="onboarding_finish">Get started</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_skip">Skip guide</string>
+    <string name="onboarding_title_1">Welcome to ClassFlow</string>
+    <string name="onboarding_title_2">Swipe to switch weeks</string>
+    <string name="onboarding_title_3">One-tap sync</string>
+    <string name="onboarding_title_4">Quick navigation</string>
+    <string name="onboarding_title_5">Set semester start</string>
+    <string name="status_on_vacation">On vacation</string>
+    <string name="title_wallpaper_adjust">Adjust background</string>
+    <string name="widget_date_dayofweek_format">%1$s %2$s</string>
+    <string name="widget_name_large">Today 4x3</string>
+    <string name="widget_name_moderate">Today 4x2</string>
+</resources>
