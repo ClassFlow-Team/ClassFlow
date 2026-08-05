@@ -39,6 +39,10 @@ val hasReleaseSigning = listOf(
     releaseKeyPassword
 ).all { !it.isNullOrBlank() }
 
+// 是否为 CI 环境（GitHub Actions 会设置 CI=true / GITHUB_ACTIONS=true）
+val isCi = System.getenv("CI")?.equals("true", ignoreCase = true) == true
+        || System.getenv("GITHUB_ACTIONS")?.equals("true", ignoreCase = true) == true
+
 android {
     namespace = "com.xingheyuzhuan.shiguangschedule"
     compileSdk = 37
@@ -76,11 +80,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // 生产签名优先使用自有密钥；若未配置则回退 debug，避免本地构建中断
-            signingConfig = if (hasReleaseSigning) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            // 生产签名优先使用自有密钥；本地未配置时回退 debug，避免本地构建中断。
+            // CI 环境禁止回退：缺少签名时会在任务图就绪阶段直接报错（见脚本末尾检查）
+            signingConfig = when {
+                hasReleaseSigning -> signingConfigs.getByName("release")
+                isCi -> null
+                else -> signingConfigs.getByName("debug")
             }
         }
     }
@@ -155,6 +160,29 @@ afterEvaluate {
     }
     tasks.named("assembleDevRelease") {
         dependsOn("licenseDevReleaseReport")
+    }
+}
+
+// CI 环境下 release 打包/签名任务必须使用正式签名：签名配置缺失时直接失败，
+// 不再静默回退到 debug 签名；本地开发（非 CI）不受影响。
+tasks.configureEach {
+    if (name.contains("Release", ignoreCase = true) &&
+        (name.startsWith("assemble") ||
+            name.startsWith("package") ||
+            name.startsWith("bundle"))
+    ) {
+        doFirst {
+            if (isCi && !hasReleaseSigning) {
+                throw GradleException(
+                    "CI 环境缺少 release 签名配置，禁止回退到 debug 签名。\n" +
+                        "请为 GitHub 仓库配置以下 secrets：\n" +
+                        "  CLASSFLOW_RELEASE_KEYSTORE_BASE64（release keystore 的 base64 内容）\n" +
+                        "  CLASSFLOW_RELEASE_STORE_PASSWORD\n" +
+                        "  CLASSFLOW_RELEASE_KEY_ALIAS\n" +
+                        "  CLASSFLOW_RELEASE_KEY_PASSWORD"
+                )
+            }
+        }
     }
 }
 

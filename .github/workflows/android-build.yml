@@ -12,6 +12,12 @@ on:
 jobs:
   build-prod-release:
     runs-on: ubuntu-latest
+    env:
+      # 与 android-release.yml 一致：CI 的 release 构建必须使用正式签名，
+      # 签名配置缺失时 Gradle 会直接报错，不再回退 debug 签名
+      CLASSFLOW_RELEASE_STORE_PASSWORD: ${{ secrets.CLASSFLOW_RELEASE_STORE_PASSWORD }}
+      CLASSFLOW_RELEASE_KEY_ALIAS: ${{ secrets.CLASSFLOW_RELEASE_KEY_ALIAS }}
+      CLASSFLOW_RELEASE_KEY_PASSWORD: ${{ secrets.CLASSFLOW_RELEASE_KEY_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -28,6 +34,23 @@ jobs:
 
       - name: Ensure gradlew is executable
         run: chmod +x gradlew
+
+      - name: Materialize release keystore
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.CLASSFLOW_RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${KEYSTORE_BASE64}" ]]; then
+            echo "::error::缺少 secret CLASSFLOW_RELEASE_KEYSTORE_BASE64（release keystore 的 base64 内容）"
+            exit 1
+          fi
+          echo "${KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/classflow-release.jks"
+          if [[ ! -s "${RUNNER_TEMP}/classflow-release.jks" ]]; then
+            echo "::error::解码后的 keystore 文件为空，请检查 CLASSFLOW_RELEASE_KEYSTORE_BASE64 内容"
+            exit 1
+          fi
+          echo "CLASSFLOW_RELEASE_STORE_FILE=${RUNNER_TEMP}/classflow-release.jks" >> "${GITHUB_ENV}"
 
       - name: Build prodRelease APK
         run: bash ./gradlew :app:assembleProdRelease --console=plain
