@@ -25,6 +25,9 @@ local.properties
 
 # build outputs
 app/build/
+app/prod/
 build/
 *.apk
 *.aab
+# CI 签名 keystore（由 KEYSTORE_BASE64 在 runner 上解码生成，禁止入库）
+app/release.jks
