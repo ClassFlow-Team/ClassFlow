@@ -20,7 +20,7 @@ work-runtime = "2.11.2"
 okhttp = "5.4.0"
 room = "2.8.4"
 ksp = "2.3.9"
-gradle-license-plugin = "0.9.8"
+gradle-license-plugin = "0.9.9"
 jgit = "5.13.5.202508271544-r"
 slf4j = "2.0.18"
 slf4j_android = "1.7.36"
@@ -86,7 +86,6 @@ ktor-client-auth = { module = "io.ktor:ktor-client-auth", version.ref = "ktor" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
