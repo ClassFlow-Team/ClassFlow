@@ -1,63 +1,86 @@
-name: Android Build
+name: Android CI Build
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      build_label:
+        description: '请选择要构建的发布版本 (Choose Build Variant)'
+        required: true
+        default: '正式版'
+        type: choice
+        options:
+          - 正式版
+          - 开发者版
 
 jobs:
-  build-prod-release:
+  build:
+    environment: Release-Signing
+
     runs-on: ubuntu-latest
-    env:
-      # 与 android-release.yml 一致：CI 的 release 构建必须使用正式签名，
-      # 签名配置缺失时 Gradle 会直接报错，不再回退 debug 签名
-      CLASSFLOW_RELEASE_STORE_PASSWORD: ${{ secrets.CLASSFLOW_RELEASE_STORE_PASSWORD }}
-      CLASSFLOW_RELEASE_KEY_ALIAS: ${{ secrets.CLASSFLOW_RELEASE_KEY_ALIAS }}
-      CLASSFLOW_RELEASE_KEY_PASSWORD: ${{ secrets.CLASSFLOW_RELEASE_KEY_PASSWORD }}
 
     steps:
-      - name: Checkout
+      - name: 检出代码 (Checkout)
         uses: actions/checkout@v4
 
-      - name: Setup Java 21
+      - name: 步骤：解析构建标签，确定任务和风味
+        id: resolve_vars
+        run: |
+          LABEL="${{ github.event.inputs.build_label }}"
+
+          case "$LABEL" in
+            "正式版")
+              TASK="assembleProdRelease"
+              FLAVOR="prod"
+              ;;
+            "开发者版")
+              TASK="assembleDevRelease"
+              FLAVOR="dev"
+              ;;
+            *)
+              echo "::error::未知构建标签：$LABEL"
+              exit 1
+              ;;
+          esac
+
+          echo "task=$TASK" >> $GITHUB_OUTPUT
+          echo "flavor=$FLAVOR" >> $GITHUB_OUTPUT
+          echo "已选择：$LABEL，对应 Gradle 任务：$TASK"
+
+      - name: 设置 JDK 21 (Setup JDK)
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: "21"
+          distribution: 'temurin'
+          java-version: '21'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: 设置 Gradle 缓存 (Cache Gradle Dependencies)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
-      - name: Ensure gradlew is executable
-        run: chmod +x gradlew
-
-      - name: Materialize release keystore
-        shell: bash
-        env:
-          KEYSTORE_BASE64: ${{ secrets.CLASSFLOW_RELEASE_KEYSTORE_BASE64 }}
+      - name: 解码并准备签名密钥文件 (Decode and Prepare Signing Key)
         run: |
-          set -euo pipefail
-          if [[ -z "${KEYSTORE_BASE64}" ]]; then
-            echo "::error::缺少 secret CLASSFLOW_RELEASE_KEYSTORE_BASE64（release keystore 的 base64 内容）"
-            exit 1
-          fi
-          echo "${KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/classflow-release.jks"
-          if [[ ! -s "${RUNNER_TEMP}/classflow-release.jks" ]]; then
-            echo "::error::解码后的 keystore 文件为空，请检查 CLASSFLOW_RELEASE_KEYSTORE_BASE64 内容"
-            exit 1
-          fi
-          echo "CLASSFLOW_RELEASE_STORE_FILE=${RUNNER_TEMP}/classflow-release.jks" >> "${GITHUB_ENV}"
+          echo "${{ secrets.CLASSFLOW_RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > app/release.jks
+          test -s app/release.jks || { echo "::error::解码后的 keystore 为空，请检查 CLASSFLOW_RELEASE_KEYSTORE_BASE64 secret"; exit 1; }
 
-      - name: Build prodRelease APK
-        run: bash ./gradlew :app:assembleProdRelease --console=plain
+      - name: 运行动态构建任务 (Build with Dynamic Flavor)
+        run: |
+          chmod +x ./gradlew
+          ./gradlew ${{ steps.resolve_vars.outputs.task }} \
+            -Pandroid.injected.signing.store.file="${{ github.workspace }}/app/release.jks" \
+            -Pandroid.injected.signing.store.password="${{ secrets.CLASSFLOW_RELEASE_STORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.CLASSFLOW_RELEASE_KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.CLASSFLOW_RELEASE_KEY_PASSWORD }}" \
+            --console=plain
 
-      - name: Upload APK artifacts
+      - name: 上传构建产物到仓库 (Upload Artifact)
         uses: actions/upload-artifact@v4
         with:
-          name: classflow-prod-release-apks
-          path: app/build/outputs/apk/prod/release/*.apk
+          name: app-${{ steps.resolve_vars.outputs.flavor }}-release-apk
+          path: app/build/outputs/apk/${{ steps.resolve_vars.outputs.flavor }}/release/*.apk
           if-no-files-found: error
+          retention-days: 7
