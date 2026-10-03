@@ -141,9 +141,21 @@ NDEF 占用 = TLV(3B) + 记录头(4B) + URI 前缀码(1B，`0x04` 已把 `https:
 | 类型已冻结但本版本未实现（`proxy`、`layout_plugin`） | 「该类型需要更新 App 后才能使用」 |
 | 类型未知（服务端新造的类型） | 「无法识别的分享类型：xxx」+ 复制链接 |
 | 已过期 / `minAppVersion` 过高 | 对应提示，不落地 |
-| 解析失败（网络/服务端） | 失败态（Stage B 提供重试） |
+| 解析失败（网络/服务端 5xx、超时） | 「网络异常」+ 重试 |
+| 服务端返回 HTML / 非 JSON（`/url/` 被跳转页接走、部署未更新） | 「服务端没有返回节点数据」+ 重试 + 用浏览器打开 |
 
 任何情况下都**不会自动落地**：必须由用户在确认卡片上点「应用」。
+
+### 为什么 HTML 响应不塞进内置 WebView
+
+这类页面（例如站点原有的「打开 ClassFlow」跳转页）通常自己会 `location.href = 'intent://...#Intent;...;end'`。
+WebView 不认识 `intent://`，只会渲染出「网页无法打开 / `net::ERR_UNKNOWN_URL_SCHEME`」——
+在 App 里表现为一张莫名其妙的错误页（真机复现过）。所以：**服务端必须给 App 返回 JSON**；
+拿到 HTML 时只提示 + 重试，并把「用浏览器打开」留给系统浏览器（那里 `intent://` 与 App Links 行为才正常）。
+
+另外 `WebViewScreen` 已拦截非 http(s) 跳转：解析 `intent://` 内层 http(s) 地址，
+命中校园深链规范（`/w/`、`/wm/`、`/hd/`、`/url/`、`/u/`）就走原生页面，其余交给系统，
+因此任何页面在 App 内置 WebView 里都不会再出现那张 `ERR_UNKNOWN_URL_SCHEME` 错误页。
 
 ## 7. 安全约束
 
