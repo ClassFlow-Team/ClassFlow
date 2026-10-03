@@ -17,7 +17,7 @@
 入口三条，最终都进入 App 的节点确认页：
 
 1. **NFC 触碰**：标签写 `NDEF URI 记录`；App 在后台由 `NDEF_DISCOVERED` 过滤器接住，在前台由 `enableForegroundDispatch` 接住（不要求 `assetlinks.json`）。
-2. **外部链接（VIEW）**：已声明 hub host 的 `autoVerify` 过滤器（`/url/`、`/u/`），与 U净 host 分成两个 filter（域名验证按 host 逐个进行，互不牵连）；该 host 的 `.well-known/assetlinks.json` 含 `com.shiro.classflow` 与 `com.shiro.classflow.dev`，真机 `pm get-app-links` 显示 `wbu.pennote.cn: verified`，浏览器/聊天软件里点链接可直接进 App。dev 与 prod 同时安装时，系统按惯例可能弹一次选择器。
+2. **外部链接（VIEW）**：已声明 hub host 的 `autoVerify` 过滤器（`/url/`、`/u/`），与 U净 host 分成两个 filter（域名验证按 host 逐个进行，互不牵连）；该 host 的 `.well-known/assetlinks.json` 含 `com.shiro.classflow` 与 `com.shiro.classflow.dev`，真机 `pm get-app-links` 显示该 host 为 `verified`，浏览器/聊天软件里点链接可直接进 App。dev 与 prod 同时安装时，系统按惯例可能弹一次选择器。
 3. **App 内扫一扫**：相机或相册选图解码后走同一套路由。
 
 ## 2. URL 形态与严格匹配
@@ -142,7 +142,7 @@ NDEF 占用 = TLV(3B) + 记录头(4B) + URI 前缀码(1B，`0x04` 已把 `https:
 | 类型未知（服务端新造的类型） | 「无法识别的分享类型：xxx」+ 复制链接 |
 | 已过期 / `minAppVersion` 过高 | 对应提示，不落地 |
 | 解析失败（网络/服务端 5xx、超时） | 「网络异常」+ 重试 |
-| 服务端返回 HTML / 非 JSON（`/url/` 被跳转页接走、部署未更新） | 「服务端没有返回节点数据」+ 重试 + 用浏览器打开 |
+| 服务端返回 HTML / 非 JSON（`/url/` 被其它页面接走） | 「该分享内容暂时打不开」+ 重试 + 用浏览器打开 |
 
 任何情况下都**不会自动落地**：必须由用户在确认卡片上点「应用」。
 
@@ -182,8 +182,8 @@ WebView 不认识 `intent://`，只会渲染出「网页无法打开 / `net::ERR
 | 节点确认页 + handler 注册表 | ✅ 已实现（内置 `open`、`text`） |
 | 服务端 JSON 解析（线格式 A，App 侧） | ✅ 已完成：`LinkHubClient` 取信封、按 origin 请求、404/410/网络异常分类与重试、HTML 兜底交内置 WebView |
 | hub host 的 VIEW / `autoVerify` 过滤器 | ✅ 已注册并验证通过（assetlinks.json 含 prod/dev 包名，真机 `pm get-app-links` = verified） |
-| 服务端示例（`server/linkhub.php`，Python 版等价） | ✅ 已实现：`GET /url/{code}`、`GET /u/{code}`、`POST/GET/PUT/DELETE /api/v1/nodes[/{code}]`、`GET /api/v1/health`；`/api/` 带 CORS；写接口 `Authorization: Bearer <TOKEN>` |
-| 生成器页面（`server/linkhub-demo.html`） | ✅ 已实现：本地算内嵌载荷 + 调服务端换短码 + 本地渲染二维码 + 内置自检 |
+| 服务端实现 | ✅ 已在私有环境落地（`GET /url/{code}` 按 `Accept` 分发出 JSON / 落地页；`/api/v1/nodes` 提供创建、改内容、撤销） |
+| URL 生成器（本地小工具，不入库） | ✅ 已实现：本地算内嵌载荷 + 本地渲染二维码 + 与 App 字节自检 |
 | 分享侧（App 内上传换 code、写 NFC 标签） | ⏳ 未开始（服务端写入 API 与生成器页面已可用） |
 | `proxy` / `layout_plugin` 功能本体 | ⏳ 未开始（字段契约已冻结，见第 3、4 节） |
 | 载荷签名 / 加密 | ⏳ 未开始 |

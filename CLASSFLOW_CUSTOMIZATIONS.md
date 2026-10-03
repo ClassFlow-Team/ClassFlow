@@ -75,7 +75,7 @@ git diff 3eb39c2 --stat -- app/src/main/java app/src/main/res | sort -t'|' -k2 -
 
 ### 6. 其他独有/定制
 - `ui/theme/ThemeClassFlow.kt`（Sakura/Afternoon/Evening 色板 + ClassFlowTheme）
-- `server/`（**上游无此目录**）：通用链接节点示例服务端（`linkhub.php` 单文件 PHP Demo + `linkhub-demo.html` 纯前端 URL 生成器，`/url/{code}` 公开入口 + `/api/v1/nodes` 写入 API + 内嵌 CFN1 编解码，与 App 端 `LinkHubCompactCodec` 逐字节一致，`--selftest` 自检）；协议见 `LINK_HUB_PROTOCOL.md`
+- 服务端与落地页（**不入库**）：`/url/{code}` 的 PHP 处理、节点数据、以及「打开 App / 下载」落地页均在本机维护，已加入 `.gitignore`（`/server/`、`/scripts/classflow_landing.html`）；协议契约见 `LINK_HUB_PROTOCOL.md`。
 - 桌面快捷方式资源：`src/dev/res/xml/shortcuts.xml` 与 `src/prod/res/xml/shortcuts.xml`（显式指定 `targetPackage` 与 `targetClass`，消除 dev/prod 共存时的选择弹窗；扫一扫 `qr_scan` + 一卡通 `campus_card`）、`res/drawable/ic_shortcut_qr_scan.xml`、`res/drawable/ic_shortcut_campus_card.xml`（独有文件）
 - 依赖追加：`androidx.camera:camera-{core,camera2,lifecycle,view}` 1.6.2 + `com.google.mlkit:barcode-scanning` 17.3.0（`gradle/libs.versions.toml`、`app/build.gradle.kts`）
 - `ui/settings/themesettings/`、`WallpaperAdjustScreen.kt`、`OnboardingOverlay.kt`

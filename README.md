@@ -215,14 +215,15 @@ org.gradle.java.home=C:\\path\\to\\jdk-21
 
 - 服务端短码：`https://<hub>/url/{code}`，App 带 `Accept: application/json` 取回动作信封；
 - 内嵌小配置：`https://<hub>/u/#<紧凑载荷>`，全部信息就在链接里，离线可用、不经服务端；
-- 入口：NFC 触碰、App 内扫一扫（相机 / 相册选图）、外部链接（需 hub host 部署 `assetlinks.json` 后开启）；
+- 入口：NFC 触碰、App 内扫一扫（相机 / 相册选图）、外部链接（hub host 已通过 `autoVerify` 验证）；
 - 无论哪种来源都必须由用户在确认卡片上手动「应用」，不存在自动落地路径。
 
 完整字段、紧凑线格式与 NFC 标签容量预算（含「多小的标签放得下什么」实测表）见
-[`LINK_HUB_PROTOCOL.md`](LINK_HUB_PROTOCOL.md)；示例服务端与生成器页面见 [`server/`](server/README.md)。
+[`LINK_HUB_PROTOCOL.md`](LINK_HUB_PROTOCOL.md)。
 
-本机想不部署公网就联调：`python -m http.server` 之外的那一套见 `server/README.md` 的「本地联调」一节
-（`php -S` 起本地服务端 + `adb reverse tcp:8090 tcp:8090` + `CLASSFLOW_LINK_HUB_DEBUG_BASE`）。
+本机联调（不部署公网）：用 `php -S` 起一个本地服务端，再配合
+`adb reverse tcp:8090 tcp:8090` 与 `CLASSFLOW_LINK_HUB_DEBUG_BASE=http://127.0.0.1:8090`
+（仅 dev 构建生效）即可跑通读侧；该配置项说明见下方 `local.properties` 注释。
 
 ## 项目结构
 
