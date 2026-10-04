@@ -959,4 +959,6 @@
     <string name="fail_webvpn_unreachable">连不上 WebVPN，请检查网络后重试</string>
     <string name="fail_unified_auth_unreachable">连不上统一身份认证，请检查网络后重试</string>
     <string name="fail_unexpected">操作没成功，可能是学校系统有变动，请稍后重试</string>
+    <string name="desc_enter_unified_auth_password">本机没有保存统一认证密码，输入后继续</string>
+    <string name="action_use_webvpn_once">改用 WebVPN</string>
 </resources>
