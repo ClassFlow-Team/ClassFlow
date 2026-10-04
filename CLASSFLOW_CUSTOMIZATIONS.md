@@ -77,7 +77,7 @@ git diff 3eb39c2 --stat -- app/src/main/java app/src/main/res | sort -t'|' -k2 -
 - `ui/theme/ThemeClassFlow.kt`（Sakura/Afternoon/Evening 色板 + ClassFlowTheme）
 - 线上网页与短链服务端（**不入库**，本机维护、手动部署，全在 `web/` 下，已加入 `.gitignore`）：`web/site/` 官网静态站、`web/pages/` 「打开 App / 下载」落地页、`web/api/linkhub.php` 单文件短链后端（节点数据也在服务器上）、`web/tools/` 本机调试页；协议契约见 `LINK_HUB_PROTOCOL.md`。
 - 桌面快捷方式资源：`src/dev/res/xml/shortcuts.xml` 与 `src/prod/res/xml/shortcuts.xml`（显式指定 `targetPackage` 与 `targetClass`，消除 dev/prod 共存时的选择弹窗；扫一扫 `qr_scan` + 一卡通 `campus_card`）、`res/drawable/ic_shortcut_qr_scan.xml`、`res/drawable/ic_shortcut_campus_card.xml`（独有文件）
-- 设备直达 / 网页入口的静默登录：`/w/`（`UjingWaterViewModel`）与 `/wm/`、一卡通等 WebApp 入口（`WebAppViewModel`）在 **CASTGC 缺失或失效**时，先复用仍有效的会话；不行再用**保存的统一认证密码静默登录一次**（开启「统一认证经过 WebVPN」时用保存的 WebVPN 密码打通门禁），失败才弹 `WbuCampusAuthSheet`。每次进入只尝试一次，避免失败后反复重试成环
+- 设备直达 / 网页入口的静默登录：`/w/`（`UjingWaterViewModel`）与 `/wm/`、一卡通等 WebApp 入口（`WebAppViewModel`）在 **CASTGC 缺失或失效**时先复用仍有效的会话，不行才用**保存的统一认证密码静默登录一次**：没保存 WebVPN 密码就先弹小窗（`ui/components/WbuAuthPrompt.kt` 的 `WbuAuthPromptDialogs`）补 WebVPN 密码 → 再按需弹短信验证码；补不上或用户取消才回落到 `WbuCampusAuthSheet`。是否牵扯 WebVPN 只由「统一认证经过 WebVPN」决定（只有内容本身必须走 WebVPN、即 TWFID 门禁失效时才强制走），所以直连服务（一卡通、U净）在该开关关闭时完全不经 WebVPN。每次进入只尝试一次，避免失败后反复重试成环
 - 依赖追加：`androidx.camera:camera-{core,camera2,lifecycle,view}` 1.6.2 + `com.google.mlkit:barcode-scanning` 17.3.0（`gradle/libs.versions.toml`、`app/build.gradle.kts`）
 - `ui/settings/themesettings/`、`WallpaperAdjustScreen.kt`、`OnboardingOverlay.kt`
 - widget `*NativeRenderer.kt` 系列（原生渲染，上游部分有对应文件——差异在渲染实现）
