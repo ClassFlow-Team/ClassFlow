@@ -199,7 +199,7 @@ Overwriting will replace all current courses.</string>
     <string name="msg_new_semester_found">New schedule for [%1$s] is available. Import and create it now?</string>
     <string name="action_import_and_create_now">Import Now</string>
     <string name="title_connect_webvpn">Connect to WebVPN</string>
-    <string name="desc_connect_webvpn">Off-campus access requires WebVPN. Please enter your CAS/WebVPN password to connect:</string>
+    <string name="desc_connect_webvpn">Off-campus access to campus services goes through WebVPN. Please enter your CAS / WebVPN password to connect:</string>
     <string name="label_webvpn_password">CAS / WebVPN Password</string>
     <string name="a11y_hide_password">Hide password</string>
     <string name="a11y_show_password">Show password</string>

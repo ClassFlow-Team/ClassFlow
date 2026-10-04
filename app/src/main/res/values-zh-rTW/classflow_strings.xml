@@ -197,7 +197,7 @@
     <string name="msg_new_semester_found">教務系統當前已有新學期【%1$s】的課表。是否立即匯入並新建該學期課表？</string>
     <string name="action_import_and_create_now">立即匯入新建</string>
     <string name="title_connect_webvpn">連線 WebVPN</string>
-    <string name="desc_connect_webvpn">校外存取教務系統需先透過 WebVPN 門禁。請輸入您的【統一認證/WebVPN 密碼】以連線網路：</string>
+    <string name="desc_connect_webvpn">校外存取校內服務需先通過 WebVPN 門禁。請輸入您的【統一認證 / WebVPN 密碼】以連線網路：</string>
     <string name="label_webvpn_password">統一認證 (WebVPN) 密碼</string>
     <string name="a11y_hide_password">隱藏密碼</string>
     <string name="a11y_show_password">顯示密碼</string>
