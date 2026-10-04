@@ -330,7 +330,11 @@ class UjingWaterViewModel(application: Application) : AndroidViewModel(applicati
 
     /**
      * 尝试使用已保存的统一认证凭据进行后台静默登录。
-     * 若未保存密码或登录过程需要交互验证（滑块/短信），返回 false。
+     *
+     * 调用时机：先让 `WbuCampusCardClient.ensureValidAccessToken()` 复用仍然有效的 **CASTGC**（免密换票），
+     * 只有它缺失 / 失效时才走到这里；这里再失败（没保存密码、需要滑块或短信、WebVPN 门禁打不通）
+     * 才把 `needLogin` 交给 UI 弹登录 Sheet。
+     * 经 WebVPN 时用**已保存的** WebVPN 密码打通门禁，静默路径绝不弹窗。
      */
     private suspend fun trySilentUnifiedAuthLogin(): Boolean {
         val app = getApplication<Application>()
@@ -350,7 +354,9 @@ class UjingWaterViewModel(application: Application) : AndroidViewModel(applicati
                 studentId = studentId,
                 password = password,
                 viaWebVpn = viaWebVpn,
-                flowTag = "UJING_WATER_AUTO_AUTH"
+                flowTag = "UJING_WATER_AUTO_AUTH",
+                // 经 WebVPN 时要先打通门禁：只用**已保存**的 WebVPN 密码，绝不在静默路径上弹窗
+                vpnPasswordProvider = { WbuAuthTransport.getSavedVpnPassword(app) }
             )
             Log.i(TAG, "Silent unified auth login result: $success")
             success
