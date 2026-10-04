@@ -96,7 +96,9 @@ class LinkHubClient @Inject constructor() {
         .build()
 
     suspend fun fetch(code: String, origin: String? = null): LinkHubFetchResult = withContext(Dispatchers.IO) {
-        val url = LinkHubUrl.buildCodeUrl(code = code, origin = origin)
+        // 走 /api/ 读接口，而不是分享链接本身：`/url/{code}` 通常被浏览器侧的落地页接管，
+        // 做不了 Accept 协商，App 会拿到 HTML（详见 buildApiUrl 的注释）
+        val url = LinkHubUrl.buildApiUrl(code = code, origin = origin)
         val request = Request.Builder()
             .url(url)
             .header("Accept", "application/json")

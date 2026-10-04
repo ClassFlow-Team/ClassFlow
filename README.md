@@ -213,9 +213,9 @@ org.gradle.java.home=C:\\path\\to\\jdk-21
 除设备直达链接（`/w/`、`/wm/`、`/hd/`）外，`/url/{code}`（短别名 `/u/{code}`）是一个通用命名空间，
 用来分享小配置（如网络代理、文本、网页链接）与后续的布局插件：
 
-- 服务端短码：`https://<hub>/url/{code}`，App 带 `Accept: application/json` 取回动作信封；
+- 服务端短码：分享出去的是 `https://<hub>/url/{code}`（浏览器侧显示「打开 App / 下载」落地页），App 读内容走 `https://<hub>/api/v1/nodes/{code}`（返回 JSON 信封）——两条路径分开，浏览器侧的改动不会影响 App；
 - 内嵌小配置：`https://<hub>/u/#<紧凑载荷>`，全部信息就在链接里，离线可用、不经服务端；
-- 入口：NFC 触碰、App 内扫一扫（相机 / 相册选图）、外部链接（hub host 已通过 `autoVerify` 验证）；
+- 入口：NFC 触碰、App 内扫一扫（相机 / 相册选图）、外部链接（hub host 已通过 `autoVerify` 验证，直接导航到链接能进 App；落地页上的按钮因为同域 App Links 不生效，改用 `intent://` 显式唤起，见协议文档 §6.1）；
 - 无论哪种来源都必须由用户在确认卡片上手动「应用」，不存在自动落地路径。
 
 完整字段、紧凑线格式与 NFC 标签容量预算（含「多小的标签放得下什么」实测表）见
