@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,6 +44,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import com.xingheyuzhuan.shiguangschedule.data.model.wbu.CredentialService
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuAuthTransport
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -138,10 +141,12 @@ fun VpnPasswordPromptDialog(onSubmit: (String?) -> Unit) {
         }
     }
 
-    // 关闭弹窗时若用户取消了记住密码，统一清空持久化数据
-    DisposableEffect(rememberVpnPassword) {
+    // 关闭弹窗时若用户取消了记住密码，统一清空持久化数据。
+    // key 用 Unit：取消勾选那一刻不该立刻抹除（误触就没了），等弹窗真正离开组合时再按最新状态清。
+    val currentRememberVpnPassword = rememberUpdatedState(rememberVpnPassword)
+    DisposableEffect(Unit) {
         onDispose {
-            if (!rememberVpnPassword) {
+            if (!currentRememberVpnPassword.value) {
                 WbuSyncEngine.setRememberVpnPasswordEnabled(context, false)
                 WbuSyncEngine.clearSavedVpnPassword(context)
             }
@@ -363,15 +368,21 @@ object WbuAuthPromptBus {
 
     private var pending: CompletableDeferred<String?>? = null
 
+    /**
+     * 串行化补输入：弹窗本身是模态的，同时来两个请求只会互相覆盖 ——
+     * 旧的 `pending` 会被后一个覆盖，前一个 `ask` 永远等不到结果；而且 `finally` 还会把界面上的新请求一起清掉。
+     */
+    private val mutex = Mutex()
+
     /** 短信重发钩子：由发起方在调用前注入。 */
     var onResendSmsCode: (suspend () -> Unit)? = null
 
     /** 挂起等待用户输入；返回 null 表示用户取消。 */
-    suspend fun ask(request: WbuAuthPromptRequest): String? {
+    suspend fun ask(request: WbuAuthPromptRequest): String? = mutex.withLock {
         val deferred = CompletableDeferred<String?>()
         pending = deferred
         _request.value = request
-        return try {
+        try {
             deferred.await()
         } finally {
             pending = null

@@ -82,6 +82,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -340,14 +341,19 @@ fun WbuAuthBottomSheet(
             }
         }
     }
-    // 延迟清空密码（防抖机制）：如果用户取消勾选了“记住密码”，在退出 BottomSheet 时统一清空持久化密码，
-    // 避免操作时误触导致数据立刻抹除
-    DisposableEffect(rememberPassword) {
+    // 取消勾选「记住密码」时不立刻抹除（防误触），只记下「这次要清哪些服务」，关闭 Sheet 时再统一清。
+    //
+    // 旧写法把 DisposableEffect 的 key 设成 rememberPassword，取消勾选那一刻旧 effect 就被 dispose，
+    // 而它捕获的委托读到的是**当前值** false —— 于是「延迟清空」实际上还是立刻清空；
+    // 而且它捕获的 passwordService 是普通值，切过密码类型之后会去清**上一个服务**的槽位。
+    val pendingPasswordClear = remember { mutableStateListOf<CredentialService>() }
+    DisposableEffect(Unit) {
         onDispose {
-            if (!rememberPassword) {
-                WbuAuthTransport.setRememberPasswordEnabled(context, passwordService, false)
-                WbuAuthTransport.clearSavedPassword(context, passwordService)
+            pendingPasswordClear.forEach { service ->
+                WbuAuthTransport.setRememberPasswordEnabled(context, service, false)
+                WbuAuthTransport.clearSavedPassword(context, service)
             }
+            pendingPasswordClear.clear()
         }
     }
     // 打开即全展开，避免内容过高时停在半展开状态，导致登录后下方的报错信息被遮挡
@@ -431,7 +437,9 @@ fun WbuAuthBottomSheet(
                             if (!checked) {
                                 // 只是取消勾选：先把占位符收起来（字段跟着变空），真正的抹除留到关闭 Sheet 时做
                                 hasOwnSavedPassword = false
+                                if (passwordService !in pendingPasswordClear) pendingPasswordClear.add(passwordService)
                             } else {
+                                pendingPasswordClear.remove(passwordService)
                                 WbuAuthTransport.setRememberPasswordEnabled(context, passwordService, true)
                                 if (defaultAuthMode == null) {
                                     WbuAuthTransport.setSavedAuthMode(context, authMode)
@@ -600,9 +608,9 @@ fun WbuAuthBottomSheet(
                                     }
                                     hasOwnSavedPassword = true
                                 } else {
-                                    WbuAuthTransport.setRememberPasswordEnabled(context, passwordService, false)
-                                    WbuAuthTransport.clearSavedPassword(context, passwordService)
+                                    // 没勾「记住密码」也走同一套延迟清理，避免一按登录就把旧密码抹掉
                                     hasOwnSavedPassword = false
+                                    if (passwordService !in pendingPasswordClear) pendingPasswordClear.add(passwordService)
                                 }
                                 onPasswordLogin(studentId, effectivePassword, useVpn, authMode)
                             }
@@ -641,10 +649,6 @@ fun WbuAuthBottomSheet(
             if (showSyncButton) {
                 // 小按钮：默认用统一认证凭据做一次真正的 CAS 登录（不再直接复用当前 Cookie）；
                 // 调用方提供了自定义动作时（如课表页）优先用自定义的。
-                val syncPassword = passwordDraft.text
-                    .takeIf { passwordDraft.edited }
-                    .orEmpty()
-                    .ifBlank { WbuAuthTransport.getSavedPassword(context, CredentialService.UNIFIED_AUTH).orEmpty() }
                 // 双按钮：左「登录同步」(2/3) + 右「统一认证登录」图标 (1/3)
                 Row(
                     modifier = Modifier
@@ -665,6 +669,10 @@ fun WbuAuthBottomSheet(
                     }
                     Button(
                         onClick = {
+                            // 已保存密码的解密只放在点击时做：放进组合体里会让每次重组都在主线程走一遍 KeyStore
+                            val syncPassword = passwordDraft.text
+                                .takeIf { passwordDraft.edited && it.isNotBlank() }
+                                ?: WbuAuthTransport.getSavedPassword(context, CredentialService.UNIFIED_AUTH).orEmpty()
                             onSyncWithCredentials?.invoke()
                                 ?: onPasswordLogin(studentId, syncPassword, useVpn, WbuAuthMode.UNIFIED_CAS)
                         },
