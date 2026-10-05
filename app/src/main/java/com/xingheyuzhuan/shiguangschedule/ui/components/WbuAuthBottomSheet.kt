@@ -194,19 +194,24 @@ fun WbuAuthBottomSheet(
         CredentialService.UNIFIED_AUTH
     }
     var rememberPassword by remember(passwordService) { mutableStateOf(WbuAuthTransport.isRememberPasswordEnabled(context, passwordService)) }
-    var hasSavedPassword by remember(passwordService) { mutableStateOf(WbuAuthTransport.hasSavedPassword(context, passwordService)) }
+    // 占位符只看该服务**自身**的密码槽：教务「跟随统一认证」不算已经存过教务密码
+    var hasOwnSavedPassword by remember(passwordService) { mutableStateOf(WbuAuthTransport.hasOwnSavedPassword(context, passwordService)) }
     var isPasswordModified by remember(passwordService) { mutableStateOf(false) }
     var studentId by remember(initialStudentId) { mutableStateOf(initialStudentId) }
     var password by remember(passwordService) {
-        mutableStateOf(if (WbuAuthTransport.hasSavedPassword(context, passwordService)) "••••••••" else "")
+        mutableStateOf(if (WbuAuthTransport.hasOwnSavedPassword(context, passwordService)) "••••••••" else "")
     }
     var useVpn by remember(initialUseVpn) { mutableStateOf(initialUseVpn) }
+    // 教务自身没存密码时，本次登录会「跟随统一认证」：字段保持空白，只用一行提示说明会用到统一认证密码
+    val followsUnifiedAuth = !hasOwnSavedPassword && WbuAuthTransport.hasSavedPassword(context, passwordService)
+    // 本次登录能否直接用已保存的密码（含教务回退）
+    val hasUsableSavedPassword = hasOwnSavedPassword || followsUnifiedAuth
     // 切换密码类型时刷新该类型自己的「已保存」状态与占位符（用户已在改密码则不动输入框）
     LaunchedEffect(passwordService) {
         rememberPassword = WbuAuthTransport.isRememberPasswordEnabled(context, passwordService)
-        hasSavedPassword = WbuAuthTransport.hasSavedPassword(context, passwordService)
+        hasOwnSavedPassword = WbuAuthTransport.hasOwnSavedPassword(context, passwordService)
         if (!isPasswordModified) {
-            password = if (hasSavedPassword) "••••••••" else ""
+            password = if (hasOwnSavedPassword) "••••••••" else ""
         }
     }
     var authMenuExpanded by remember { mutableStateOf(false) }
@@ -386,7 +391,7 @@ fun WbuAuthBottomSheet(
                     PasswordInput(
                         value = password,
                         onValueChange = { newValue ->
-                            if (hasSavedPassword && !isPasswordModified) {
+                            if (hasOwnSavedPassword && !isPasswordModified) {
                                 // 第一次在占位符状态下输入：若按退格删除或直接打字，均视为重新开始输入新密码
                                 isPasswordModified = true
                                 password = if (newValue.startsWith("••••••••")) {
@@ -404,20 +409,23 @@ fun WbuAuthBottomSheet(
                         },
                         authMode = authMode,
                         onAuthModeChange = { newMode ->
+                            // 只是切一下密码类型不等于要改全局偏好：登录方式在真正提交（或用户显式勾选记住密码）
+                            // 时才写回，否则「随手切一下看看」会把用户的默认登录方式改掉
                             authMode = newMode
-                            // 指定了默认登录方式时（如选课页）不写回全局偏好，避免影响其它页面
-                            if (rememberPassword && defaultAuthMode == null) {
-                                WbuAuthTransport.setSavedAuthMode(context, newMode)
-                            }
                         },
                         menuExpanded = authMenuExpanded,
                         onMenuExpandedChange = { authMenuExpanded = it },
                         lockPasswordType = lockPasswordType,
                         rememberPassword = rememberPassword,
+                        supportingText = if (followsUnifiedAuth && !isPasswordModified) {
+                            stringResource(R.string.hint_password_follows_unified_auth)
+                        } else {
+                            null
+                        },
                         onRememberPasswordChange = { checked ->
                             rememberPassword = checked
                             if (!checked) {
-                                hasSavedPassword = false
+                                hasOwnSavedPassword = false
                                 if (!isPasswordModified && password == "••••••••") {
                                     password = ""
                                 }
@@ -426,14 +434,14 @@ fun WbuAuthBottomSheet(
                                 if (defaultAuthMode == null) {
                                     WbuAuthTransport.setSavedAuthMode(context, authMode)
                                 }
-                                val effective = if (hasSavedPassword && !isPasswordModified) {
+                                val effective = if (hasOwnSavedPassword && !isPasswordModified) {
                                     WbuAuthTransport.getSavedPassword(context, passwordService) ?: ""
                                 } else {
                                     password
                                 }
                                 if (effective.isNotBlank()) {
                                     WbuAuthTransport.savePassword(context, passwordService, effective)
-                                    hasSavedPassword = true
+                                    hasOwnSavedPassword = true
                                 }
                             }
                         },
@@ -575,15 +583,17 @@ fun WbuAuthBottomSheet(
             // 登录按钮
             val (label, enabled, action) = when (method) {
                 WbuLoginMethod.PASSWORD -> {
-                    val canSubmit = studentId.isNotBlank() && (password.isNotBlank() || hasSavedPassword)
+                    val canSubmit = studentId.isNotBlank() && (password.isNotBlank() || hasUsableSavedPassword)
                     Triple(
                         primaryButtonText ?: stringResource(R.string.action_one_tap_sync),
                         canSubmit,
                         {
-                            val effectivePassword = if (hasSavedPassword && !isPasswordModified) {
-                                WbuAuthTransport.getSavedPassword(context, passwordService) ?: password
+                            // 教务自身没密码时 getSavedPassword 会回退到统一认证密码：字段留空即走回退，
+                            // 但绝不把「••••••••」这类占位符当成密码发出去
+                            val effectivePassword = if (hasOwnSavedPassword && !isPasswordModified) {
+                                WbuAuthTransport.getSavedPassword(context, passwordService).orEmpty()
                             } else {
-                                password
+                                password.ifBlank { WbuAuthTransport.getSavedPassword(context, passwordService).orEmpty() }
                             }
                             if (rememberPassword && effectivePassword.isNotBlank()) {
                                 WbuAuthTransport.setRememberPasswordEnabled(context, passwordService, true)
@@ -591,11 +601,11 @@ fun WbuAuthBottomSheet(
                                 if (defaultAuthMode == null) {
                                     WbuAuthTransport.setSavedAuthMode(context, authMode)
                                 }
-                                hasSavedPassword = true
+                                hasOwnSavedPassword = true
                             } else if (!rememberPassword) {
                                 WbuAuthTransport.setRememberPasswordEnabled(context, passwordService, false)
                                 WbuAuthTransport.clearSavedPassword(context, passwordService)
-                                hasSavedPassword = false
+                                hasOwnSavedPassword = false
                             }
                             onPasswordLogin(studentId, effectivePassword, useVpn, authMode)
                         }
@@ -964,8 +974,10 @@ private fun PasswordInput(
     lockPasswordType: Boolean = false,
     rememberPassword: Boolean,
     onRememberPasswordChange: (Boolean) -> Unit,
-    enabled: Boolean
+    enabled: Boolean,
+    supportingText: String? = null
 ) {
+    val supportingHint = supportingText?.takeIf { it.isNotBlank() }
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
@@ -1063,7 +1075,9 @@ private fun PasswordInput(
             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
             unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
         ),
-        enabled = enabled
+        enabled = enabled,
+        // 例如「教务密码留空时会用已保存的统一认证密码」这类说明
+        supportingText = supportingHint?.let { hint -> { Text(text = hint) } }
     )
 }
 @Composable
