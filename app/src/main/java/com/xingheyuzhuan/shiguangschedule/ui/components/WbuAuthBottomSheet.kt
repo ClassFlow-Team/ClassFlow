@@ -220,7 +220,10 @@ fun WbuAuthBottomSheet(
         val effective = when {
             !stored.isNullOrBlank() -> stored
             passwordDraft.text.isNotBlank() -> passwordDraft.text
-            else -> WbuAuthTransport.getSavedPassword(context, passwordService).orEmpty()
+            // 完全没动过输入框（显示占位符 / 教务跟随统一认证）时才允许直接用保存的密码；
+            // 用户把字段清空后再按登录，就该当成「还没输密码」，而不是又拿保存的密码去登
+            !passwordDraft.edited -> WbuAuthTransport.getSavedPassword(context, passwordService).orEmpty()
+            else -> ""
         }
         if (effective.isBlank() && hasOwnSavedPassword) {
             WbuAuthTransport.setRememberPasswordEnabled(context, passwordService, false)
@@ -593,7 +596,9 @@ fun WbuAuthBottomSheet(
             // 登录按钮
             val (label, enabled, action) = when (method) {
                 WbuLoginMethod.PASSWORD -> {
-                    val canSubmit = studentId.isNotBlank() && (passwordDraft.text.isNotBlank() || hasUsableSavedPassword)
+                    val canSubmit = studentId.isNotBlank() && (
+                        passwordDraft.text.isNotBlank() || (hasUsableSavedPassword && !passwordDraft.edited)
+                        )
                     Triple(
                         primaryButtonText ?: stringResource(R.string.action_one_tap_sync),
                         canSubmit,
