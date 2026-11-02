@@ -35,6 +35,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -165,7 +166,9 @@ fun UjingWaterScreen(
                         ErrorView(
                             message = stage.message,
                             canRetry = stage.canRetry,
+                            offerWebVpnOnce = stage.offerWebVpnOnce,
                             onRetry = viewModel::retry,
+                            onRetryWithWebVpnOnce = viewModel::retryWithWebVpnOnce,
                             onExit = {
                                 UjingWaterViewModel.clearSession()
                                 navBridge.popBackStack()
@@ -406,7 +409,9 @@ private fun ErrorView(
     message: String,
     canRetry: Boolean,
     onRetry: () -> Unit,
-    onExit: () -> Unit
+    onExit: () -> Unit,
+    offerWebVpnOnce: Boolean = false,
+    onRetryWithWebVpnOnce: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -444,6 +449,13 @@ private fun ErrorView(
                 Button(onClick = onRetry) {
                     Text(stringResource(R.string.action_retry))
                 }
+            }
+        }
+        // 被校园网关拦在外面时，重试只会再撞一次；换一条通道才可能真的通
+        if (offerWebVpnOnce) {
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(onClick = onRetryWithWebVpnOnce) {
+                Text(stringResource(R.string.action_use_webvpn_once))
             }
         }
     }
