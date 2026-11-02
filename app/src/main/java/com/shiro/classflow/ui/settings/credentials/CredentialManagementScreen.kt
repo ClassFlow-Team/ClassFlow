@@ -33,6 +33,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -170,8 +171,10 @@ fun CredentialManagementScreen(
                             onCheckedChange = { viewModel.setAutoVerify(it) },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
-                                checkedTrackColor = Color.White.copy(alpha = 0.28f),
-                                uncheckedThumbColor = Color.White.copy(alpha = 0.9f)
+                                checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                uncheckedThumbColor = Color.White.copy(alpha = 0.9f),
+                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                uncheckedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
                             )
                         )
                     }
@@ -187,8 +190,10 @@ fun CredentialManagementScreen(
                             onCheckedChange = { viewModel.setAutoLoginWithSavedPassword(it) },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
-                                checkedTrackColor = Color.White.copy(alpha = 0.28f),
-                                uncheckedThumbColor = Color.White.copy(alpha = 0.9f)
+                                checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                uncheckedThumbColor = Color.White.copy(alpha = 0.9f),
+                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                uncheckedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
                             )
                         )
                     }
@@ -204,8 +209,10 @@ fun CredentialManagementScreen(
                             onCheckedChange = { viewModel.setUseVpn(it) },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
-                                checkedTrackColor = Color.White.copy(alpha = 0.28f),
-                                uncheckedThumbColor = Color.White.copy(alpha = 0.9f)
+                                checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                uncheckedThumbColor = Color.White.copy(alpha = 0.9f),
+                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                uncheckedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
                             )
                         )
                     }
@@ -224,8 +231,10 @@ fun CredentialManagementScreen(
                                 onCheckedChange = { viewModel.setAutoCampusProbe(it) },
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
-                                    checkedTrackColor = Color.White.copy(alpha = 0.28f),
-                                    uncheckedThumbColor = Color.White.copy(alpha = 0.9f)
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                    uncheckedThumbColor = Color.White.copy(alpha = 0.9f),
+                                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    uncheckedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
                                 )
                             )
                         }
@@ -693,8 +702,10 @@ private fun ToggleRow(
                 onCheckedChange = onCheckedChange,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Color.White,
-                    checkedTrackColor = Color.White.copy(alpha = 0.28f),
-                    uncheckedThumbColor = Color.White.copy(alpha = 0.9f)
+                    checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                    uncheckedThumbColor = Color.White.copy(alpha = 0.9f),
+                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    uncheckedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
                 )
             )
         },
