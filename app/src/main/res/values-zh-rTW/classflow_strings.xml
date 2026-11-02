@@ -1019,9 +1019,12 @@
     <string name="fail_sms_code_rejected">驗證碼不正確，請重新輸入</string>
     <string name="fail_captcha_rejected">圖形驗證碼不正確，請重新輸入</string>
     <string name="fail_not_on_campus">目前不在校園網，無法直連學校系統</string>
+    <string name="fail_no_network">未連接網路，請先連接網路後重試</string>
     <string name="fail_network_unreachable">網路連線失敗，請檢查網路後重試</string>
     <string name="fail_webvpn_unreachable">連不上 WebVPN，請檢查網路後重試</string>
     <string name="fail_unified_auth_unreachable">連不上統一身份認證，請檢查網路後重試</string>
+    <string name="fail_waf_blocked">校外直連統一身份認證時被校園閘道攔截，改用 WebVPN 再試</string>
+    <string name="fail_waf_blocked_webvpn">經 WebVPN 存取仍被閘道攔截，請稍後重試或改用網頁開啟</string>
     <string name="fail_unexpected">操作未成功，學校系統回傳的內容不符預期，請稍後重試</string>
     <string name="desc_enter_unified_auth_password">本機沒有儲存統一認證密碼，輸入後繼續</string>
     <string name="action_use_webvpn_once">改用 WebVPN</string>

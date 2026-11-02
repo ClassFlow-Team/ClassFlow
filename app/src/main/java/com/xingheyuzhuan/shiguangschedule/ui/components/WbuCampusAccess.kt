@@ -15,7 +15,7 @@ import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuQueryClient
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSyncEngine
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.confirmedPasswordRejectionLayer
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.suggestedAction
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.unreachableOnDirectChannel
+import com.xingheyuzhuan.shiguangschedule.data.network.wbu.directChannelTrouble
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -93,9 +93,10 @@ suspend fun <T> campusAccess(
     var first = attempt()
     if (first !is CampusAccessResult.Failed) return first
 
-    // 3) 直连连一个响应都没拿到，而通道是探测定的：重算一次通道，翻成 WebVPN 就按新通道再走一遍。
+    // 3) 直连根本没走到学校系统（一个响应都没拿到，或被校外那道 WAF 拦下），而通道是探测定的：
+    //    重算一次通道，翻成 WebVPN 就按新通道再走一遍。
     //    这一步专治「判据过期」：短缓存里可能还写着「在校园网」，人却已经走出了 WiFi 范围。
-    if (decision.decidedByProbe && first.failure.unreachableOnDirectChannel) {
+    if (decision.decidedByProbe && first.failure.directChannelTrouble) {
         val replanned = replanCampusChannel(context, savedUseVpn)
         if (replanned.useVpn != useVpn) {
             useVpn = replanned.useVpn
@@ -385,7 +386,7 @@ suspend fun prepareWbuSyncSession(
     }
 
     var (engine, failure) = prepare()
-    if (failure != null && decision.decidedByProbe && failure.unreachableOnDirectChannel) {
+    if (failure != null && decision.decidedByProbe && failure.directChannelTrouble) {
         val replanned = replanCampusChannel(context, savedUseVpn)
         if (replanned.useVpn != decision.useVpn) {
             decision = replanned

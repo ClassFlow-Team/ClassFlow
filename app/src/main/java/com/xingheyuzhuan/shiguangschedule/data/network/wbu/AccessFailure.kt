@@ -1,5 +1,6 @@
 package com.xingheyuzhuan.shiguangschedule.data.network.wbu
 
+import com.xingheyuzhuan.shiguangschedule.data.network.NoNetworkException
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -47,10 +48,17 @@ enum class CredentialKind {
  */
 sealed interface AccessFailure {
 
-    /** 一个 HTTP 响应都没拿到：超时、DNS 失败、连接被拒、TLS 失败。属于网络问题。 */
+    /**
+     * 一个 HTTP 响应都没拿到：超时、DNS 失败、连接被拒、TLS 失败。属于网络问题。
+     *
+     * [offline] 是**设备自己**没有网络（系统里没有任何默认网络，见 `NetworkAvailability`），
+     * 与「设备有网、但到不了学校」是两回事：前者换通道、换 WebVPN 都没用，只能让用户先把网连上。
+     * 只有这一种失败才该说「未连接网络」，其余情形仍按原来的「连不上 XX」措辞。
+     */
     data class Unreachable(
         val layer: AccessLayer,
-        val cause: Throwable? = null
+        val cause: Throwable? = null,
+        val offline: Boolean = false
     ) : AccessFailure
 
     /**
@@ -70,6 +78,30 @@ sealed interface AccessFailure {
 
     /** 用户主动取消输入（WebVPN 密码 / 短信验证码 / 图形验证码 / 校园网确认）。不应报错。 */
     data object Cancelled : AccessFailure
+
+    /**
+     * 请求被**校外那道云 WAF 拦下来了** —— 拿到的不是学校的真实应答。
+     *
+     * 实测：`ids.wbu.edu.cn` 的解析链是
+     * `ids-wbu-edu-cn.cname.saaswaf.com → … → a005v6.cache.dbappwaf.cn`，即请求先过一道安恒云 WAF，
+     * 挡板页由 `error.websaas.cn` / `custompages.websaas.cn` 提供。校外直连时它回一张
+     * **HTTP 404 的拦截页**，冒充「页面不存在」。
+     *
+     * 反证（别再把它当成「源站错误页换皮」）：源站自己的错误是**原样透传**的 ——
+     * 不存在的路径回 nginx 原生 404，CAS 后端的 JSON 404 原样返回，登录态正常时打
+     * `/authserver/a` 拿到的也是 CAS 自己的 HTML 404。这几种都不带 websaas 的页面，
+     * 所以抓到的那张 404 就是 WAF 的挡板页本身。
+     *
+     * 能确定的两件事：这不是「页面不存在」，也不是「登录态过期」。字面当成其中任何一个，
+     * 都会把用户带去做无用功（去重新登录 → 登录页同样返回这张页）。
+     *
+     * 因此处理方式是「直连换 WebVPN 隧道，隧道里还被拦就只让用户等」，绝不提示重新登录。
+     */
+    data class Intercepted(
+        val layer: AccessLayer,
+        /** 出事的 host（如 `ids.wbu.edu.cn`），只用于日志与提示。 */
+        val host: String? = null
+    ) : AccessFailure
 
     /** 有响应但内容不符合预期：接口调整、解析失败、服务端维护页。 */
     data class Unexpected(
@@ -97,9 +129,17 @@ enum class AccessAction {
 fun AccessFailure.suggestedAction(webVpnEnabled: Boolean): AccessAction = when (this) {
     is AccessFailure.Cancelled -> AccessAction.None
     is AccessFailure.Unreachable ->
-        if (layer == AccessLayer.CampusDirect && !webVpnEnabled) AccessAction.UseWebVpnOnce else AccessAction.Retry
+        when {
+            // 手机自己没网：换通道解决不了任何问题，先把网连上再点重试
+            offline -> AccessAction.Retry
+            layer == AccessLayer.CampusDirect && !webVpnEnabled -> AccessAction.UseWebVpnOnce
+            else -> AccessAction.Retry
+        }
     is AccessFailure.SessionExpired -> AccessAction.Relogin
     is AccessFailure.CredentialRejected -> AccessAction.Relogin
+    // 被 WAF 拦：登录态没问题，重新登录只会再撞一次 WAF。换通道才有意义。
+    is AccessFailure.Intercepted ->
+        if (layer == AccessLayer.WebVpnPortal) AccessAction.Retry else AccessAction.UseWebVpnOnce
     is AccessFailure.Unexpected -> AccessAction.Retry
 }
 
@@ -117,7 +157,20 @@ val AccessFailure.needsRelogin: Boolean
  * 不该连认证页都到不了）。调用方据此作废探测缓存、重算一次通道再试（见 `replanCampusChannel`）。
  */
 val AccessFailure.unreachableOnDirectChannel: Boolean
-    get() = this is AccessFailure.Unreachable && layer != AccessLayer.WebVpnPortal
+    get() = this is AccessFailure.Unreachable && !offline && layer != AccessLayer.WebVpnPortal
+
+/**
+ * 这次失败能不能当作「直连这条通道本身不行」的证据 —— [unreachableOnDirectChannel] 的超集。
+ *
+ * 比它多一种：[AccessFailure.Intercepted]（被校外那道 WAF 拦了）。两者的共同点是**请求根本没
+ * 走到学校系统**，换一条通道（WebVPN 隧道 / 校内的直连）就能到；不同点是拦截至少证明了网络通。
+ *
+ * 特意与 [unreachableOnDirectChannel] 分开：后者是「在不在校园网」的判据，被 WAF 拦并不说明
+ * 这个判据过期（外网也会被拦）。用到的地方是「作废缓存、重算一次通道再试」。
+ */
+val AccessFailure.directChannelTrouble: Boolean
+    get() = unreachableOnDirectChannel ||
+        (this is AccessFailure.Intercepted && layer != AccessLayer.WebVpnPortal)
 
 /**
  * 这次失败是否**确认**「某个保存的密码不对」—— 是则返回该密码所在的层，否则 null。
@@ -223,6 +276,15 @@ object WbuFailureDetector {
      */
     fun fromThrowable(e: Throwable, layer: AccessLayer): AccessFailure = when (e) {
         is WbuSessionExpiredException -> AccessFailure.SessionExpired(e.layer)
+        // 被校外那道 WAF 拦了：登录态没问题、网络也通，就是这条路不通 —— 换通道，别让人重登。
+        // 已经在 WebVPN 隧道里还被拦，说明隧道本身有问题，层保持门户层不变。
+        is WafBlockedException ->
+            AccessFailure.Intercepted(
+                if (layer == AccessLayer.WebVpnPortal) AccessLayer.WebVpnPortal else AccessLayer.UnifiedAuth,
+                e.host
+            )
+        // 手机自己没网：先认出来，别让用户以为是学校的服务器坏了
+        is NoNetworkException -> AccessFailure.Unreachable(layer, e, offline = true)
         is UnknownHostException, is SocketTimeoutException, is SSLException, is IOException ->
             AccessFailure.Unreachable(layer, e)
         else -> AccessFailure.Unexpected(layer, e.message)
