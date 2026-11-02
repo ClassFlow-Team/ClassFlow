@@ -24,7 +24,7 @@
 **ClassFlow** 是 [拾光课程表](https://github.com/XingHeYuZhuan/shiguangschedule) 面向 **武汉商学院（WBU）** 的定制分支：保留上游轻量、优雅的课表体验，补齐了 WBU 教务系统的一键登录同步、校园内网 / WebVPN 自动路由，以及成绩、空教室、学业进程、图书馆、一卡通等常用校园服务。
 
 - 📱 **平台**：Android 8.0（API 26）及以上，按 CPU 架构分包（arm64-v8a / armeabi-v7a / x86_64）
-- 🚀 **分发**：[Gitee Releases](https://gitee.com/hjwqa/class-flow/releases)（主要）、[GitHub](https://github.com/shiro123444/ClassFlow)（源码）
+- 🚀 **分发**：[Gitee Releases](https://gitee.com/hjwqa/class-flow/releases)（主要）、[GitHub](https://github.com/ClassFlow-Team/ClassFlow)（源码）
 - 🫶 **定位**：仅对标武汉商学院。其它学校请前往 [拾光课程表主仓库](https://github.com/XingHeYuZhuan/shiguangschedule)
 
 > ∠・ω< )⌒☆ Ciallo～
@@ -80,7 +80,9 @@
 ### 🔄 更新
 
 - **应用内自更新**：走 `PackageInstaller` 会话安装——Android 12+ 条件满足时对自身更新**静默安装**；否则拉起系统确认界面；缺少「安装未知应用」权限时引导授权并在返回后自动重试；会话异常自动回退系统安装器
-- 启动时静默检查更新（可关）、跳过指定版本、支持自定义更新源
+- 启动时静默检查更新（可关，频率可选：每次启动 / 6 小时 / 12 小时 / 24 小时 / 3 天 / 7 天）
+- 更新源自动路由：构建时配置了更新接口就走接口；没有配置则使用 GitHub Releases；仍可手动填写自定义更新源覆盖
+- **`classflow://` 自定义协议**：NFC 标签与浏览器链接不依赖域名验证，GitHub 自建包也能直接打开设备页
 
 ## 界面预览
 
@@ -97,7 +99,7 @@
 | 渠道 | 地址 | 说明 |
 | --- | --- | --- |
 | **Gitee Releases**（推荐） | <https://gitee.com/hjwqa/class-flow/releases> | 国内直连，下载 APK |
-| GitHub 仓库 | <https://github.com/shiro123444/ClassFlow> | 源码、Issue、PR |
+| GitHub 仓库 | <https://github.com/ClassFlow-Team/ClassFlow> | 源码、Issue、PR |
 
 APK 按 CPU 架构分包，请选择与自己设备匹配的版本：
 
@@ -151,14 +153,14 @@ Android 需要你手动允许「安装未知应用」：设置 → 应用 → �
 <details>
 <summary><b>教务系统改版导致同步失败怎么办？</b></summary>
 
-校园接口依赖学校系统页面结构，改版后可能需要跟进适配。请到 [Issues](https://github.com/shiro123444/ClassFlow/issues) 反馈，附上失败现象与时间。
+校园接口依赖学校系统页面结构，改版后可能需要跟进适配。请到 [Issues](https://github.com/ClassFlow-Team/ClassFlow/issues) 反馈，附上失败现象与时间。
 
 </details>
 
 <details>
 <summary><b>怎么反馈问题或提建议？</b></summary>
 
-推荐 [GitHub Issues](https://github.com/shiro123444/ClassFlow/issues)，也可以加入 QQ 用户群 **1050669511**（系列产品群：**133364402**）交流。
+推荐 [GitHub Issues](https://github.com/ClassFlow-Team/ClassFlow/issues)，也可以加入 QQ 用户群 **1050669511**（系列产品群：**133364402**）交流。
 
 </details>
 
@@ -179,26 +181,36 @@ Android 需要你手动允许「安装未知应用」：设置 → 应用 → �
 **环境要求**：JDK 21、Android SDK（`compileSdk = 37`）、Git。
 
 ```bash
-git clone https://github.com/shiro123444/ClassFlow.git
+git clone https://github.com/ClassFlow-Team/ClassFlow.git
 cd ClassFlow
 ```
 
 在项目根目录的 `local.properties`（已被 Git 忽略）中补充配置：
 
 ```properties
-# U净 NFC / DeepLink 域名：必填，缺失会直接构建失败（避免打出指向错误域名的包）
+# U净 NFC / DeepLink 域名：可选。缺失时使用 classflow.invalid 占位并输出 Gradle warning，
+# 此时 https NFC / App Links 不可用，但 classflow:// 自定义协议仍完全可用。
 CLASSFLOW_UJING_NFC_HOST=ujing.example.edu.cn
 # 可选：通用链接节点（/url/、/u/）hub 域名；缺省时回落到上面的 U净 域名
 CLASSFLOW_LINK_HUB_HOST=hub.example.com
 # 可选（仅 debug 构建生效）：通用链接节点本地联调地址，配合 `adb reverse` 用本地服务端跑通读侧
 # CLASSFLOW_LINK_HUB_DEBUG_BASE=http://127.0.0.1:8090
-# 可选：应用内更新接口地址
+# 可选：应用内更新接口地址。有值时只走该接口；留空则使用 GitHub Releases
 CLASSFLOW_UPDATE_API_URL=https://example.com/classflow/update
+# 可选：GitHub Releases 更新仓库（owner/repo），默认 ClassFlow-Team/ClassFlow
+# CLASSFLOW_GITHUB_REPO=ClassFlow-Team/ClassFlow
 # 可选：指定本机 JDK
 org.gradle.java.home=C:\\path\\to\\jdk-21
 ```
 
 同一配置也可通过 Gradle 属性（`-PCLASSFLOW_UJING_NFC_HOST=...`）或环境变量注入，优先级：Gradle 属性 > `local.properties` > 环境变量。
+
+**更新源规则**：
+
+- 用户手填自定义更新接口 → 走该接口；
+- 否则构建时提供了 `CLASSFLOW_UPDATE_API_URL` → 走官方更新接口（失败也不会静默回退 GitHub）；
+- 两者都没有 → 走 `https://api.github.com/repos/<CLASSFLOW_GITHUB_REPO>/releases`。GitHub 源只有两档：**Release**（只取正式 Release）与 **PreRelease**（包含 prerelease），再按当前 flavor 与 ABI 选择 APK。
+- GitHub API 不提供 `versionCode`，回退源按 `versionName` 比较；dev 渠道的 CI Release 目前是 draft，主要服务正式版。
 
 ```bash
 ./gradlew :app:testDevDebugUnitTest   # 单元测试
@@ -226,6 +238,40 @@ org.gradle.java.home=C:\\path\\to\\jdk-21
 `adb reverse tcp:8090 tcp:8090` 与 `CLASSFLOW_LINK_HUB_DEBUG_BASE=http://127.0.0.1:8090`
 （仅 dev 构建生效）即可跑通读侧；该配置项说明见下方 `local.properties` 注释。
 
+## `classflow://` 自定义协议（NFC / 浏览器直达）
+
+GitHub 自建包通常无法通过 https App Links 的签名验证，因此额外提供 `classflow://`：
+它不需要 `assetlinks.json`，也不依赖签名证书；正式版与 dev 版共用同一 scheme，
+两者同时安装时由系统弹出选择器（与现有 https App Links 行为一致）。
+
+路径与 https 深链完全一致：
+
+```text
+饮水机：      classflow://w/{设备码}
+洗衣机：      classflow://wm/{uuid}
+吹风机：      classflow://hd/{设备码}
+洗浴·1栋：    classflow://s/y/{机号}
+洗浴·2-3栋：  classflow://s/l/{设备号}[/{端口}]
+通用节点：    classflow://url/{code}
+短别名：      classflow://u/{code}
+内嵌载荷：    classflow://url/{code}#{payload}
+内嵌省码：    classflow://u/#{payload}
+```
+
+同时兼容三斜杠写法（`classflow:///w/{设备码}`）。
+
+- **NFC 标签**：直接写 `classflow://w/0011202004140940`，NTAG213 容量足够。
+- **网页按钮**：推荐使用 `intent://` + 未安装兜底：
+
+```html
+<a href="intent://w/CODE#Intent;scheme=classflow;package=com.shiro.classflow;S.browser_fallback_url=https://github.com/ClassFlow-Team/ClassFlow/releases/latest;end">
+  打开 ClassFlow
+</a>
+```
+
+- **安全边界**：自定义 scheme 没有所有权验证，任何 App / 网页都能调用；不要在其中携带密码、Token 等敏感信息。设备码仍走原有格式校验，通用节点仍保留确认页。
+- 没有配置 `CLASSFLOW_LINK_HUB_HOST` 的构建：设备直达与内嵌载荷可用，服务端短码会明确提示「未配置链接服务」；复制内嵌分享链接时自动使用 `classflow://`。
+
 ## 项目结构
 
 ```text
@@ -240,7 +286,7 @@ picture/             # 应用截图与图标源文件
 
 ## 贡献与反馈
 
-- 提交 Issue / PR：<https://github.com/shiro123444/ClassFlow>
+- 提交 Issue / PR：<https://github.com/ClassFlow-Team/ClassFlow>
 - 开发分支为 `dev`，提交信息遵循 [Conventional Commits](https://www.conventionalcommits.org/)（`feat:` / `fix:` / `chore:` …）
 - 与上游的差异清单见 [`CLASSFLOW_CUSTOMIZATIONS.md`](CLASSFLOW_CUSTOMIZATIONS.md)，merge 上游后请按其中的审计流程核对
 

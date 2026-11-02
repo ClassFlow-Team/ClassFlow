@@ -70,7 +70,9 @@
 ### 🔄 Updates
 
 - In-app self-update through `PackageInstaller` sessions: silent on Android 12+ when eligible, system confirmation otherwise; missing "install unknown apps" permission is requested and the update retried on return; session errors fall back to the system installer
-- Silent update check at launch (toggleable), skip a version, or point the app at your own update server
+- Silent update check at launch with a selectable interval (every launch / 6 h / 12 h / 24 h / 3 days / 7 days), skip a version, or point the app at your own update server
+- Update source routing: a build-time update endpoint wins; without one the app uses GitHub Releases; a user-entered endpoint still overrides both
+- **`classflow://` custom scheme**: NFC tags and browser links work without domain verification, including GitHub self-built APKs
 
 ## Screenshots
 
@@ -87,7 +89,7 @@
 | Channel | Link | Notes |
 | --- | --- | --- |
 | **Gitee Releases** (recommended) | <https://gitee.com/hjwqa/class-flow/releases> | Fast in mainland China |
-| GitHub | <https://github.com/shiro123444/ClassFlow> | Source, issues, pull requests |
+| GitHub | <https://github.com/ClassFlow-Team/ClassFlow> | Source, issues, pull requests |
 
 APKs are split per CPU architecture — install the one that matches your device:
 
@@ -136,7 +138,7 @@ Supported — the UI adapts to landscape and tablet sizes; emulators should inst
 <details>
 <summary><b>How do I report a problem?</b></summary>
 
-Open an [issue on GitHub](https://github.com/shiro123444/ClassFlow/issues) or join the QQ group **1050669511**.
+Open an [issue on GitHub](https://github.com/ClassFlow-Team/ClassFlow/issues) or join the QQ group **1050669511**.
 </details>
 
 ## Tech stack
@@ -156,24 +158,34 @@ Open an [issue on GitHub](https://github.com/shiro123444/ClassFlow/issues) or jo
 **Requirements:** JDK 21, Android SDK (`compileSdk = 37`), Git.
 
 ```bash
-git clone https://github.com/shiro123444/ClassFlow.git
+git clone https://github.com/ClassFlow-Team/ClassFlow.git
 cd ClassFlow
 ```
 
 Add the following to `local.properties` (already git-ignored):
 
 ```properties
-# Ujing NFC / deep-link host: required — the build fails without it
+# Ujing NFC / deep-link host: optional. When missing, `classflow.invalid` is used with a Gradle warning;
+# https NFC / App Links are unavailable, but the classflow:// scheme still works.
 CLASSFLOW_UJING_NFC_HOST=ujing.example.edu.cn
 # Optional: generic link node (/url/, /u/) hub host; falls back to the Ujing host above
 CLASSFLOW_LINK_HUB_HOST=hub.example.com
-# Optional: in-app update API endpoint
+# Optional: in-app update API endpoint. When set, only this endpoint is used; otherwise GitHub Releases
 CLASSFLOW_UPDATE_API_URL=https://example.com/classflow/update
+# Optional: GitHub Releases repository (owner/repo), defaults to ClassFlow-Team/ClassFlow
+# CLASSFLOW_GITHUB_REPO=ClassFlow-Team/ClassFlow
 # Optional: local JDK
 org.gradle.java.home=C:\\path\\to\\jdk-21
 ```
 
 The same values can be supplied as Gradle properties (`-PCLASSFLOW_UJING_NFC_HOST=...`) or environment variables; precedence is Gradle property > `local.properties` > environment variable.
+
+**Update source rules:**
+
+- A user-entered custom endpoint wins;
+- otherwise a build-time `CLASSFLOW_UPDATE_API_URL` is used (no silent GitHub fallback on failure);
+- if neither exists, `https://api.github.com/repos/<CLASSFLOW_GITHUB_REPO>/releases` is queried. The GitHub source has only two tiers: **Release** (normal releases only) and **PreRelease** (includes pre-releases), then filtered by flavor and device ABI.
+- GitHub has no `versionCode`, so the fallback compares `versionName`; dev CI releases are currently drafts and the fallback mainly serves production builds.
 
 ```bash
 ./gradlew :app:testDevDebugUnitTest   # unit tests
@@ -184,9 +196,47 @@ The same values can be supplied as Gradle properties (`-PCLASSFLOW_UJING_NFC_HOS
 - Release signing is injected via `-Pandroid.injected.signing.*`; local release builds fall back to the debug key and are for testing only
 - CI: [`android-build.yml`](.github/workflows/android-build.yml) (manual build + signing) and [`android-release.yml`](.github/workflows/android-release.yml) (publishes a release from a build artifact)
 
+## `classflow://` custom scheme (NFC / browser)
+
+GitHub self-built APKs usually cannot pass the signature check for https App Links, so ClassFlow also
+registers `classflow://`. It needs no `assetlinks.json` and does not depend on the signing certificate.
+The prod and dev flavors share the same scheme; if both are installed, Android shows a chooser
+(the same behaviour as the existing https App Links).
+
+Paths mirror the https deep links:
+
+```text
+Water dispenser:   classflow://w/{device code}
+Washer:            classflow://wm/{uuid}
+Hairdryer:         classflow://hd/{device code}
+Shower (bldg 1):   classflow://s/y/{machine}
+Shower (bldg 2-3): classflow://s/l/{device code}[/{port}]
+Generic node:      classflow://url/{code}
+Short alias:       classflow://u/{code}
+Inline payload:    classflow://url/{code}#{payload}
+Inline, no code:   classflow://u/#{payload}
+```
+
+The triple-slash form is also accepted (`classflow:///w/{device code}`).
+
+- **NFC tags**: write the URI directly, e.g. `classflow://w/0011202004140940`; an NTAG213 is enough.
+- **Web buttons**: prefer `intent://` with a fallback when the app is not installed:
+
+```html
+<a href="intent://w/CODE#Intent;scheme=classflow;package=com.shiro.classflow;S.browser_fallback_url=https://github.com/ClassFlow-Team/ClassFlow/releases/latest;end">
+  Open ClassFlow
+</a>
+```
+
+- **Security**: a custom scheme has no ownership verification, so any app or web page can invoke it.
+  Never put passwords or tokens in the URL. Device codes keep their existing validation, and generic
+  nodes still require user confirmation.
+- Builds without `CLASSFLOW_LINK_HUB_HOST`: device routes and inline payloads work; server short codes
+  show a clear "no link service configured" error, and copying an inline share link uses `classflow://`.
+
 ## Contributing
 
-Issues and pull requests are welcome at <https://github.com/shiro123444/ClassFlow>. Development happens on the `dev` branch, and commit messages follow [Conventional Commits](https://www.conventionalcommits.org/). The intentional differences from upstream are documented in [`CLASSFLOW_CUSTOMIZATIONS.md`](CLASSFLOW_CUSTOMIZATIONS.md).
+Issues and pull requests are welcome at <https://github.com/ClassFlow-Team/ClassFlow>. Development happens on the `dev` branch, and commit messages follow [Conventional Commits](https://www.conventionalcommits.org/). The intentional differences from upstream are documented in [`CLASSFLOW_CUSTOMIZATIONS.md`](CLASSFLOW_CUSTOMIZATIONS.md).
 
 ## Disclaimer
 

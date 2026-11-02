@@ -142,7 +142,7 @@ fun OpenSourceLicensesScreen(navBridge: NavBridge) {
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "github.com/shiro123444/ClassFlow",
+                        text = "github.com/ClassFlow-Team/ClassFlow",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
