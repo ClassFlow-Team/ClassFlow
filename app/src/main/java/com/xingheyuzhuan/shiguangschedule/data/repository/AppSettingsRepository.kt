@@ -9,6 +9,7 @@ import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfigDao
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableDao
 import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
 import com.xingheyuzhuan.shiguangschedule.data.model.AutoControlMode
+import com.xingheyuzhuan.shiguangschedule.data.model.UpdateCheckInterval
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -102,6 +103,7 @@ class AppSettingsRepository @Inject constructor(
             prefs[AppSettingsModel.KEY_IGNORED_UPDATE_VERSION] = newSettings.ignoredUpdateVersion
             prefs[AppSettingsModel.KEY_CUSTOM_UPDATE_API_URL] = newSettings.customUpdateApiUrl
             prefs[AppSettingsModel.KEY_UPDATE_CHANNEL] = newSettings.updateChannel
+            prefs[AppSettingsModel.KEY_UPDATE_CHECK_INTERVAL] = newSettings.updateCheckInterval.id
         }
     }
 
@@ -129,6 +131,15 @@ class AppSettingsRepository @Inject constructor(
     suspend fun updateAutoCheckUpdate(enabled: Boolean) {
         dataStore.edit { prefs ->
             prefs[AppSettingsModel.KEY_AUTO_CHECK_UPDATE] = enabled
+        }
+    }
+
+    /**
+     * 更新启动时自动检查更新的冷却间隔。
+     */
+    suspend fun updateUpdateCheckInterval(interval: UpdateCheckInterval) {
+        dataStore.edit { prefs ->
+            prefs[AppSettingsModel.KEY_UPDATE_CHECK_INTERVAL] = interval.id
         }
     }
 

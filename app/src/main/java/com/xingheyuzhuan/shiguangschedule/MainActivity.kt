@@ -581,26 +581,29 @@ fun AppNavigation(
         delay(1500)
         val settings = appSettingsRepository.getAppSettingsOnce()
         if (!settings.autoCheckUpdate) return@LaunchedEffect
-        val effectiveApiUrl = settings.customUpdateApiUrl.ifBlank { BuildConfig.UPDATE_API_URL }.trim()
-        if (effectiveApiUrl.isBlank()) return@LaunchedEffect
 
+        // 冷却间隔：0 表示每次启动都检查；不再因为「没有更新接口」而跳过 GitHub 源
         val now = System.currentTimeMillis()
-        val checkIntervalMs = 24 * 60 * 60 * 1000L
-        if (now - settings.lastCheckUpdateTime < checkIntervalMs) return@LaunchedEffect
+        val checkIntervalMs = settings.updateCheckInterval.millis
+        if (checkIntervalMs > 0 && now - settings.lastCheckUpdateTime < checkIntervalMs) {
+            return@LaunchedEffect
+        }
 
         val status = updateChecker.checkUpdate(
-            customApiUrl = effectiveApiUrl,
+            customApiUrl = settings.customUpdateApiUrl,
             channel = settings.updateChannel
         )
+
+        // Found 也记录冷却：用户点「稍后」后不应每次启动都弹窗
+        if (status is UpdateStatus.Found || status is UpdateStatus.Latest) {
+            appSettingsRepository.updateLastCheckUpdateTime(now)
+        }
 
         if (status is UpdateStatus.Found) {
             // 发现新版本：若未被用户明确标记跳过，则弹出更新提示
             if (status.info.latestVersionName != settings.ignoredUpdateVersion) {
                 autoUpdateFoundInfo = status.info
             }
-        } else if (status is UpdateStatus.Latest) {
-            // 只有在已是最新版本时，才记录24小时冷却，避免频繁请求
-            appSettingsRepository.updateLastCheckUpdateTime(now)
         }
     }
 

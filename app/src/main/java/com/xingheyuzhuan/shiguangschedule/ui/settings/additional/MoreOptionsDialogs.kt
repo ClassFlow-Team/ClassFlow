@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.model.StartScreen
 import com.xingheyuzhuan.shiguangschedule.data.model.UpdateChannelType
+import com.xingheyuzhuan.shiguangschedule.data.model.UpdateCheckInterval
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateChecker.Companion.UPDATE_CHANNELS
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateStatus
 
@@ -100,6 +101,95 @@ fun UpdateChannelDialog(
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                         leadingContent = {
                             RadioButton(selected = isSelected, onClick = null)
+                        }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+/**
+ * 自动检查更新频率选择弹窗。
+ */
+@Composable
+fun UpdateCheckIntervalDialog(
+    showDialog: Boolean,
+    currentInterval: UpdateCheckInterval,
+    onDismiss: () -> Unit,
+    onSelectInterval: (UpdateCheckInterval) -> Unit
+) {
+    if (!showDialog) return
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.dialog_update_check_frequency)) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                UpdateCheckInterval.entries.forEach { interval ->
+                    ListItem(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelectInterval(interval) },
+                        headlineContent = { Text(text = stringResource(interval.labelRes)) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        leadingContent = {
+                            RadioButton(selected = interval == currentInterval, onClick = null)
+                        }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+/**
+ * GitHub 更新渠道选择弹窗。
+ *
+ * GitHub 源只分两档：Release（正式 Release）与 PreRelease（含 prerelease）。
+ */
+@Composable
+fun GitHubUpdateChannelDialog(
+    showDialog: Boolean,
+    isPrerelease: Boolean,
+    onDismiss: () -> Unit,
+    onSelectChannel: (prerelease: Boolean) -> Unit
+) {
+    if (!showDialog) return
+
+    val options = listOf(
+        Triple(false, R.string.channel_github_release_title, R.string.channel_github_release_desc),
+        Triple(true, R.string.channel_github_prerelease_title, R.string.channel_github_prerelease_desc)
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.dialog_select_github_update_channel)) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                options.forEach { (prerelease, titleRes, descRes) ->
+                    ListItem(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onSelectChannel(prerelease)
+                                onDismiss()
+                            },
+                        headlineContent = { Text(text = stringResource(titleRes)) },
+                        supportingContent = { Text(text = stringResource(descRes)) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        leadingContent = {
+                            RadioButton(selected = isPrerelease == prerelease, onClick = null)
                         }
                     )
                 }

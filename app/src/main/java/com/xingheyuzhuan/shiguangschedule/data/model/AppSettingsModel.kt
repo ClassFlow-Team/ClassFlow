@@ -73,6 +73,33 @@ enum class UpdateChannelType(
 }
 
 /**
+ * 自动检查更新的启动冷却间隔。
+ *
+ * 语义是“距离上次检查超过该时长后才在启动时自动检查”，不是后台定时任务。
+ */
+enum class UpdateCheckInterval(
+    val id: String,
+    val hours: Int,
+    val labelRes: Int
+) {
+    /** 每次启动都检查 */
+    EVERY_LAUNCH("every_launch", 0, R.string.interval_every_launch),
+    EVERY_6_HOURS("6h", 6, R.string.interval_6_hours),
+    EVERY_12_HOURS("12h", 12, R.string.interval_12_hours),
+    DAILY("24h", 24, R.string.interval_24_hours),
+    EVERY_3_DAYS("3d", 72, R.string.interval_3_days),
+    EVERY_7_DAYS("7d", 168, R.string.interval_7_days);
+
+    /** 0 表示不设冷却。 */
+    val millis: Long get() = hours * 60L * 60L * 1000L
+
+    companion object {
+        fun fromId(id: String?): UpdateCheckInterval =
+            entries.find { it.id == id } ?: DAILY
+    }
+}
+
+/**
  * 应用主题模式枚举
  */
 enum class AppThemeMode(val value: String, val labelRes: Int) {
@@ -161,6 +188,9 @@ data class AppSettingsModel(
 
     /** 当前选择的更新渠道（默认 "stable"） */
     val updateChannel: String = UpdateChannelType.STABLE.channelId,
+
+    /** 启动时自动检查更新的冷却间隔（默认 24 小时） */
+    val updateCheckInterval: UpdateCheckInterval = UpdateCheckInterval.DAILY,
 ) {
     /**
      * 将 DataStore 的 Key 定义在伴生对象中。
@@ -187,6 +217,7 @@ data class AppSettingsModel(
         val KEY_IGNORED_UPDATE_VERSION = stringPreferencesKey("ignored_update_version")
         val KEY_CUSTOM_UPDATE_API_URL = stringPreferencesKey("custom_update_api_url")
         val KEY_UPDATE_CHANNEL = stringPreferencesKey("update_channel")
+        val KEY_UPDATE_CHECK_INTERVAL = stringPreferencesKey("update_check_interval")
 
         /**
          * 从 Preferences 中解析出 AppSettingsModel
@@ -213,6 +244,8 @@ data class AppSettingsModel(
                 ignoredUpdateVersion = prefs[KEY_IGNORED_UPDATE_VERSION] ?: d.ignoredUpdateVersion,
                 customUpdateApiUrl = prefs[KEY_CUSTOM_UPDATE_API_URL] ?: d.customUpdateApiUrl,
                 updateChannel = prefs[KEY_UPDATE_CHANNEL] ?: d.updateChannel,
+                updateCheckInterval = prefs[KEY_UPDATE_CHECK_INTERVAL]
+                    ?.let { UpdateCheckInterval.fromId(it) } ?: d.updateCheckInterval,
             )
         }
     }
