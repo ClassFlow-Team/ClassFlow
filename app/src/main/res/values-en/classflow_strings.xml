@@ -508,6 +508,17 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="item_library_seat">Library Seat Booking</string>
     <string name="desc_library_seat">Seat booking, floor plans, check-ins and live status</string>
     <string name="title_library_seat">Library Seat Booking</string>
+
+    <!-- Mobile portal (ydmh): one entry point for campus services -->
+    <string name="item_mobile_portal">Mobile Portal</string>
+    <string name="desc_mobile_portal">One entry point for campus services and business systems</string>
+    <string name="wechat_auth_title">WeChat authorisation required</string>
+    <string name="wechat_auth_message">This app has to be authorised inside WeChat, and ClassFlow cannot do that step for you. Copy the link and open it in WeChat instead.</string>
+    <string name="wechat_auth_target_host">Target site: %1$s</string>
+    <string name="wechat_auth_copy">Copy link</string>
+    <string name="wechat_auth_copied">Link copied — open it in WeChat</string>
+    <string name="wechat_auth_back">Back</string>
+
     <string name="status_fetching_webapp_token">Fetching unified authentication token...</string>
     <string name="title_load_failed">Page Load Failed</string>
     <string name="action_exit">Exit</string>
@@ -738,6 +749,9 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="shortcut_short_campus_card">Campus Card</string>
     <string name="item_qr_scan">Scan QR code</string>
     <string name="desc_qr_scan">Scan the unified-auth login QR code to confirm sign-in on your computer</string>
+    <string name="item_network_diagnostics">Copy network diagnostics</string>
+    <string name="desc_network_diagnostics">Records the peer IP and status code of recent campus requests to tell on-campus direct access from off-campus gateway access</string>
+    <string name="toast_diagnostics_copied">Network diagnostics copied</string>
     <string name="title_qr_scan">Scan</string>
     <string name="a11y_qr_scan_photo">Read a QR code from an image</string>
     <string name="qr_scan_photo_no_code">No QR code found in the image — try another one, or scan the code directly</string>

@@ -1,13 +1,19 @@
 package com.xingheyuzhuan.shiguangschedule.ui.webapp
 
 import android.app.Application
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.view.ViewGroup
+import android.webkit.WebStorage
+import android.webkit.WebView
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.model.wbu.WebAppCatalog
 import com.xingheyuzhuan.shiguangschedule.data.model.wbu.WebAppDefinition
 import com.xingheyuzhuan.shiguangschedule.data.model.wbu.WebAppId
+import com.xingheyuzhuan.shiguangschedule.data.model.wbu.WebAppLaunchMode
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.AccessFailure
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuAuthTransport
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuCampusCardClient
@@ -21,6 +27,7 @@ import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WebVpnClient
 import com.xingheyuzhuan.shiguangschedule.ui.components.accessFailureText
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.resolveCampusUseVpn
 import com.xingheyuzhuan.shiguangschedule.ui.components.silentUnifiedAuthLogin
+import com.xingheyuzhuan.shiguangschedule.ui.components.userFacingMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,13 +52,27 @@ sealed class WebAppStage {
     /** Token 已成功就绪，WebView 正在全屏渲染目标页面。 */
     data class ContentReady(
         val url: String,
-        val token: String,
+        /** 平台令牌（一卡通 / 图书馆座位预约用）；门户类应用只换票据不换令牌，因此为 null。 */
+        val token: String?,
         val useVpn: Boolean
     ) : WebAppStage()
 
     /** 遇到错误。 */
     data class Error(val message: String) : WebAppStage()
 }
+
+/**
+ * 「需要微信授权」统一页的入参。
+ *
+ * 门户里有些目标只在微信客户端里走得通（微信自己的授权页在 App 里就是一个报错页），
+ * 客户端代替不了这一步 —— 于是盖一层统一页，把「复制链接 + 返回」交给用户。
+ */
+data class WechatGate(
+    /** 被拦下来的地址（微信自己的授权页 / 企业微信中转）。 */
+    val blockedUrl: String,
+    /** 「复制链接」复制的内容（优先级见 [WebAppWechat.pickCopyUrl]）。 */
+    val copyUrl: String
+)
 
 data class WebAppUiState(
     val stage: WebAppStage = WebAppStage.ProbingNetwork,
@@ -60,7 +81,11 @@ data class WebAppUiState(
     val needLogin: Boolean = false,
     val requireVpnForLogin: Boolean = false,
     val temporaryUseVpn: Boolean = false,
-    val isRetrying: Boolean = false
+    val isRetrying: Boolean = false,
+    /** 非空时容器上盖一层「需要微信授权」统一页；返回键优先关它（不退出容器）。 */
+    val wechatGate: WechatGate? = null,
+    /** CAS 票据桥刚换到的落地地址（一次性：WebView 加载后立即清空）。 */
+    val casBridgeUrl: String? = null
 )
 
 class WebAppViewModel(application: Application) : AndroidViewModel(application) {
@@ -74,6 +99,22 @@ class WebAppViewModel(application: Application) : AndroidViewModel(application) 
 
     private var currentAppId: String? = null
     private var overrideTargetUrl: String? = null
+
+    /** 一卡通平台应用编码（旧一卡通链接改道时带进来），见 [WbuCampusCardClient.resolveDeepLink]。 */
+    private var campusCardAppCode: String? = null
+
+    /** 平台应用深链的固定兜底（应用表拿不到时用），见 [CampusCardLegacyLink.PlatformApp.deepLinkFallback]。 */
+    private var campusCardDeepLinkFallback: String? = null
+
+    /**
+     * 票据桥最近一次换票的目标与**连续**次数。
+     *
+     * 同一目标连着换票还被踢回登录页，说明业务端根本不认我们换来的票（配置对不上 / 服务端拒绝），
+     * 再换下去就是「加载 → 跳 CAS → 再换 → 再加载」的死循环；到第 3 次就放弃桥接、
+     * 交回既有自救（静默登录 → 登录面板）。
+     */
+    private var lastBridgeService: String? = null
+    private var lastBridgeRepeats = 0
 
     /** 本次流程上一次静默登录的失败原因（null = 成功或还没试过）。 */
     private var lastSilentLoginFailure: AccessFailure? = null
@@ -99,14 +140,26 @@ class WebAppViewModel(application: Application) : AndroidViewModel(application) 
      * 1. 寻找配置定义；
      * 2. 检查 WebVPN 与校园网；
      * 3. 决定网络策略；
-     * 4. 换取 Token 并打开。
+     * 4. 换取 Token（或票据）并打开。
+     *
+     * @param campusCardAppCode 一卡通平台应用编码（旧一卡通链接改道时带进来）：进平台后直接落到该应用页；
+     * @param campusCardDeepLinkFallback 应用表解析不出来时的固定深链兜底。
      */
-    fun start(appId: String, initialTargetUrl: String? = null) {
+    fun start(
+        appId: String,
+        initialTargetUrl: String? = null,
+        campusCardAppCode: String? = null,
+        campusCardDeepLinkFallback: String? = null
+    ) {
         currentAppId = appId
         overrideTargetUrl = initialTargetUrl
+        this.campusCardAppCode = campusCardAppCode
+        this.campusCardDeepLinkFallback = campusCardDeepLinkFallback
         silentLoginAttempted = false
         lastSilentLoginFailure = null
         webRecoveryAttempted = false
+        lastBridgeService = null
+        lastBridgeRepeats = 0
         val def = WebAppCatalog.findByIdString(appId)
         if (def == null) {
             _uiState.update { it.copy(stage = WebAppStage.Error(getApplication<Application>().getString(R.string.err_unknown_web_app, appId))) }
@@ -309,13 +362,31 @@ class WebAppViewModel(application: Application) : AndroidViewModel(application) 
                 if (def.id == WebAppId.CAMPUS_CARD) {
                     val cardClient = WbuCampusCardClient(app, useVpn = false)
                     val token = cardClient.ensureValidAccessToken()
-                    val launchUrl = overrideTargetUrl ?: cardClient.buildLaunchUrl(token)
+                    val launchUrl = resolveCampusCardLaunchUrl(cardClient, token)
                     _uiState.update {
                         it.copy(
                             stage = WebAppStage.ContentReady(
                                 url = launchUrl,
                                 token = token,
                                 useVpn = false
+                            ),
+                            needLogin = false
+                        )
+                    }
+                    return@launch
+                }
+
+                // 门户类（移动门户）：只换票据、不在客户端核销 —— 票据交给 WebView，
+                // 由门户自己核销并下发 SESSION 会话（见 WebAppLaunchMode.CAS_SERVICE_TICKET）
+                if (def.launchMode == WebAppLaunchMode.CAS_SERVICE_TICKET) {
+                    val client = WbuWebAppClient(app, useVpn = useVpn)
+                    val ticketUrl = client.fetchCasServiceTicketUrl(def)
+                    _uiState.update {
+                        it.copy(
+                            stage = WebAppStage.ContentReady(
+                                url = ticketUrl,
+                                token = null,
+                                useVpn = useVpn
                             ),
                             needLogin = false
                         )
@@ -358,14 +429,33 @@ class WebAppViewModel(application: Application) : AndroidViewModel(application) 
                     }
                     settleSilentLoginFailure(failure, requireVpnForLogin = useVpn)
                 } else {
+                    val app = getApplication<Application>()
                     _uiState.update {
                         it.copy(
-                            stage = WebAppStage.Error(e.localizedMessage ?: getApplication<Application>().getString(R.string.err_load_page_credential_failed))
+                            stage = WebAppStage.Error(userFacingMessage(app, e) ?: app.getString(R.string.err_load_page_credential_failed))
                         )
                     }
                 }
             }
         }
+    }
+
+    /**
+     * 一卡通进容器时要落的地址，优先级：
+     * 外部深链（[overrideTargetUrl]，如 U净 / 洗浴直达）→ 平台应用深链（旧链接改道带进来的）
+     * → 固定深链兜底 → 平台首页。
+     *
+     * 平台应用深链按 `appCode` 运行时解析（学校改配置也不失效），拿不到应用表才用写死的兜底。
+     */
+    private suspend fun resolveCampusCardLaunchUrl(client: WbuCampusCardClient, token: String): String {
+        overrideTargetUrl?.let { return it }
+        campusCardAppCode?.takeIf { it.isNotBlank() }?.let { code ->
+            client.resolveDeepLink(token, code)?.let { return it }
+        }
+        campusCardDeepLinkFallback?.takeIf { it.isNotBlank() }?.let { fallback ->
+            return client.buildDeepLinkUrl(token, fallback)
+        }
+        return client.buildLaunchUrl(token)
     }
 
     /**
@@ -486,6 +576,82 @@ class WebAppViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
+     * 拦到了「需要微信授权」的目标：盖统一页（提示 + 复制链接 + 返回）。
+     *
+     * @param blockedUrl 被拦下来的地址（微信授权页 / 企业微信中转）；
+     * @param pageUrl 拦下来时页面上正停留的那一页 —— 复制内容优先用它（见 [WebAppWechat.pickCopyUrl]）。
+     */
+    fun onWechatBlocked(blockedUrl: String, pageUrl: String?) {
+        val copyUrl = WebAppWechat.pickCopyUrl(pageUrl, blockedUrl)
+        Log.i(TAG, "拦到需要微信授权的目标，改弹统一页：blocked=$blockedUrl copy=$copyUrl")
+        _uiState.update { it.copy(wechatGate = WechatGate(blockedUrl = blockedUrl, copyUrl = copyUrl)) }
+    }
+
+    /** 关掉「需要微信授权」统一页（返回按钮 / 返回键；WebView 的历史回退由容器做）。 */
+    fun dismissWechatGate() {
+        _uiState.update { it.copy(wechatGate = null) }
+    }
+
+    /**
+     * CAS 票据桥：用本机 `CASTGC` 给 [serviceUrl] 换一张票据，把 CAS 回跳地址交给 WebView 加载。
+     *
+     * 门户里的应用（ehall / 新生入馆教育 …）自己跳统一认证登录页是**正常流程** ——
+     * 它们要的是「一张能证明身份的票据」，不是「让用户再登录一次」，
+     * 所以这里就地换票，用户完全无感（见 [WebAppDefinition.casTicketBridge]）。
+     *
+     * @param blockedUrl 非空表示这次拦截来自「企业微信中转」（`weixinQYLogin.do?success=…`）：
+     *        换票失败时不弹登录面板，而是回落到微信统一页 —— 那条链接复制到微信里仍然走得通。
+     */
+    fun requestCasTicket(serviceUrl: String, blockedUrl: String? = null) {
+        val def = _uiState.value.definition ?: return
+        if (serviceUrl.isBlank()) {
+            onWebAuthRedirect(null)
+            return
+        }
+
+        // 同一目标连续换票 > 2 次：业务端不认这份票，别再成环（见 [lastBridgeRepeats]）
+        if (serviceUrl == lastBridgeService) {
+            lastBridgeRepeats++
+        } else {
+            lastBridgeService = serviceUrl
+            lastBridgeRepeats = 1
+        }
+        if (lastBridgeRepeats > 2) {
+            Log.w(TAG, "票据桥同一目标已连续换票 $lastBridgeRepeats 次，放弃桥接：$serviceUrl")
+            if (blockedUrl != null) onWechatBlocked(blockedUrl, null) else onWebAuthRedirect(null)
+            return
+        }
+
+        viewModelScope.launch {
+            val useVpn = _uiState.value.temporaryUseVpn || _uiState.value.requireVpnForLogin
+            val landing = runCatching {
+                // 跨站目标（ehall / zxst …）不做 WebVPN 宿主改写：它们不在本应用的代理范围内，
+                // 按现状原样加载（见实施计划 §7 风险表）
+                WbuWebAppClient(getApplication(), useVpn = useVpn)
+                    .resolveCasServiceRedirect(serviceUrl, proxyHostOf = null)
+            }.onFailure {
+                Log.w(TAG, "CAS 票据桥换票失败：service=$serviceUrl", it)
+            }.getOrNull()
+
+            if (!landing.isNullOrBlank()) {
+                Log.i(TAG, "CAS 票据桥换到落地地址，交给 WebView：$landing")
+                _uiState.update { it.copy(casBridgeUrl = landing, needLogin = false) }
+                return@launch
+            }
+            if (blockedUrl != null) {
+                onWechatBlocked(blockedUrl, null)
+            } else {
+                onWebAuthRedirect(null)
+            }
+        }
+    }
+
+    /** 票据桥的落地地址已经被 WebView 加载，清掉这份一次性的状态。 */
+    fun onCasBridgeUrlConsumed() {
+        _uiState.update { it.copy(casBridgeUrl = null) }
+    }
+
+    /**
      * 一卡通自救：换一份新的平台令牌，重新加载平台页。
      *
      * 顺序与进容器时一致：`access_token` → `refresh_token`（两者都不顶号、都不需要用户在场）
@@ -538,11 +704,11 @@ class WebAppViewModel(application: Application) : AndroidViewModel(application) 
         CardTokenResult.NeedsUnifiedAuth
     } catch (e: Exception) {
         Log.w(TAG, "换一卡通令牌失败", e)
+        val app = getApplication<Application>()
         _uiState.update {
             it.copy(
                 stage = WebAppStage.Error(
-                    e.localizedMessage
-                        ?: getApplication<Application>().getString(R.string.err_load_page_credential_failed)
+                    userFacingMessage(app, e) ?: app.getString(R.string.err_load_page_credential_failed)
                 )
             )
         }
@@ -587,11 +753,124 @@ class WebAppViewModel(application: Application) : AndroidViewModel(application) 
         silentLoginAttempted = false
         lastSilentLoginFailure = null
         webRecoveryAttempted = false
+        lastBridgeService = null
+        lastBridgeRepeats = 0
         val def = _uiState.value.definition
         if (def != null) {
             evaluateNetworkAndProceed(def)
         } else {
             currentAppId?.let { start(it) }
+        }
+    }
+
+    // ── WebView 会话：容器被别的页面盖住时，把这一页原样留住 ──
+
+    /** 当前导航条目手里的 WebView，见 [reusableSessionWebView]。 */
+    private var sessionWebView: WebView? = null
+
+    /** 本轮流程要落的地址已经换了（探测 / 换票 / 重新登录 / 自救 / 重试）：上一轮的会话作废。 */
+    private var sessionInvalidated = false
+
+    init {
+        // 容器只要离开过「内容就绪」，就说明这一轮要落的地址是新的（重探网络、重新换票、重新登录、
+        // 一卡通自救、重试……），旧 WebView 上的页面作废。
+        //
+        // 这件事放在 VM 里盯着自己的状态流做，而不是让 Compose 侧去观察 `stage`：阶段是连跳的
+        // （LoadingToken → ContentReady 之间只隔着一次网络往返），而 Compose 收集状态时会把
+        // 一帧内的中间态合并掉 —— 那样「离开过 ContentReady」就有可能被漏掉，页面于是停在旧地址上。
+        viewModelScope.launch {
+            uiState.collect { state ->
+                if (state.stage !is WebAppStage.ContentReady) invalidateSession()
+            }
+        }
+    }
+
+    /**
+     * 本次导航条目是否已经有一份活着、能直接挂回容器的 WebView 会话。
+     *
+     * true 表示容器只是被别的页面盖住过（门户里点开「一卡通充值」，压进来的是原生页或一卡通平台），
+     * 此时**不要**再走一遍 [start]：页面本身、选项卡位置、滚动位置全在 WebView 手里。
+     */
+    fun hasLiveSession(appId: String): Boolean =
+        currentAppId == appId && reusableSessionWebView() != null
+
+    /**
+     * 可复用的 WebView 会话（没有则返回 null，由容器新建后交回 [holdSessionWebView]）。
+     *
+     * 为什么必须留着同一个 WebView：门户这类单页应用把「当前在哪个选项卡、滚到哪儿、页内拿到了哪些
+     * 数据」都存在自己的 JS 内存里，换一个 WebView（哪怕地址一样）都会重新加载、回到首页顶部。
+     *
+     * 生命周期借的是**导航条目**：Nav3 给每个条目一份 ViewModelStore，条目被别的页面压住时留着，
+     * 真正从回退栈弹出时才清（见 [onCleared]）—— 正是「同一个条目来回切」这个窗口。
+     */
+    fun reusableSessionWebView(): WebView? = sessionWebView?.takeIf { !sessionInvalidated }
+
+    /** 容器新建好的 WebView 交回来持有；上一份如果已经作废，顺手销毁它。 */
+    fun holdSessionWebView(webView: WebView) {
+        val stale = sessionWebView?.takeIf { it !== webView }
+        sessionWebView = webView
+        sessionInvalidated = false
+        stale?.let(::destroyWebView)
+    }
+
+    // ── 网页定位桥：http 站点拿不到浏览器定位，由容器自己取位置交给页面 ──
+
+    /** 定位桥（见 [WebAppGeolocationController]），惰性创建。 */
+    private var geolocationController: WebAppGeolocationController? = null
+
+    /**
+     * 取本条目共用的定位桥。
+     *
+     * 必须与会话 WebView 同寿：`addJavascriptInterface` 的注册挂在 **WebView 对象**上，
+     * 页面里的接管脚本一旦装上，后续定位请求就只会打到当初注册的那个对象。容器被别的页面
+     * 盖住再挂回来时如果换了新桥，页面就会打到一只已经放手的桥上（表现为「拿不到位置」）。
+     */
+    internal fun geolocationController(): WebAppGeolocationController =
+        geolocationController ?: WebAppGeolocationController(
+            getApplication(),
+            Handler(Looper.getMainLooper())
+        ).also { geolocationController = it }
+
+    /**
+     * 作废当前会话。
+     *
+     * 只打标记、不当场销毁：这一刻 WebView 可能还挂在正在退场的容器上（销毁正在使用的 WebView
+     * 会出问题），真正的销毁交给新会话接手时或条目弹出时。
+     */
+    fun invalidateSession() {
+        if (sessionWebView != null) sessionInvalidated = true
+    }
+
+    override fun onCleared() {
+        sessionWebView?.let { webView ->
+            sessionWebView = null
+            destroyWebView(webView)
+        }
+        super.onCleared()
+    }
+
+    /**
+     * 销毁 WebView 并清掉它留下的一切（缓存、历史、WebStorage）。
+     *
+     * 与 WebView 打交道只能在主线程：`onCleared` 由导航弹栈触发（主线程），保险起见兜一层。
+     */
+    private fun destroyWebView(webView: WebView) {
+        val teardown = Runnable {
+            // 可能还挂在旧容器上，先摘下来再销毁
+            runCatching { (webView.parent as? ViewGroup)?.removeView(webView) }
+            runCatching {
+                webView.stopLoading()
+                webView.clearCache(true)
+                webView.clearHistory()
+                WebStorage.getInstance().deleteAllData()
+                webView.removeAllViews()
+                webView.destroy()
+            }.onFailure { Log.w(TAG, "清理 WebView 资源失败", it) }
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            teardown.run()
+        } else {
+            Handler(Looper.getMainLooper()).post(teardown)
         }
     }
 }

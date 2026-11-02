@@ -508,6 +508,17 @@
     <string name="item_library_seat">圖書館座位預約</string>
     <string name="desc_library_seat">在線座位預約、樓層選座、簽到與使用狀態</string>
     <string name="title_library_seat">圖書館座位預約</string>
+
+    <!-- 行動入口（ydmh）：校內辦事與各業務系統的聚合入口 -->
+    <string name="item_mobile_portal">行動入口</string>
+    <string name="desc_mobile_portal">校內辦事與各業務系統的統一入口</string>
+    <string name="wechat_auth_title">需要微信授權</string>
+    <string name="wechat_auth_message">此應用需要在微信裡完成授權，ClassFlow 無法代替微信完成這一步。可以先複製連結，再到微信中開啟。</string>
+    <string name="wechat_auth_target_host">目標站點：%1$s</string>
+    <string name="wechat_auth_copy">複製連結</string>
+    <string name="wechat_auth_copied">已複製連結，可在微信中開啟</string>
+    <string name="wechat_auth_back">返回</string>
+
     <string name="status_fetching_webapp_token">正在獲取統一身分認證訪問憑證...</string>
     <string name="title_load_failed">頁面載入失敗</string>
     <string name="action_exit">退出</string>
@@ -738,6 +749,9 @@
     <string name="shortcut_short_campus_card">一卡通</string>
     <string name="item_qr_scan">掃一掃</string>
     <string name="desc_qr_scan">掃描統一認證登入二維碼，確認電腦端登入</string>
+    <string name="item_network_diagnostics">複製網路診斷</string>
+    <string name="desc_network_diagnostics">記錄最近校園請求的對端 IP 與狀態碼，排查「校內直連 / 校外過閘道」用</string>
+    <string name="toast_diagnostics_copied">網路診斷已複製</string>
     <string name="title_qr_scan">掃一掃</string>
     <string name="a11y_qr_scan_photo">從圖片中辨識二維碼</string>
     <string name="qr_scan_photo_no_code">圖片裡沒找到二維碼，換一張或直接對著二維碼掃描</string>

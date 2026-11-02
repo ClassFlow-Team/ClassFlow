@@ -988,7 +988,9 @@ fun AppNavigation(
                                 appId = destination.appId,
                                 initialTargetUrl = destination.initialTargetUrl,
                                 pendingAutoScan = destination.pendingAutoScan,
-                                pendingHashRoute = destination.pendingHashRoute
+                                pendingHashRoute = destination.pendingHashRoute,
+                                campusCardAppCode = destination.campusCardAppCode,
+                                campusCardDeepLinkFallback = destination.campusCardDeepLinkFallback
                             )
 
                             is Destination.UjingWater -> com.xingheyuzhuan.shiguangschedule.ui.campus.ujing.UjingWaterScreen(

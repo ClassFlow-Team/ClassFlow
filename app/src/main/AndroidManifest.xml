@@ -19,6 +19,15 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <!--
+        网页应用里的定位（签到助手 / 查寝 / 打卡 …）：
+        门户里的业务系统跑在 http:// 上，Chromium 对非安全源**硬拒绝** navigator.geolocation
+        （Only secure origins are allowed，且发生在权限判定之前），只能由容器自己取位置再交给页面，
+        详见 ui/webapp/WebAppGeolocation.kt。
+        两个都要：COARSE 走网络定位（快），FINE 才可能拿到 GPS（准）；只在页面真要定位时才申请。
+    -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.NFC" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
 
