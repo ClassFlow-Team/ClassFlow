@@ -32,6 +32,16 @@ git diff 3eb39c2 --stat -- app/src/main/java app/src/main/res | sort -t'|' -k2 -
   清单里出现这些路径时按原路径理解；下文 §5 等章节里 `data/network/wbu/` 之类的路径
   一律指 `com/shiro/classflow/` 下的同名子路径。
 
+> **例外：`MainActivity.kt` 是唯一被搬进 `com/shiro/classflow/` 的上游文件。**
+> 该文件 1395 行，与上游同步点差异 +1408/−116，主体早已是 ClassFlow 代码，
+> 只是顶着上游的包名；而且它是每次 `adb shell am start` 都要打交道的组件。
+> 它仍是 `MainActivity` 类名（只换包），所以 `ACTION_*` / `EXTRA_*` 常量与
+> `Intent(context, MainActivity::class.java)` 的语义不变。搬它是为了让调试命令
+> 写成 `com.shiro.classflow/.MainActivity`（prod）而不用再打上游包名。
+> 代价：上游以后改这个文件时，`git` 会把它当成「我们删除了上游文件」，
+> 需要手工移植——鉴于 95% 已是我们的代码，实际损失很小。
+> 审计脚本 `scripts/audit-upstream.sh` 的包边界守卫已为它加白名单。
+
 > 历史：`707341c` 曾把全部 144 个文件搬进 `com/shiro/classflow`，导致上游 merge 无法自动合并，
 > 被 `61d6e76` 回滚。**只搬上游不存在的文件**是当前约定。
 
@@ -70,7 +80,7 @@ git diff 3eb39c2 --stat -- app/src/main/java app/src/main/res | sort -t'|' -k2 -
 ### 3. 宿主与导航
 | 文件 | 差异内容 |
 |---|---|
-| `MainActivity.kt` | 悬浮课程时隐藏 Dock（`isFloatingCourseMode`）、onboarding 引导、背景壁纸容器、校园服务路由（成绩/空教室/学业进程/扫一扫/付款码）、桌面快捷方式深链（`ACTION_QR_SCAN` / `ACTION_CAMPUS_CARD` / `ACTION_PAY_CODE` + `pendingDeepLink`/`onNewIntent`）、`AppCompatActivity` 宿主（语言切换依赖 AppCompat delegate 生效） |
+| `MainActivity.kt`（现位于 `com/shiro/classflow/`，见上方例外） | 悬浮课程时隐藏 Dock（`isFloatingCourseMode`）、onboarding 引导、背景壁纸容器、校园服务路由（成绩/空教室/学业进程/扫一扫/付款码）、桌面快捷方式深链（`ACTION_QR_SCAN` / `ACTION_CAMPUS_CARD` / `ACTION_PAY_CODE` + `pendingDeepLink`/`onNewIntent`）、`AppCompatActivity` 宿主（语言切换依赖 AppCompat delegate 生效） |
 | `Navigation.kt` | `WallpaperAdjust`、`GradeQuery`、`FreeClassroomQuery`、`AcademicProgress`、`CredentialManagement`、`QrScan`、`CampusCardPayCode`（付款码）、`LanguageSettings` 目的地 |
 | `AndroidManifest.xml` | `CAMERA` 权限；`MainActivity` 追加 `QR_SCAN`、`CAMPUS_CARD` 与 `PAY_CODE` intent-filter（与 flavor 独立的 shortcuts.xml 配合定向分发）与 `android.app.shortcuts` meta-data；`AppLocalesMetadataHolderService` + `autoStoreLocales=true`（语言选择持久化，上游同款） |
 | `res/values/themes.xml` | `Theme.ClassFlow` 父主题改为 `Theme.AppCompat.DayNight.NoActionBar` + 透明状态栏 + 关闭 Activity 转场（上游 androidApp 同款；AppCompatActivity 必需） |

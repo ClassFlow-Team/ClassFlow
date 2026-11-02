@@ -1,12 +1,13 @@
 package com.shiro.classflow.ui.campus.hairdryer
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import androidx.annotation.DrawableRes
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
-import com.xingheyuzhuan.shiguangschedule.MainActivity
+import com.shiro.classflow.MainActivity
 import com.xingheyuzhuan.shiguangschedule.R
 import com.shiro.classflow.data.model.wbu.HairdryerHistoryEntry
 
@@ -45,6 +46,36 @@ object HairdryerShortcuts {
 
     /** 快捷方式 ID 与设备码一一对应：同一台机器重复添加就是更新同一个图标。 */
     fun shortcutIdOf(cd: String): String = "hairdryer_$cd"
+
+    /**
+     * 旧版本（`MainActivity` 还叫 `com.xingheyuzhuan.shiguangschedule.MainActivity` 时）
+     * 钉到桌面的快捷方式，其 Intent 里写死的是旧组件名。搬包之后这些图标点下去会报
+     * 「Activity class does not exist」，而快捷方式只在用户点「加到桌面」时才重建。
+     *
+     * 这里在启动时一次性把它们改指向新的 [MainActivity]：用 [ShortcutInfoCompat.Builder] 的
+     * 拷贝构造保留原有名字、图标、extras，只替换 Intent 的组件（activity 也要一起换，
+     * 系统会校验「快捷方式的 activity 必须是主 Activity」）。
+     */
+    fun migrateLegacyIntents(context: Context) {
+        val stale = runCatching {
+            ShortcutManagerCompat.getShortcuts(
+                context,
+                ShortcutManagerCompat.FLAG_MATCH_PINNED or ShortcutManagerCompat.FLAG_MATCH_DYNAMIC
+            ).filter { it.intent.component?.className == LEGACY_ACTIVITY_CLASS }
+        }.getOrDefault(emptyList())
+        if (stale.isEmpty()) return
+
+        val updates = stale.map { info ->
+            val migrated = Intent(info.intent).setClass(context, MainActivity::class.java)
+            ShortcutInfoCompat.Builder(info)
+                // 系统校验「快捷方式的 activity 必须是主 Activity」：旧记录里存的还是旧组件名，
+                // 必须和 Intent 一起换掉，否则 updateShortcuts 会被 ShortcutService 拒绝。
+                .setActivity(ComponentName(context, MainActivity::class.java))
+                .setIntent(migrated)
+                .build()
+        }
+        runCatching { ShortcutManagerCompat.updateShortcuts(context, updates) }
+    }
 
     /** 当前桌面（Launcher）支不支持「请求添加图标」。 */
     fun isPinSupported(context: Context): Boolean =
@@ -130,3 +161,6 @@ object HairdryerShortcuts {
             .build()
     }
 }
+
+/** 搬包前 `MainActivity` 的全限定名；只用于迁移历史快捷方式（见 [HairdryerShortcuts.migrateLegacyIntents]）。 */
+private const val LEGACY_ACTIVITY_CLASS = "com.xingheyuzhuan.shiguangschedule.MainActivity"

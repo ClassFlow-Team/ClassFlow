@@ -1,4 +1,4 @@
-package com.xingheyuzhuan.shiguangschedule
+package com.shiro.classflow
 
 import android.app.PendingIntent
 import android.content.Intent
@@ -114,6 +114,13 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.DisposableEffect
+import com.xingheyuzhuan.shiguangschedule.BuildConfig
+import com.xingheyuzhuan.shiguangschedule.Destination
+import com.xingheyuzhuan.shiguangschedule.NavBridge
+import com.xingheyuzhuan.shiguangschedule.R
+import com.xingheyuzhuan.shiguangschedule.ShiguangNavMetadata
+import com.xingheyuzhuan.shiguangschedule.isMainScreen
+import com.xingheyuzhuan.shiguangschedule.isSeamlessHandoff
 import com.xingheyuzhuan.shiguangschedule.tool.InstallResult
 import com.xingheyuzhuan.shiguangschedule.tool.ReleaseUpdateInfo
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateChecker
@@ -121,11 +128,13 @@ import com.xingheyuzhuan.shiguangschedule.tool.UpdateStatus
 import com.xingheyuzhuan.shiguangschedule.ui.components.AppDownloadProgressDialog
 import com.xingheyuzhuan.shiguangschedule.ui.components.AppUpdateFoundDialog
 import com.xingheyuzhuan.shiguangschedule.ui.components.InstallPermissionPromptDialog
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
 import com.shiro.classflow.data.network.NetworkAvailability
+import com.shiro.classflow.ui.campus.hairdryer.HairdryerShortcuts
 import kotlinx.coroutines.launch
 import java.io.File
 import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
@@ -253,6 +262,11 @@ class MainActivity : AppCompatActivity() {
         // 若照常处理会把用户从返回后的页面再次拉回扫码页
         if (savedInstanceState == null) handleDeepLink(intent)
         enableHighRefreshRate()
+        // 搬包（MainActivity 从上游包迁到 com.shiro.classflow）前钉到桌面的快捷方式，
+        // Intent 里还写着旧组件名；启动时顺手改指向新类，旧图标才不会点开就报「类不存在」。
+        lifecycleScope.launch(Dispatchers.IO) {
+            HairdryerShortcuts.migrateLegacyIntents(applicationContext)
+        }
         setContent {
             val settings by appSettingsRepository.getAppSettings()
                 .collectAsState(initial = null)
