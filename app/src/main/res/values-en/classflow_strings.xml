@@ -1019,9 +1019,12 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="fail_sms_code_rejected">Incorrect verification code. Please try again</string>
     <string name="fail_captcha_rejected">Incorrect image captcha. Please try again</string>
     <string name="fail_not_on_campus">Not on the campus network, so a direct connection is unavailable</string>
+    <string name="fail_no_network">No network connection. Connect to a network and try again</string>
     <string name="fail_network_unreachable">Network connection failed. Please check your network and retry</string>
     <string name="fail_webvpn_unreachable">Cannot reach WebVPN. Please check your network and retry</string>
     <string name="fail_unified_auth_unreachable">Cannot reach unified authentication. Please check your network and retry</string>
+    <string name="fail_waf_blocked">Your campus gateway blocked the direct connection to unified authentication. Try again over WebVPN</string>
+    <string name="fail_waf_blocked_webvpn">The gateway still blocks this request over WebVPN. Retry later or open it in the web page instead</string>
     <string name="fail_unexpected">The operation did not succeed. The school system returned an unexpected response; please retry later</string>
     <string name="desc_enter_unified_auth_password">No unified-authentication password is saved on this device. Enter it to continue</string>
     <string name="action_use_webvpn_once">Use WebVPN for this try</string>

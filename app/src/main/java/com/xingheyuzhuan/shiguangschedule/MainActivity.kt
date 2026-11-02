@@ -86,6 +86,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.CompositionLocalProvider
@@ -123,6 +124,8 @@ import com.xingheyuzhuan.shiguangschedule.ui.components.InstallPermissionPromptD
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
+import com.xingheyuzhuan.shiguangschedule.data.network.NetworkAvailability
 import kotlinx.coroutines.launch
 import java.io.File
 import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
@@ -512,6 +515,18 @@ fun AppNavigation(
 
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // 「未连接网络」的统一提示：请求在网络闸门处被拦下时会发来一次信号（源头已做 3 秒去重）。
+    // 收敛在这一处，就不必让每个页面各自把「手机没网」和「学校服务器连不上」分开处理。
+    LaunchedEffect(Unit) {
+        NetworkAvailability.offlineRequests.collect {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.showSnackbar(
+                message = context.getString(R.string.fail_no_network),
+                duration = SnackbarDuration.Short
+            )
+        }
+    }
     val updateChecker = remember(context) { UpdateChecker(context.applicationContext) }
     var autoUpdateFoundInfo by remember { mutableStateOf<ReleaseUpdateInfo?>(null) }
     var autoUpdateStatus by remember { mutableStateOf<UpdateStatus>(UpdateStatus.Idle) }

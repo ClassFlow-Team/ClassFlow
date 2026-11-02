@@ -1,5 +1,6 @@
 package com.xingheyuzhuan.shiguangschedule.data.network.wbu
 
+import com.xingheyuzhuan.shiguangschedule.data.network.NoNetworkException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -222,5 +223,69 @@ class AccessFailureClassificationTest {
         assertTrue(
             AccessFailure.CredentialRejected(AccessLayer.WebVpnPortal, CredentialKind.Password).needsRelogin
         )
+    }
+
+    // ---------- 「手机自己没网」与「到不了学校」必须分开 ----------
+
+    @Test
+    fun noDefaultNetworkIsReportedAsOffline() {
+        val failure = WbuFailureDetector.fromThrowable(
+            NoNetworkException("http://yktfwpt.wbu.edu.cn/berserker-auth/oauth/token"),
+            AccessLayer.Service
+        )
+        assertTrue("没网应当归为「一个响应都没拿到」", failure is AccessFailure.Unreachable)
+        assertTrue("必须标记成 offline，否则会被当成「不在校园网」", (failure as AccessFailure.Unreachable).offline)
+    }
+
+    @Test
+    fun offlineDoesNotOfferWebVpnOrCountAsChannelTrouble() {
+        val offline = AccessFailure.Unreachable(AccessLayer.CampusDirect, offline = true)
+        // 手机没网时换 WebVPN 一点用都没有：只该让用户连上网再点重试
+        assertEquals(AccessAction.Retry, offline.suggestedAction(webVpnEnabled = false))
+        // 也不该据此重算「在不在校园网」—— 探测请求会同样失败，白绕一圈
+        assertFalse(offline.unreachableOnDirectChannel)
+        // 但绝不是「需要重新登录」：绝不能把用户顶到登录面板前
+        assertFalse(offline.needsRelogin)
+    }
+
+    @Test
+    fun ordinaryNetworkTroubleStillBehavesAsBefore() {
+        // 设备有网、只是到不了学校：行为保持原样（直连失败 → 可以试试 WebVPN）
+        val unreachable = AccessFailure.Unreachable(AccessLayer.CampusDirect)
+        assertFalse(unreachable.offline)
+        assertEquals(AccessAction.UseWebVpnOnce, unreachable.suggestedAction(webVpnEnabled = false))
+        assertTrue(unreachable.unreachableOnDirectChannel)
+    }
+
+    // ---------- 被校外 WAF 拦下：既不是登录问题，也不是网络问题 ----------
+
+    @Test
+    fun wafBlockIsNeitherReloginNorUnreachable() {
+        val blocked = AccessFailure.Intercepted(AccessLayer.UnifiedAuth, "ids.wbu.edu.cn")
+        // 登录态没问题，重登只会再撞一次同一张挡板页
+        assertFalse(blocked.needsRelogin)
+        assertEquals(AccessAction.UseWebVpnOnce, blocked.suggestedAction(webVpnEnabled = false))
+        // 请求没走到学校系统，但网络是通的：够格作废「在不在校园网」的缓存、重算一次通道
+        assertTrue(blocked.directChannelTrouble)
+        // 但拦截不是「连不上」，不能当成「人不在校园网」的证据（外网同样会被拦）
+        assertFalse(blocked.unreachableOnDirectChannel)
+    }
+
+    @Test
+    fun wafBlockInsideTunnelOnlyRetries() {
+        val blocked = AccessFailure.Intercepted(AccessLayer.WebVpnPortal, "ids-wbu-edu-cn.webvpn.wbu.edu.cn")
+        // 隧道里还被拦说明通道本身有问题：这时再「换通道」是空转，只让用户稍后重试
+        assertEquals(AccessAction.Retry, blocked.suggestedAction(webVpnEnabled = true))
+        assertFalse(blocked.directChannelTrouble)
+    }
+
+    @Test
+    fun wafBlockedExceptionMapsToInterceptedWithHost() {
+        val failure = WbuFailureDetector.fromThrowable(
+            WafBlockedException("ids.wbu.edu.cn", 404),
+            AccessLayer.UnifiedAuth
+        )
+        assertTrue(failure is AccessFailure.Intercepted)
+        assertEquals("ids.wbu.edu.cn", (failure as AccessFailure.Intercepted).host)
     }
 }

@@ -7,6 +7,7 @@ import android.util.Base64
 import android.util.Log
 import androidx.appcompat.app.AppCompatDelegate
 import com.xingheyuzhuan.shiguangschedule.data.model.wbu.CredentialService
+import com.xingheyuzhuan.shiguangschedule.data.network.NoNetworkInterceptor
 import com.xingheyuzhuan.shiguangschedule.data.model.wbu.QrScanEngine
 import java.security.KeyStore
 import java.security.MessageDigest
@@ -128,6 +129,13 @@ internal class WbuAuthTransport(
     private fun buildClient(): OkHttpClient {
         val builder = OkHttpClient.Builder()
             .cookieJar(cookieJar)
+            // 没网就立刻失败并提示「未连接网络」，不让用户干等 15s 超时（判据见 NetworkAvailability）
+            .addInterceptor(NoNetworkInterceptor(context))
+            // 校外直连 ids 会被前面的云 WAF 拦下（回一张 404 拦截页）：
+            // 在这层把它认出来，别让上层当成「页面不存在」或「登录态过期」（判据见 WafBlockDetector）
+            .addInterceptor(WafBlockInterceptor())
+            // 只记录「对端 IP + 状态码」用于诊断（校内直连 vs 过 WAF 一眼可分），不改变请求行为
+            .eventListener(WbuNetworkDiagnostics.listener)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .followRedirects(true)
@@ -195,6 +203,7 @@ internal class WbuAuthTransport(
     private fun buildPortalClient(): OkHttpClient {
         val builder = OkHttpClient.Builder()
             .cookieJar(cookieJar)
+            .addInterceptor(NoNetworkInterceptor(context))
             .connectionPool(ConnectionPool(5, 1, TimeUnit.MINUTES))
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
@@ -238,6 +247,7 @@ internal class WbuAuthTransport(
     /** TWFID 校验专用客户端：无 cookieJar，避免混入会话 Cookie；仅用于门户 /por/login_psw.csp 探活。 */
     val twfidProbeClient by lazy {
         OkHttpClient.Builder()
+            .addInterceptor(NoNetworkInterceptor(context))
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
             .followRedirects(false)
@@ -299,6 +309,13 @@ internal class WbuAuthTransport(
     fun libseatBase(): String = if (useVpn) libseatProxyBase() else "https://libseat.wbu.edu.cn"
 
     private fun idsProxyBase(): String = "${webVpnScheme()}://ids-wbu-edu-cn.webvpn.wbu.edu.cn${webVpnPort()}"
+
+    /**
+     * ids 的 WebVPN 代理基址（**不受**「ids 走 WebVPN」开关影响）。
+     *
+     * 给「校外直连被 WAF 拦了就换隧道再试一次」这类降级用：它不是用户的设置，而是绕过拦截的路。
+     */
+    fun idsProxyBaseUrl(): String = idsProxyBase()
 
     /** ids 认证基址：受「ids 走 WebVPN」开关控制（默认公网）。 */
     fun idsBase(): String = if (getIdsViaWebVpn(context)) idsProxyBase() else idsPublicBase
@@ -1401,6 +1418,18 @@ internal class WbuAuthTransport(
             // 教务系统：自身密码槽为空时回退统一认证（两者当前共用同一密码）
             if (service == CredentialService.JIAOWU) return hasSavedPassword(context, CredentialService.UNIFIED_AUTH)
             return false
+        }
+
+        /**
+         * WebVPN 隧道**现在**能不能建起来 —— 决定「直连不通时该不该自动改道」。
+         *
+         * 两种情况都算能：已经拿着门禁票（TWFID）可以直接用；没票但存着门禁密码，可以静默登一次。
+         * 两者都没有就别自动切：真切过去只会把用户卡在门户登录页，比留一句「改用 WebVPN」还差。
+         */
+        fun isTunnelReady(context: Context): Boolean {
+            val transport = getShared(context, getSavedUseVpn(context))
+            if (transport.currentTwfid().isNotBlank()) return true
+            return hasSavedPassword(context, CredentialService.WEBVPN)
         }
 
         fun getSavedPassword(
