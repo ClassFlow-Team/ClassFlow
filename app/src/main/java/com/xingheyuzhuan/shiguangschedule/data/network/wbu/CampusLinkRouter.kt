@@ -28,7 +28,7 @@ object CampusLinkRouter {
      * 解析任意 String 或 Uri，若符合校园直达规范，返回目标 Destination。
      */
     fun parse(uriString: String, scanId: Long = 0L): Destination? {
-        val trimmed = uriString.trim()
+        val trimmed = ClassFlowScheme.canonicalize(uriString) ?: uriString.trim()
         val okhttpUrl = trimmed.toHttpUrlOrNull()
         val path = okhttpUrl?.encodedPath ?: run {
             val qIdx = trimmed.indexOfAny(charArrayOf('?', '#'))
@@ -162,10 +162,11 @@ object CampusLinkRouter {
     }
 
     private fun isDownloadUri(uri: Uri): Boolean {
-        val path = uri.encodedPath?.lowercase().orEmpty()
+        val normalized = ClassFlowScheme.canonicalize(uri.toString())?.let { Uri.parse(it) } ?: uri
+        val path = normalized.encodedPath?.lowercase().orEmpty()
         val knownPath = path.startsWith("/w/") || path.startsWith("/wm/") || path.startsWith("/hd/")
         if (!knownPath) return false
-        val segment = uri.lastPathSegment?.trim().orEmpty()
+        val segment = normalized.lastPathSegment?.trim().orEmpty()
         return segment.isNotEmpty() && UjingQrLink.isReservedSegment(segment)
     }
 
@@ -176,7 +177,8 @@ object CampusLinkRouter {
         if (intent == null) return null
 
         intent.data?.let { uri ->
-            val res = UjingQrLink.parse(uri.toString())
+            val raw = ClassFlowScheme.canonicalize(uri.toString()) ?: uri.toString()
+            val res = UjingQrLink.parse(raw)
             if (res is UjingQrLink.Result.Hairdryer) return res
         }
 
@@ -187,7 +189,8 @@ object CampusLinkRouter {
                 val msg = raw as? NdefMessage ?: continue
                 for (record in msg.records) {
                     val uri = record.toUri() ?: continue
-                    val res = UjingQrLink.parse(uri.toString())
+                    val normalized = ClassFlowScheme.canonicalize(uri.toString()) ?: uri.toString()
+                    val res = UjingQrLink.parse(normalized)
                     if (res is UjingQrLink.Result.Hairdryer) return res
                 }
             }

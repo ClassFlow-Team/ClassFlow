@@ -345,18 +345,31 @@ class MainActivity : AppCompatActivity() {
             // 却先被本 App 抢走，表现为「碰了没反应」。
             // 因此这里与 AndroidManifest 的 NDEF 过滤器保持一致：只接管自己的校园域名，
             // 其余标签一律不拦，仍交给系统按正常规则分发。
-            val hosts = listOf(BuildConfig.UJING_NFC_HOST, BuildConfig.LINK_HUB_HOST)
-                .map { it.trim().lowercase() }
+            val hosts = buildList {
+                if (BuildConfig.HAS_UJING_NFC_HOST) add(BuildConfig.UJING_NFC_HOST)
+                if (BuildConfig.HAS_LINK_HUB_HOST) add(BuildConfig.LINK_HUB_HOST)
+            }.map { it.trim().lowercase() }
                 .filter { it.isNotEmpty() }
                 .distinct()
-            if (hosts.isEmpty()) return
-            val filters = hosts.map { host ->
-                IntentFilter(NfcAdapter.ACTION_NDEF_DISCOVERED).apply {
-                    addDataScheme("https")
-                    addDataScheme("http")
-                    addDataAuthority(host, null)
+
+            val filters = buildList {
+                hosts.forEach { host ->
+                    add(
+                        IntentFilter(NfcAdapter.ACTION_NDEF_DISCOVERED).apply {
+                            addDataScheme("https")
+                            addDataScheme("http")
+                            addDataAuthority(host, null)
+                        }
+                    )
                 }
+                // classflow://：GitHub 自建包 / 无域名构建的主要 NFC 入口，始终注册
+                add(
+                    IntentFilter(NfcAdapter.ACTION_NDEF_DISCOVERED).apply {
+                        addDataScheme(com.xingheyuzhuan.shiguangschedule.data.network.wbu.ClassFlowScheme.SCHEME)
+                    }
+                )
             }.toTypedArray()
+
             adapter.enableForegroundDispatch(this, pendingIntent, filters, null)
         } catch (e: Exception) {
             android.util.Log.w("MainActivity", "Failed to enable NFC foreground dispatch", e)

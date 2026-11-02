@@ -65,4 +65,38 @@ class CampusLinkRouterTest {
         assertNull(CampusLinkRouter.parse("https://ujing.example.com/wm/download"))
         assertNull(CampusLinkRouter.parse("https://ujing.example.com/w/download?from=qr"))
     }
+
+    @Test
+    fun parsesClassFlowWaterUri() {
+        val dest = CampusLinkRouter.parse("classflow://w/0011202004140940")
+        assertNotNull(dest)
+        assertTrue(dest is Destination.UjingWater)
+        assertEquals("0011202004140940", (dest as Destination.UjingWater).cd)
+    }
+
+    @Test
+    fun parsesClassFlowTripleSlashUri() {
+        val dest = CampusLinkRouter.parse("classflow:///w/0011202004140940")
+        assertNotNull(dest)
+        assertTrue(dest is Destination.UjingWater)
+    }
+
+    @Test
+    fun parsesClassFlowShowerUri() {
+        val dest = CampusLinkRouter.parse("classflow://s/y/10101")
+        assertNotNull(dest)
+        assertTrue(dest is Destination.ShowerDirect)
+        assertEquals(CampusShowerLink.SYSTEM_YKT, (dest as Destination.ShowerDirect).system)
+    }
+
+    @Test
+    fun classFlowDownloadPageIsNotADevice() {
+        assertNull(CampusLinkRouter.parse("classflow://w/download"))
+        assertNull(CampusLinkRouter.parse("classflow://wm/download"))
+    }
+
+    @Test
+    fun classFlowUnknownPathReturnsNull() {
+        assertNull(CampusLinkRouter.parse("classflow://other/abc"))
+    }
 }

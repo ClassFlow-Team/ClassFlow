@@ -2,6 +2,7 @@ package com.xingheyuzhuan.shiguangschedule.data.network.link
 
 import com.xingheyuzhuan.shiguangschedule.BuildConfig
 import com.xingheyuzhuan.shiguangschedule.data.model.link.LinkHubProtocol
+import com.xingheyuzhuan.shiguangschedule.data.network.wbu.ClassFlowScheme
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
@@ -22,6 +23,14 @@ object LinkHubUrl {
 
     /** 当前构建的 hub 域名。 */
     val host: String get() = BuildConfig.LINK_HUB_HOST
+
+    /**
+     * 是否配置了可用的链接服务端。
+     *
+     * 无私有域名的 GitHub 构建为 false：服务端短码不可用，但内嵌载荷仍可离线解析。
+     */
+    val isServerConfigured: Boolean
+        get() = BuildConfig.HAS_LINK_HUB_HOST || debugBase != null
 
     /**
      * 仅 debug 构建生效的本地联调地址（`CLASSFLOW_LINK_HUB_DEBUG_BASE`，例如 `http://127.0.0.1:8090`）。
@@ -141,6 +150,31 @@ object LinkHubUrl {
         shortAlias: Boolean = false
     ): String {
         val prefix = "https://$host${if (shortAlias) "/u/" else "/url/"}"
+        return prefix + code.orEmpty() + "#" + payload
+    }
+
+    /**
+     * 内嵌节点的分享地址：
+     * - 配置了 hub → `https://<hub>/u/#payload`（别人点开有浏览器落地页兜底）；
+     * - 没有 hub → `classflow://u/#payload`（装了 App 就能直接打开）。
+     */
+    fun buildInlineShareUrl(
+        payload: String,
+        code: String? = null,
+        shortAlias: Boolean = false
+    ): String = if (isServerConfigured) {
+        buildInlineUrl(payload = payload, code = code, shortAlias = shortAlias)
+    } else {
+        buildAppInlineUrl(payload = payload, code = code, shortAlias = shortAlias)
+    }
+
+    /** 强制使用 `classflow://` 的内嵌节点地址（无 hub 构建/离线分享）。 */
+    fun buildAppInlineUrl(
+        payload: String,
+        code: String? = null,
+        shortAlias: Boolean = false
+    ): String {
+        val prefix = "${ClassFlowScheme.SCHEME}://${if (shortAlias) "u" else "url"}/"
         return prefix + code.orEmpty() + "#" + payload
     }
 }

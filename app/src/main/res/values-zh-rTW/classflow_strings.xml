@@ -998,6 +998,7 @@
     <string name="link_hub_error_expired">此分享內容已失效</string>
     <string name="link_hub_error_app_version">需要更新 App 後才能使用此內容</string>
     <string name="link_hub_error_network">網路異常，無法取得此分享內容</string>
+    <string name="link_hub_error_server_not_configured">此建置未設定連結服務，無法解析伺服器短碼</string>
     <string name="link_hub_error_shower_invalid">未識別到該洗浴設備，請確認控水器編號是否正確</string>
     <string name="link_hub_error_not_json">此分享內容暫時無法開啟，請稍後再試</string>
     <string name="link_hub_open_in_browser">用瀏覽器開啟</string>
