@@ -12,7 +12,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import androidx.core.content.getSystemService
-import com.xingheyuzhuan.shiguangschedule.MainActivity
+import com.shiro.classflow.MainActivity
 import com.xingheyuzhuan.shiguangschedule.AppEntryPoint
 import dagger.hilt.android.EntryPointAccessors
 import com.xingheyuzhuan.shiguangschedule.R
