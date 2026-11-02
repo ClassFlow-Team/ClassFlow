@@ -6,17 +6,22 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.xingheyuzhuan.shiguangschedule.data.network.NoNetworkException
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.AccessFailure
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.AccessLayer
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.UjingMqttClient
+import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WafBlockedException
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuAuthTransport
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuCampusCardClient
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuFailureDetector
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSessionExpiredException
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuUjingClient
+import com.xingheyuzhuan.shiguangschedule.data.network.wbu.directChannelTrouble
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.needsRelogin
 import com.xingheyuzhuan.shiguangschedule.ui.components.accessFailureText
+import com.xingheyuzhuan.shiguangschedule.ui.components.shouldOfferWebVpnOnce
 import com.xingheyuzhuan.shiguangschedule.ui.components.silentUnifiedAuthLogin
+import com.xingheyuzhuan.shiguangschedule.ui.components.userFacingMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -40,7 +45,17 @@ sealed interface UjingWaterUiStage {
         val subject: WbuUjingClient.WaterServiceSubject,
         val detail: WbuUjingClient.WaterOrderDetail
     ) : UjingWaterUiStage
-    data class Error(val message: String, val canRetry: Boolean = true) : UjingWaterUiStage
+    data class Error(
+        val message: String,
+        val canRetry: Boolean = true,
+        /**
+         * 是否给一个「改用 WebVPN」的出路。
+         *
+         * 只在「直连这条通道走不通」时出现：被校外 WAF 拦（[com.xingheyuzhuan.shiguangschedule.data.network.wbu.WafBlockedException]）
+         * 或一个响应都没拿到。会话过期不给 —— 那种情况该重新登录，换通道只会再撞一次。
+         */
+        val offerWebVpnOnce: Boolean = false
+    ) : UjingWaterUiStage
 }
 
 data class UjingWaterUiState(
@@ -98,6 +113,9 @@ class UjingWaterViewModel(application: Application) : AndroidViewModel(applicati
     private var currentCd: String = ""
     private var hasStarted: Boolean = false
 
+    /** 本次取水是否已经自动改过一次隧道：只自动试一次，失败就交给用户，避免来回切。 */
+    private var autoTunnelTried: Boolean = false
+
     /**
      * 启动饮水机扫码出水全流程。
      */
@@ -126,6 +144,7 @@ class UjingWaterViewModel(application: Application) : AndroidViewModel(applicati
         }
 
         hasStarted = true
+        autoTunnelTried = false
         currentCd = trimmed
         _uiState.update { it.copy(cd = currentCd, stage = UjingWaterUiStage.Splash, needLogin = false) }
 
@@ -143,6 +162,7 @@ class UjingWaterViewModel(application: Application) : AndroidViewModel(applicati
         clearSession()
         stopStatusWatch()
         hasStarted = false
+        autoTunnelTried = false
         _uiState.update { it.copy(stage = UjingWaterUiStage.Splash, needLogin = false) }
         start(cd)
     }
@@ -209,8 +229,45 @@ class UjingWaterViewModel(application: Application) : AndroidViewModel(applicati
                 _uiState.update { it.copy(needLogin = true) }
             } catch (e: Exception) {
                 Log.e(TAG, "Water flow error", e)
+                val app = getApplication<Application>()
+                // 只有「确定是通道问题」的异常才升级成结构化失败：U净 自己的业务异常
+                // （设备离线、订单被占…）多数也是 IOException，不能一并当成「网络不通」，
+                // 否则会让用户去连 WiFi / 开 WebVPN，而他其实什么都不用做。
+                val failure = when (e) {
+                    is WafBlockedException -> WbuFailureDetector.fromThrowable(e, AccessLayer.UnifiedAuth)
+                    is NoNetworkException -> WbuFailureDetector.fromThrowable(e, AccessLayer.Service)
+                    else -> null
+                }
+                val message = failure?.let { accessFailureText(app, it) }
+                    ?: userFacingMessage(app, e)
+                    ?: app.getString(R.string.err_dispensing_failed)
+
+                // 自动改道：直连这条道明确不通（被 WAF 拦 / 一个响应都没拿到），而且 WebVPN 凭据
+                // 现成可用时，直接切隧道重跑一次，不必让用户在错误页上再点一下。只自动试一次；
+                // 凭据不可用就别切 —— 真切过去只会把用户卡在门户登录页。
+                val directTrouble = failure?.directChannelTrouble == true
+                if (directTrouble &&
+                    !WbuAuthTransport.getIdsViaWebVpn(app) &&
+                    !autoTunnelTried &&
+                    WbuAuthTransport.isTunnelReady(app)
+                ) {
+                    autoTunnelTried = true
+                    WbuAuthTransport.setIdsViaWebVpn(app, true)
+                    Log.i(TAG, "直连不通且 WebVPN 凭据可用，自动改道重试一次：$e")
+                    clearSession()
+                    hasStarted = true
+                    executeFlow(cd)
+                    return@launch
+                }
+
                 _uiState.update {
-                    it.copy(stage = UjingWaterUiStage.Error(e.localizedMessage ?: getApplication<Application>().getString(R.string.err_dispensing_failed)))
+                    it.copy(
+                        stage = UjingWaterUiStage.Error(
+                            message = message,
+                            offerWebVpnOnce = failure
+                                ?.shouldOfferWebVpnOnce(WbuAuthTransport.getIdsViaWebVpn(app)) == true
+                        )
+                    )
                 }
             }
         }
@@ -390,8 +447,10 @@ class UjingWaterViewModel(application: Application) : AndroidViewModel(applicati
             it.copy(
                 needLogin = false,
                 stage = UjingWaterUiStage.Error(
-                    accessFailureText(app, failure)
-                        ?: app.getString(R.string.err_need_unified_auth_session)
+                    message = accessFailureText(app, failure)
+                        ?: app.getString(R.string.err_need_unified_auth_session),
+                    // 被 WAF 拦 / 直连不通才给「改用 WebVPN」；网络真断开时换通道也没用
+                    offerWebVpnOnce = failure.shouldOfferWebVpnOnce(WbuAuthTransport.getIdsViaWebVpn(app))
                 )
             )
         }
@@ -419,6 +478,23 @@ class UjingWaterViewModel(application: Application) : AndroidViewModel(applicati
             hasStarted = true
             executeFlow(currentCd)
         }
+    }
+
+    /**
+     * 「改用 WebVPN 再试」。
+     *
+     * 取水页没有「仅本次走隧道」的临时开关：统一认证走不走 WebVPN 只由设置里的那一个偏好决定
+     * （`WbuAuthTransport.getIdsViaWebVpn`），换票链路每次请求都实时读它。所以这里**写入**该偏好再重试。
+     * 也就是说，用户点的这句「改用 WebVPN」是持久的，设置页里看得见、也随时能关掉 ——
+     * 与其造一个只在取水页生效、退出就消失的隐藏状态，不如让开关保持单一来源。
+     *
+     * 只影响 id 系主机（统一认证 / 一卡通换票），`yktfwpt`、`opac` 本来就是直连服务，不受牵连。
+     */
+    fun retryWithWebVpnOnce() {
+        val app = getApplication<Application>()
+        WbuAuthTransport.setIdsViaWebVpn(app, true)
+        Log.i(TAG, "用户选择改用 WebVPN：已开启统一认证走 WebVPN，重试取水")
+        retry()
     }
 
     override fun onCleared() {
