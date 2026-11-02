@@ -49,21 +49,7 @@ class WbuWebAppClient(
      * @throws IOException 当网络通信失败或返回异常时抛出
      */
     suspend fun fetchCasCallbackToken(def: WebAppDefinition): String = withContext(Dispatchers.IO) {
-        transport.restoreCookieStore()
-
-        // 若处于 WebVPN 模式，确保将 TWFID 门禁 Cookie 注入到 OkHttp 的 cookieStore 内存中
-        if (useVpn) {
-            val twfid = WbuAuthTransport.getTwfid(context)
-            if (twfid.isNotBlank()) {
-                WebVpnClient(transport).injectTwfid(twfid)
-            }
-        }
-
-        val hasTgc = transport.cookieStore.any { it.name == "CASTGC" && it.value.isNotBlank() }
-        if (!hasTgc) {
-            Log.w("WbuWebAppClient", "No CASTGC found in cookie store for WebApp: ${def.id}")
-            throw WbuSessionExpiredException(AccessLayer.UnifiedAuth)
-        }
+        prepareSession()
 
         val noRedirectClient = client.newBuilder().followRedirects(false).build()
         val currentBase = resolveBaseUrl(def)
@@ -93,27 +79,7 @@ class WbuWebAppClient(
 
         // 2. 向 CAS 申请目标业务服务的 Service Ticket (ST)
         // 注意：CAS 服务端登记的 service 验证地址始终必须是业务端声明的公网真实 URL
-        val encodedService = URLEncoder.encode(def.casServiceUrl, "UTF-8")
-        val casLoginUrl = "${transport.idsBase()}/authserver/login?service=$encodedService"
-
-        val casReq = Request.Builder()
-            .url(casLoginUrl)
-            .header("User-Agent", transport.authUserAgent())
-            .header("Accept-Language", transport.authAcceptLanguage)
-            .get()
-            .build()
-
-        val casLocation = noRedirectClient.newCall(casReq).execute().use { resp ->
-            resp.header("Location")
-        }
-
-        if (casLocation.isNullOrBlank() || !casLocation.contains("ticket=")) {
-            if (casLocation.orEmpty().contains("/por/") || casLocation.orEmpty().contains("webvpn")) {
-                throw WbuSessionExpiredException(AccessLayer.WebVpnPortal)
-            }
-            Log.w("WbuWebAppClient", "CAS failed to grant ST ticket. Location: $casLocation")
-            throw WbuSessionExpiredException(AccessLayer.UnifiedAuth)
-        }
+        val casLocation = requestCasTicket(def.casServiceUrl)
 
         // 3. 将 CAS 回跳的目标重写为当前通道宿主（WebVPN 下重写为代理宿主）
         val targetCallbackUrl = if (useVpn) {
@@ -159,6 +125,94 @@ class WbuWebAppClient(
         transport.persistCookieStore()
         Log.i("WbuWebAppClient", "Successfully obtained WebApp token for ${def.id}")
         token
+    }
+
+    /**
+     * 只要一张 CAS 票据、**不在客户端核销**：返回 CAS 回跳的落地地址（含 `?ticket=ST-…`）。
+     *
+     * 供 [WebAppLaunchMode.CAS_SERVICE_TICKET] 的门户类应用使用：票据交给 WebView 加载，
+     * 由业务端自己核销并下发自己的会话 Cookie —— 会话落在 WebView 的 Cookie 罐里，
+     * 页面后续的跳转与 XHR 才带着它。前提是本机持有有效的 `CASTGC`（没有就抛
+     * [WbuSessionExpiredException]，由上层走静默登录 / 登录面板）。
+     *
+     * @throws WbuSessionExpiredException 凭据缺失或已过期（含 WebVPN 门禁失效）
+     */
+    suspend fun fetchCasServiceTicketUrl(def: WebAppDefinition): String = withContext(Dispatchers.IO) {
+        prepareSession()
+        val landing = requestCasTicket(def.casServiceUrl)
+        if (useVpn) rewriteToProxyHost(landing, def) else landing
+    }
+
+    /**
+     * 「CAS 票据桥」：给任意业务系统地址换一张票据，返回落地地址（`<service>?ticket=ST-…`）。
+     *
+     * 门户里的应用（ehall / 新生入馆教育 …）自己跳 CAS 登录页属于正常流程，
+     * 用本机 `CASTGC` 直接替它们走完这一步即可，用户不用再登录一次。
+     *
+     * @param proxyHostOf 非空时，落地地址的宿主会被重写为该定义的 WebVPN 代理宿主（当前通道为 WebVPN）；
+     *                    为 null 时原样返回（跨站应用在 WebVPN 下按现状原样加载，见研究报告 §7 风险表）。
+     */
+    suspend fun resolveCasServiceRedirect(
+        serviceUrl: String,
+        proxyHostOf: WebAppDefinition? = null
+    ): String = withContext(Dispatchers.IO) {
+        prepareSession()
+        val landing = requestCasTicket(serviceUrl)
+        if (useVpn && proxyHostOf != null) rewriteToProxyHost(landing, proxyHostOf) else landing
+    }
+
+    /**
+     * 恢复 Cookie 库、并把 WebVPN 门禁通行证注入内存 Cookie 罐。
+     */
+    private fun prepareSession() {
+        transport.restoreCookieStore()
+
+        // 若处于 WebVPN 模式，确保将 TWFID 门禁 Cookie 注入到 OkHttp 的 cookieStore 内存中
+        if (useVpn) {
+            val twfid = WbuAuthTransport.getTwfid(context)
+            if (twfid.isNotBlank()) {
+                WebVpnClient(transport).injectTwfid(twfid)
+            }
+        }
+    }
+
+    /**
+     * 请求 CAS 为 [serviceUrl] 签发 Service Ticket，返回 CAS 回跳的完整落地地址。
+     *
+     * 只做「换票」这一跳（`followRedirects = false`），票据留在地址里不被消费 ——
+     * 谁核销由调用方决定：取 JWT 的应用自己核销，门户类交给 WebView 核销。
+     */
+    private fun requestCasTicket(serviceUrl: String): String {
+        val hasTgc = transport.cookieStore.any { it.name == "CASTGC" && it.value.isNotBlank() }
+        if (!hasTgc) {
+            Log.w("WbuWebAppClient", "No CASTGC found in cookie store (service=$serviceUrl)")
+            throw WbuSessionExpiredException(AccessLayer.UnifiedAuth)
+        }
+
+        val encodedService = URLEncoder.encode(serviceUrl, "UTF-8")
+        val casLoginUrl = "${transport.idsBase()}/authserver/login?service=$encodedService"
+
+        val casReq = Request.Builder()
+            .url(casLoginUrl)
+            .header("User-Agent", transport.authUserAgent())
+            .header("Accept-Language", transport.authAcceptLanguage)
+            .get()
+            .build()
+
+        val casLocation = client.newBuilder().followRedirects(false).build()
+            .newCall(casReq).execute().use { resp -> resp.header("Location") }
+
+        if (casLocation.isNullOrBlank() || !casLocation.contains("ticket=")) {
+            if (casLocation.orEmpty().contains("/por/") || casLocation.orEmpty().contains("webvpn")) {
+                throw WbuSessionExpiredException(AccessLayer.WebVpnPortal)
+            }
+            Log.w("WbuWebAppClient", "CAS failed to grant ST ticket. Location: $casLocation")
+            throw WbuSessionExpiredException(AccessLayer.UnifiedAuth)
+        }
+
+        // 去掉首尾空白：Location 头偶尔会带一个尾随空格，直接交给 WebView 会被编码成 `%20`
+        // 变成另一条路径（实测 `…/ydmh%20` 会被 Tomcat 直接 404）
+        return casLocation.trim()
     }
 
     /**

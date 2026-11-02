@@ -2,6 +2,9 @@ package com.xingheyuzhuan.shiguangschedule.ui.webapp
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -22,9 +25,9 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
-import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import android.widget.Toast
 import java.io.ByteArrayInputStream
 import org.json.JSONObject
@@ -105,6 +108,8 @@ import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.model.wbu.WebAppDefinition
 import com.xingheyuzhuan.shiguangschedule.data.model.wbu.WebAppId
+import com.xingheyuzhuan.shiguangschedule.data.network.wbu.CampusCardLegacyLink
+import com.xingheyuzhuan.shiguangschedule.data.network.wbu.CampusCardRedirect
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuAuthTransport
 import com.xingheyuzhuan.shiguangschedule.ui.campus.components.WasherNoticeDialog
 import com.xingheyuzhuan.shiguangschedule.ui.campus.components.WbuAuthTipsScenario
@@ -119,6 +124,7 @@ import com.xingheyuzhuan.shiguangschedule.ui.components.webDialogPageLabel
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WasherAvailability
 import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WasherEntryResolver
 import com.xingheyuzhuan.shiguangschedule.ui.schoolselection.web.DESKTOP_USER_AGENT
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -320,14 +326,64 @@ private const val WX_STUB_JS = """
 """
 
 /**
+ * `window.open` 兜底脚本（门户专用，见 [WebAppDefinition.shimWindowOpen]）。
+ *
+ * 移动门户（uni-app）打开应用靠 `window.open(url)`。Android WebView 默认
+ * `setSupportMultipleWindows(false)`：新窗口建不起来，这次跳转可能被直接丢掉
+ * （点应用图标没反应）；就算真开了新窗口，新窗口里的跳转也不会经过本容器的拦截规则
+ * —— 微信统一页与 CAS 票据桥都会失效。
+ *
+ * 因此把它改成「当前窗口跳转」：跳转变成主框架导航，规则 0~3 全都拦得到，
+ * 用户点哪个应用都会落在同一个 WebView 里（返回键也就自然能回到门户）。
+ *
+ * 返回一个空壳窗口对象而不是 null：页面里常见 `var w = window.open(…); w.close()`
+ * 这类写法，返回 null 会在页面自己的代码里抛错。真实 `window.open` 挂在
+ * `__cfWindowOpenReal` 上备查（幂等，document 级）。
+ */
+private const val WINDOW_OPEN_SHIM_JS = """
+(function() {
+  if (window.__cfWindowOpenShimmed) return;
+  window.__cfWindowOpenShimmed = true;
+  window.__cfWindowOpenReal = window.open;
+  var stub = {
+    closed: false,
+    close: function () { this.closed = true; },
+    focus: function () {},
+    blur: function () {},
+    postMessage: function () {},
+    document: { write: function () {}, close: function () {} },
+    location: {
+      href: 'about:blank',
+      replace: function (u) { try { location.href = String(u); } catch (e) {} },
+      assign: function (u) { try { location.href = String(u); } catch (e) {} }
+    }
+  };
+  window.open = function (url) {
+    if (url === undefined || url === null || url === '') return stub;
+    try {
+      location.href = String(url);
+    } catch (e) {}
+    return stub;
+  };
+})();
+"""
+
+/**
  * 通用网页应用全屏容器。
  *
  * 特性：
  * 1. 彻底移除顶部 TopAppBar 与底栏，只全屏展示 Web 内容，且内部避让系统状态栏与手势条；
  * 2. 右上方带一个半透明、可拖拽的圆形悬浮球供退出页面；
  * 3. 拦截物理/手势返回键：若当前处于页面主页（或已无法回退），直接退出页面容器；
- * 4. 彻底阻断并劫持跳向 CAS Web 统一认证登录页的行为，转为拉起原生的 [WbuCampusAuthSheet]；
- * 5. WebVPN 下注入通行证 Cookie，保障校外穿透。
+ * 4. 彻底阻断并劫持跳向 CAS Web 统一认证登录页的行为：
+ *    · 定义为「票据桥」应用（门户）时，先用本机凭据换一张票据、把落地地址交给 WebView，
+ *      让业务系统自己核销（门户里的 ehall / zxst 都靠它）；
+ *    · 其余情况转为拉起原生的 [WbuCampusAuthSheet]；
+ * 5. 网页里的微信授权依赖分两类处理（见 [WebAppWechat]）：能跳过企业微信中转的直接换票跳过，
+ *    跳不过的（真正需要微信）盖一层「需要微信授权」统一页（提示 + 复制链接 + 返回）；
+ * 6. 旧一卡通微信服务链接（`yktyd.wbu.edu.cn` 的 `wechat` 路径下）自动改道到新一卡通平台的对应功能页
+ *    （付款码直接进原生付款码页），见 [CampusCardLegacyLink]；
+ * 7. WebVPN 下注入通行证 Cookie，保障校外穿透。
  */
 @Composable
 fun WebAppScreen(
@@ -337,6 +393,10 @@ fun WebAppScreen(
     pendingAutoScan: String? = null,
     /** 页面自己授权完成之后才落上去的 hash 路由，见 [Destination.WebApp.pendingHashRoute]。 */
     pendingHashRoute: String? = null,
+    /** 一卡通平台应用编码（旧一卡通链接改道带进来），见 [Destination.WebApp.campusCardAppCode]。 */
+    campusCardAppCode: String? = null,
+    /** 一卡通平台应用深链兜底，见 [Destination.WebApp.campusCardDeepLinkFallback]。 */
+    campusCardDeepLinkFallback: String? = null,
     viewModel: WebAppViewModel = viewModel()
 ) {
     /** 仅洗衣机（/wm/ 或小天鹅链接）进入时显示 U净 品牌首屏。 */
@@ -349,6 +409,9 @@ fun WebAppScreen(
         /** 回填页面结果用：WebView 的方法只能在它自己的线程（主线程）上调用，见 [postToWebViewThread]。 */
         val mainHandler = remember { Handler(Looper.getMainLooper()) }
         val uiState by viewModel.uiState.collectAsState()
+
+        /** 本应用自己的宿主（真实宿主 + WebVPN 代理宿主）：返回键判「首页」与地址修补都用它。 */
+        val ownHosts = remember(uiState.definition) { ownHostsOf(context, uiState.definition) }
 
         var sslErrorState by remember { mutableStateOf<Pair<SslErrorHandler, SslError>?>(null) }
         var webViewInstance by remember { mutableStateOf<WebView?>(null) }
@@ -395,11 +458,33 @@ fun WebAppScreen(
             }
         }
 
-        LaunchedEffect(appId, resolvedInitialUrl, washerResolving, washerNotice) {
+        LaunchedEffect(
+            appId,
+            resolvedInitialUrl,
+            washerResolving,
+            washerNotice,
+            campusCardAppCode,
+            campusCardDeepLinkFallback
+        ) {
             if (!washerResolving && washerNotice == null) {
-                viewModel.start(appId, resolvedInitialUrl)
+                // 同一个导航条目又回到前台（去程是被别的页面盖住：门户里点开一卡通充值、付款码…）：
+                // VM 手里的 WebView 会话还在，页面就是离开前那一页（选项卡、滚动位置都在），
+                // 再走一遍 start 反而会把这一页换成重新加载过的首页。
+                if (!viewModel.hasLiveSession(appId)) {
+                    viewModel.start(appId, resolvedInitialUrl, campusCardAppCode, campusCardDeepLinkFallback)
+                }
                 vmStarted = true
             }
+        }
+
+        // CAS 票据桥刚换到的落地地址：交给 WebView 加载（同一个容器、同一个 Cookie 罐，
+        // 业务系统核销票据后下的会话就落在它手里）。一次性状态，加载完立即清掉
+        LaunchedEffect(uiState.casBridgeUrl, webViewInstance) {
+            val target = uiState.casBridgeUrl ?: return@LaunchedEffect
+            val webView = webViewInstance ?: return@LaunchedEffect
+            Log.i("WebAppScreen", "CAS 票据桥落地，交给 WebView 加载：$target")
+            webView.loadUrl(target)
+            viewModel.onCasBridgeUrlConsumed()
         }
 
         washerNotice?.let { notice ->
@@ -496,6 +581,14 @@ fun WebAppScreen(
                 return@BackHandler
             }
 
+            // 其次关闭「需要微信授权」统一页：返回键在这里的语义是「关掉这一页」，
+            // 顺带回退一次历史（回到门户里原来那一页），而不是退出整个容器
+            if (uiState.wechatGate != null) {
+                viewModel.dismissWechatGate()
+                webViewInstance?.let { if (it.canGoBack()) it.goBack() }
+                return@BackHandler
+            }
+
             val webView = webViewInstance
             if (webView != null) {
                 val currentUrl = webView.url.orEmpty()
@@ -521,7 +614,7 @@ fun WebAppScreen(
                     }
                 }
 
-                if (!isAtHomeRoute(currentUrl, def) && webView.canGoBack()) {
+                if (!isAtHomeRoute(currentUrl, def, ownHosts) && webView.canGoBack()) {
                     webView.goBack()
                 } else {
                     navBridge.popBackStack()
@@ -579,6 +672,7 @@ fun WebAppScreen(
 
                 stage is WebAppStage.ContentReady -> {
                     FullScreenWebContent(
+                        viewModel = viewModel,
                         // 深链自启已经执行过的条目（重建场景）：把地址里的一次性载体摘掉再加载，
                         // 否则页面重新挂载就会再开一单（见 [deepLinkAutoStarted]）
                         targetUrl = if (deepLinkAutoStarted) stripDeepLinkAutoTrigger(stage.url) else stage.url,
@@ -590,6 +684,22 @@ fun WebAppScreen(
                         pendingHashRoute = pendingHashRoute,
                         onSslError = { handler, error -> sslErrorState = Pair(handler, error) },
                         onWebAuthRedirect = { pageUrl -> viewModel.onWebAuthRedirect(pageUrl) },
+                        onWechatBlocked = { blockedUrl -> viewModel.onWechatBlocked(blockedUrl, webViewInstance?.url) },
+                        onCasTicketNeeded = { service, blockedUrl -> viewModel.requestCasTicket(service, blockedUrl) },
+                        onCampusCardRedirect = { redirect ->
+                            // 旧一卡通链接改道：付款码进原生页，其余功能进新平台对应应用页。
+                            // 用 navigate（入栈）而不是替换，返回键能回到原来的页面
+                            when (redirect) {
+                                CampusCardRedirect.NativePayCode -> navBridge.navigate(Destination.CampusCardPayCode)
+                                is CampusCardRedirect.PlatformApp -> navBridge.navigate(
+                                    Destination.WebApp(
+                                        appId = WebAppId.CAMPUS_CARD.name,
+                                        campusCardAppCode = redirect.appCode,
+                                        campusCardDeepLinkFallback = redirect.deepLinkFallback
+                                    )
+                                )
+                            }
+                        },
                         onInterceptScan = { redirectUrl -> scanRequest = ScanRequest.Redirect(redirectUrl) },
                         onBridgeScan = { callbackId -> scanRequest = ScanRequest.Bridge(callbackId) },
                         onEmScan = { callbackId -> scanRequest = ScanRequest.EmBridge(callbackId) },
@@ -674,6 +784,30 @@ fun WebAppScreen(
                     }
                 )
             }
+            }
+
+            /*
+             * 「需要微信授权」统一页：盖在整个 WebView 之上。
+             * 微信授权这一步客户端代替不了（在 App 里那一页是微信自己的报错页），
+             * 所以给出说明 + 目标站点 + 复制链接 + 返回，用户复制链接去微信里继续。
+             */
+            uiState.wechatGate?.let { gate ->
+                WebAppWechatOverlay(
+                    targetHost = WebAppWechat.hostOf(gate.blockedUrl).orEmpty(),
+                    copyUrl = gate.copyUrl,
+                    onCopy = {
+                        copyToClipboard(context, gate.copyUrl)
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.wechat_auth_copied),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    onBack = {
+                        viewModel.dismissWechatGate()
+                        webViewInstance?.let { if (it.canGoBack()) it.goBack() }
+                    }
+                )
             }
 
             // 原生扫码浮层（复用「扫一扫」的相机取景；针对 U净 wx 桩桥接 / 平台扫码页回填）
@@ -781,6 +915,46 @@ private fun postToWebViewThread(handler: Handler, block: () -> Unit) {
 }
 
 /**
+ * 从「网页要选文件」的结果里取出用户选中的文件。
+ *
+ * 不能只用 [WebChromeClient.FileChooserParams.parseResult]：`<input type="file" multiple>` 这种请求
+ * Chrome 会带上 `EXTRA_ALLOW_MULTIPLE`，Android 14+ 的系统照片选择器于是按「多选」返回结果 ——
+ * 选中的照片装在结果的 `ClipData` 里，`Intent.getData()` 是空的，而 `parseResult` 只认后者，
+ * 于是「明明选好了照片」被当成用户取消：网页收到的文件是 null，文件输入框直接触发 `cancel`。
+ * （真机实测：门户里「人脸采集」的 van-uploader 就是 multiple，卡片选择之后一直提交不上去。）
+ *
+ * 因此先自己按 ClipData → data → EXTRA_STREAM 的顺序取，取不到再回落到官方的 `parseResult`。
+ */
+private fun pickFileChooserUris(resultCode: Int, data: Intent?): Array<Uri>? {
+    if (resultCode != android.app.Activity.RESULT_OK || data == null) return null
+
+    val uris = mutableListOf<Uri>()
+    data.clipData?.let { clip ->
+        for (index in 0 until clip.itemCount) {
+            clip.getItemAt(index)?.uri?.let { uris.add(it) }
+        }
+    }
+    data.data?.let { uris.add(it) }
+    when (val stream = data.extras?.get(Intent.EXTRA_STREAM)) {
+        is Uri -> uris.add(stream)
+        is List<*> -> uris.addAll(stream.filterIsInstance<Uri>())
+    }
+    if (uris.isNotEmpty()) return uris.toTypedArray()
+
+    return runCatching {
+        WebChromeClient.FileChooserParams.parseResult(resultCode, data)
+    }.getOrNull()
+}
+
+
+/** 复制一段文本到系统剪贴板（「需要微信授权」统一页的「复制链接」用）。 */
+private fun copyToClipboard(context: Context, text: String) {
+    if (text.isBlank()) return
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+    runCatching { clipboard.setPrimaryClip(ClipData.newPlainText("ClassFlow", text)) }
+}
+
+/**
  * 深链里的一次性「自启」载体：`CampusShowerEntryResolver` 把扫码原文拼在地址最后
  * （`…&scanResult=<URLEncoder 原文>`），lifeService 页面在 `mounted` 里读它就直接开单。
  */
@@ -838,19 +1012,108 @@ private fun isCampusCardPaymentUrl(url: String?): Boolean {
 /**
  * 判断当前 URL 是否处于应用定义的「主页/首页」路由。
  */
-private fun isAtHomeRoute(currentUrl: String, def: WebAppDefinition?): Boolean {
+internal fun isAtHomeRoute(currentUrl: String, def: WebAppDefinition?, ownHosts: Set<String>): Boolean {
     if (currentUrl.isBlank() || currentUrl == "about:blank") return true
     if (def == null) return false
 
-    val markers = def.homeHashMarkers
-    if (markers.isEmpty()) {
+    // 「首页」只对本应用自己的页面成立：门户里打开的业务系统（ehall / 入馆教育 / 超星 …）是站外页面，
+    // 它们的 hash 空不空跟「门户首页」没有关系 —— 以前一刀切按「hash 为空 = 首页」判，
+    // 结果在这些页面里按返回键会直接退出容器（实测反馈的问题）
+    val host = currentUrl.toHttpUrlOrNull()?.host?.lowercase()
+    if (host == null || host !in ownHosts) return false
+
+    // 应用自己的页面上 hash 为空（或就是 `#/`）也算首页：hash 路由的单页应用刚加载完正是这个状态
+    // （实测门户停在 `…/index.html#/`，标题就是「首页」）
+    if (def.blankHashIsHome || def.homeHashMarkers.isEmpty()) {
         val hash = currentUrl.substringAfter("#", "")
-        return hash.isBlank() || hash == "/"
+        if (hash.isBlank() || hash == "/") return true
     }
+
+    val markers = def.homeHashMarkers
+    if (markers.isEmpty()) return false
 
     // 同时对整条 URL、Path 与 Hash 进行匹配（涵盖 Hash 路由与 History 路由如 /plat/shouyeUser）
     return markers.any { marker -> currentUrl.contains(marker, ignoreCase = true) }
 }
+
+/**
+ * 本应用「自己人」的宿主集合：真实宿主 + 它在当前 WebVPN 配置下对应的那个代理宿主。
+ *
+ * 必须按 [WebAppDefinition.targetHost] 精确算，不能拿 `*.webvpn.wbu.edu.cn` 一把认：
+ * 门户里打开的业务系统（ehall / 入馆教育 …）在校外同样跑在 `*-wbu-edu-cn.webvpn.wbu.edu.cn` 上，
+ * 一把认会把它们当成门户自己的页面。
+ */
+private fun ownHostsOf(context: Context, def: WebAppDefinition?): Set<String> {
+    if (def == null) return emptySet()
+    val hosts = mutableSetOf(def.targetHost.lowercase())
+    runCatching {
+        WbuAuthTransport.getShared(context, true)
+            .webVpnProxyBase(def.targetHost, def.vpnSingleSuffix)
+            .toHttpUrlOrNull()
+            ?.host
+            ?.lowercase()
+            ?.let { hosts.add(it) }
+    }
+    return hosts
+}
+
+/**
+ * 地址里混进空白时把它修回正常地址（只处理「路径末尾」与「整条地址末尾」两处）。
+ *
+ * 实测（真机 + WebView 调试协议）：门户核销票据后给出的跳转目标偶尔是
+ * `https://ydmh.wbu.edu.cn/ydmh ?v=<ts>`（`/ydmh` 与 `?` 之间多一个空格；同一接口另一次给的是
+ * `…/ydmh/?v=<ts>`），Chromium 会把空格编码成 `%20`，请求因此变成 `…/ydmh%20?v=<ts>` ——
+ * Tomcat 对路径 `/ydmh ` 直接 404（页面写着「请求的资源[/ydmh%20]不可用」），门户整页打不开。
+ * 这里把这类多余空白抹掉后重新加载：只动空白，其它字符一个不碰。
+ *
+ * 只管两处，避免误伤合法地址：路径**中间**的 `%20` 是合法内容，一律不碰。
+ *
+ * @return 修正后的地址；无需修正时返回 null。
+ */
+internal fun repairStrayWhitespace(url: String): String? {
+    if (url.isBlank()) return null
+    val trailingWhitespace = Regex("(?i)(?:%20|%09|\\s)+$")
+
+    val queryAt = url.indexOf('?')
+    if (queryAt > 0) {
+        // ① 路径末尾多出空白（`…/ydmh%20?v=…`）：只重写路径，查询原样保留
+        val head = url.substring(0, queryAt)
+        val fixedHead = head.replace(trailingWhitespace, "")
+        if (fixedHead != head && fixedHead.toHttpUrlOrNull() != null) {
+            return fixedHead + url.substring(queryAt)
+        }
+        return null
+    }
+
+    // ② 整条地址末尾多出空白（Location 头尾随空格）
+    val fixed = url.replace(trailingWhitespace, "")
+    return fixed.takeIf { it != url && it.toHttpUrlOrNull() != null }
+}
+
+/**
+ * 把「本该 https、却被服务端 302 到 http」的地址抬回 https。
+ *
+ * 实测（2026-11-02 抓包）：移动门户核销票据后，`https://ydmh.wbu.edu.cn/ydmh/login/cas?ticket=…`
+ * 回 302 到 **`http://ydmh.wbu.edu.cn/ydmh?v=…`**。这个域名在安恒云 WAF 上只接了 443，
+ * 80 口直接回 `422 站点不存在`（`Server: DBAppWAF/2.1.1`），整页变成报错图 —— 连 `favicon.ico`
+ * 都是同一张 422 页。
+ *
+ * 只在「应用自己配置的主页是 https」时才抬（见 [prefersHttpsOrigin]）：`yktfwpt` 这类本身
+ * 就是 http 服务的站点不能动。
+ *
+ * @return 抬回 https 后的地址；无需修正（本来就是 https、或有显式非 80 端口）时返回 null。
+ */
+internal fun upgradeHttpToHttps(url: String): String? {
+    val parsed = url.toHttpUrlOrNull() ?: return null
+    if (parsed.scheme != "http") return null
+    // 显式非 80 端口（例如 WebVPN 的 :8118）不算「被降级到 http」，别碰
+    if (parsed.port != 80) return null
+    return parsed.newBuilder().scheme("https").port(443).build().toString()
+}
+
+/** 该应用配置的主页地址是不是 https —— 决定 http 跳转要不要抬回去。 */
+internal fun prefersHttpsOrigin(realOrigin: String?): Boolean =
+    realOrigin?.startsWith("https://", ignoreCase = true) == true
 
 /**
  * 判断当前是否处于第三方 H5（如 U净）的首页路由 `#/home`。
@@ -1002,6 +1265,7 @@ private fun buildHairdryerAutoRouteJs(route: String): String = """
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun FullScreenWebContent(
+    viewModel: WebAppViewModel,
     targetUrl: String,
     useVpn: Boolean,
     definition: WebAppDefinition?,
@@ -1012,6 +1276,16 @@ private fun FullScreenWebContent(
     onSslError: (SslErrorHandler, SslError) -> Unit,
     /** 网页被踢回统一认证登录页；[pageUrl] 是当前停留在的那一页（可能为 null），供自愈时回到原地。 */
     onWebAuthRedirect: (pageUrl: String?) -> Unit,
+    /** 拦到了「需要微信授权」的目标（微信授权页 / 企业微信中转）：盖统一页。 */
+    onWechatBlocked: (blockedUrl: String) -> Unit,
+    /**
+     * CAS 票据桥：用本机凭据给 [serviceUrl] 换一张票据并把落地地址交给 WebView。
+     *
+     * @param blockedUrl 非空 = 这次拦截来自企业微信中转，换票失败要回落到统一页（不是登录面板）。
+     */
+    onCasTicketNeeded: (serviceUrl: String, blockedUrl: String?) -> Unit,
+    /** 旧一卡通链接改道（见 [CampusCardLegacyLink]）。 */
+    onCampusCardRedirect: (CampusCardRedirect) -> Unit,
     onInterceptScan: (redirectUrl: String) -> Unit,
     onBridgeScan: (callbackId: String) -> Unit,
     onEmScan: (callbackId: String) -> Unit,
@@ -1050,14 +1324,21 @@ private fun FullScreenWebContent(
         val callback = filePathCallback
         filePathCallback = null
         if (callback != null) {
-            val uris = WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+            val uris = pickFileChooserUris(result.resultCode, result.data)
+            Log.i("WebAppScreen", "网页文件选择回执：resultCode=${result.resultCode} 文件数=${uris?.size ?: 0}")
             callback.onReceiveValue(uris)
+        } else {
+            Log.w("WebAppScreen", "文件选择回执时没有挂起的回调（容器已经换过一轮？）")
         }
     }
 
     val defaultUserAgent = remember { WebSettings.getDefaultUserAgent(context) }
     // 一卡通平台 / U净 场景启用 wx 桩与原生桥（避免影响其它网页应用）
     val enableScanBridge = definition?.id == WebAppId.CAMPUS_CARD
+    // 本应用自己的宿主（真实宿主 + WebVPN 代理宿主）：只修自己人的地址，别碰站外页面
+    val ownHosts = remember(definition) { ownHostsOf(context, definition) }
+    // 门户（uni-app）用 window.open 打应用：把它改成当前窗口跳转，见定义里的 shimWindowOpen 说明
+    val shimWindowOpen = definition?.shimWindowOpen == true
     val customUserAgent = remember(defaultUserAgent, enableScanBridge) {
         // 当为一卡通平台时，追加 "SynATP E-Mobile" 使得：
         // 1. 新中新扩展应用（applications/lifeService）识别为 SynATP / TjtcApp，解锁原生扫码；
@@ -1081,6 +1362,16 @@ private fun FullScreenWebContent(
     }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
+    // 网页定位桥（见 [WebAppGeolocationController]）：页面真要定位时才弹系统授权，
+    // 没用到定位的页面不会被打扰。桥跟着导航条目走，与会话 WebView 同寿。
+    val geoController = remember { viewModel.geolocationController() }
+    val geoPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        // 粗/精两个一起申请：允许任意一个就能出位置（网络定位只需要 COARSE）
+        geoController.onPermissionResult(permissions.values.any { it })
+    }
+
     // 网页原生 alert / confirm / prompt 的挂起队列（由 WebJsDialogHost 渲染成应用自己的弹窗）
     val jsDialogState = remember { WebJsDialogState() }
 
@@ -1088,7 +1379,9 @@ private fun FullScreenWebContent(
     val jsDialogPageLabel: String? = definition?.let { context.getString(it.titleRes) }
 
     val webView = remember {
-        WebView(context).apply {
+        // 会话 WebView（见 [WebAppViewModel.reusableSessionWebView]）：容器被别的页面盖住又回来时，
+        // 挂回来的还是同一个 WebView —— 页面文档、选项卡、滚动位置全靠它。
+        viewModel.reusableSessionWebView() ?: WebView(context).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -1208,7 +1501,14 @@ private fun FullScreenWebContent(
                 )
             }
 
+            // 网页定位桥：http 站点上 Blink 会硬拒绝 navigator.geolocation（非安全源），
+            // 所以容器自己取位置、由注入的脚本把结果交给页面。所有网页应用都装，不限于一卡通。
+            addJavascriptInterface(geoController, WebAppGeolocationScript.BRIDGE_NAME)
+
             webViewClient = object : WebViewClient() {
+                /** 已经抬过 https 的地址：同一条 http 地址只抬一次，防止服务端来回 302 打成死循环。 */
+                private val upgradedOnce = HashSet<String>()
+
                 /**
                  * 根据主框架 URL 在「SynATP 移动 UA」与「桌面/H5 UA」之间切换。
                  *
@@ -1229,20 +1529,124 @@ private fun FullScreenWebContent(
                     }
                 }
 
-                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                    val url = request?.url?.toString() ?: return false
+                /**
+                 * 地址里混进空白时，修回正常地址并加载（实测门户核销票据后的跳转目标
+                 * `…/ydmh ?v=…`，Chromium 编码成 `…/ydmh%20?v=…` 后 Tomcat 直接 404）。
+                 *
+                 * 只对本应用自己的目标主机生效，避免误伤第三方页面里合法的 `%20`。
+                 * 两处都接：`shouldOverrideUrlLoading`（能拦到就势拦下这次跳转）与
+                 * `onPageStarted`（服务端 302 那种一跳到底、拦不到时，页面上手就换成修好的地址）。
+                 *
+                 * @return true = 已经改为加载修好的地址，调用方不要再管这次跳转。
+                 */
+                private fun repairUrlIfNeeded(view: WebView?, url: String?): Boolean {
+                    if (url.isNullOrBlank()) return false
+                    // 只管本应用自己的地址：真实宿主 + 它在 WebVPN 下的代理宿主
+                    // （校外加载门户时落点正是 `ydmh-wbu-edu-cn-s.webvpn.wbu.edu.cn:8118/…`，
+                    //  实测同一个 404 在直连与代理两个通道上都会出现）
+                    val host = url.toHttpUrlOrNull()?.host?.lowercase() ?: return false
+                    if (host !in ownHosts) return false
 
-                    // 1. 核心要求：坚决不让 WebView 展示统一身份认证的 Web 登录页面。
-                    //    跳到 CAS 登录页只有一个含义 —— 这一页手里的会话失效了；但「页面会话失效」不等于
-                    //    「必须让用户登录统一认证」：先交回 ViewModel，用本机凭据（一卡通平台令牌 / 保存的
-                    //    账号密码）把页面重新救回来，救不回来它才把需要登录的状态交给 UI 弹原生登录窗。
-                    if (url.contains("/authserver/login") || url.contains("/por/login")) {
-                        Log.i("WebAppScreen", "Intercepted navigation to CAS login: $url (page=${view?.url})")
-                        onWebAuthRedirect(view?.url)
+                    // ① 空白修补
+                    val repaired = repairStrayWhitespace(url)
+                    if (repaired != null) {
+                        Log.w("WebAppScreen", "地址里混进空白，修回后重新加载：$url -> $repaired")
+                        view?.loadUrl(repaired)
                         return true
                     }
 
-                    // 2. 针对 U净 / 平台扫一扫：页面跳转 /plat/scan?redirectUrl=... 时拦截，并拉起原生扫码
+                    // ② https 被服务端降级成 http：这个 http 口在云 WAF 上没接入，
+                    //    实测直接回 422「站点不存在」（ydmh 的核销跳转就是这样）。
+                    //    只在应用自己的主页是 https 时抬回去，http 服务（yktfwpt）不动。
+                    if (prefersHttpsOrigin(definition?.realOrigin)) {
+                        val upgraded = upgradeHttpToHttps(url)
+                        // 防循环：服务端如果坚持把 https 再 302 回同一个 http 地址，
+                        // 再抬一次就会 https→http→https 无限打转。同一条 http 地址只抬一次。
+                        if (upgraded != null && upgradedOnce.add(url)) {
+                            Log.w("WebAppScreen", "跳转被降级到 http，抬回 https 后重新加载：$url -> $upgraded")
+                            view?.loadUrl(upgraded)
+                            return true
+                        }
+                    }
+
+                    return false
+                }
+
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                    val url = request?.url?.toString() ?: return false
+
+                    // -1. 地址里混进空白：修回正常地址再加载
+                    if (repairUrlIfNeeded(view, url)) return true
+
+                    // 0. 旧一卡通微信服务链接（yktyd.wbu.edu.cn 的 wechat 路径下）改道新平台。
+                    //    这些链接点开必然 302 到企业微信 OAuth（回调回 yktyd 自身，客户端伪造不了），
+                    //    在 App 里只能落到微信报错页；新平台（CAMPUS_CARD）已支持免密换票，
+                    //    因此这里直接改道，并落到与新平台功能对应的那个页面（见 CampusCardLegacyLink）。
+                    //    已经站在一卡通容器里时不改道，防自我跳转。
+                    if (definition?.id != WebAppId.CAMPUS_CARD) {
+                        val redirect = CampusCardLegacyLink.parse(url)
+                        if (redirect != null) {
+                            Log.i("WebAppScreen", "旧一卡通链接改道：$url -> $redirect")
+                            onCampusCardRedirect(redirect)
+                            return true
+                        }
+                    }
+
+                    // 1. 微信自己的授权页：在 App 里打开只会渲染微信的「请在微信客户端打开链接」报错页，
+                    //    而这一步客户端代替不了 —— 换成我们自己的统一页（提示 + 复制链接 + 返回）
+                    if (WebAppWechat.isWechatAuthorizeUrl(url)) {
+                        Log.i("WebAppScreen", "拦到需要微信授权的目标：$url")
+                        onWechatBlocked(url)
+                        return true
+                    }
+
+                    // 2. 统一身份认证的企业微信中转（weixinQYLogin.do?qyId=…&success=…）：
+                    //    它要的其实只是一张 CAS 票据（success 就是一个 CAS 登录地址），
+                    //    手里有 CASTGC 就直接把后半段走完，用户不必去微信转一圈。
+                    //    解析不出 success / success 不是 CAS 登录地址时才动统一页
+                    if (WebAppWechat.isWeixinQyLoginUrl(url)) {
+                        val success = WebAppWechat.parseSuccessTarget(url)
+                        val service = success?.let { WebAppWechat.casServiceOf(it) }
+                        when {
+                            service != null -> {
+                                Log.i("WebAppScreen", "跳过企业微信中转，直接换票：service=$service")
+                                onCasTicketNeeded(service, url)
+                            }
+
+                            success != null -> {
+                                Log.i("WebAppScreen", "企业微信中转无需 CAS，直接落到 success：$success")
+                                view?.loadUrl(success)
+                            }
+
+                            else -> {
+                                Log.i("WebAppScreen", "企业微信中转没有可用的 success，弹统一页：$url")
+                                onWechatBlocked(url)
+                            }
+                        }
+                        return true
+                    }
+
+                    // 3. 跳向统一身份认证登录页。两种情况：
+                    //    · 业务系统在正常要一张票据（门户里的 ehall / zxst 都这样）→ 票据桥就地换票；
+                    //    · 这一页手里的会话真的失效了 → 交回 ViewModel 用本机凭据自救，
+                    //      救不回来它才把需要登录的状态交给 UI 弹原生登录窗。
+                    //    （核心要求不变：坚决不让 WebView 展示统一身份认证的 Web 登录页面）
+                    if (WebAppWechat.isCasLoginUrl(url)) {
+                        val service = if (definition?.casTicketBridge == true && url.contains("/authserver/login")) {
+                            WebAppWechat.casServiceOf(url)
+                        } else null
+
+                        if (service != null) {
+                            Log.i("WebAppScreen", "CAS 票据桥：为 $service 换票")
+                            onCasTicketNeeded(service, null)
+                        } else {
+                            Log.i("WebAppScreen", "Intercepted navigation to CAS login: $url (page=${view?.url})")
+                            onWebAuthRedirect(view?.url)
+                        }
+                        return true
+                    }
+
+                    // 4. 针对 U净 / 平台扫一扫：页面跳转 /plat/scan?redirectUrl=... 时拦截，并拉起原生扫码
                     if (url.contains("/plat/scan")) {
                         val parsed = Uri.parse(url)
                         val redirect = parsed.getQueryParameter("redirectUrl").orEmpty()
@@ -1253,7 +1657,7 @@ private fun FullScreenWebContent(
                         }
                     }
 
-                    // 3. U净 → 平台 OAuth：给 authorize 补上平台身份，让平台把 code 回调给 U净 页面
+                    // 5. U净 → 平台 OAuth：给 authorize 补上平台身份，让平台把 code 回调给 U净 页面
                     if (enableScanBridge &&
                         !platformToken.isNullOrBlank() &&
                         url.contains("/berserker-auth/oauth/authorize") &&
@@ -1267,7 +1671,7 @@ private fun FullScreenWebContent(
                         return true
                     }
 
-                    // 4. 拦截微信支付（weixin://）、支付宝（alipays://）及其他第三方自定义 URI Scheme
+                    // 6. 拦截微信支付（weixin://）、支付宝（alipays://）及其他第三方自定义 URI Scheme
                     val uri = Uri.parse(url)
                     val scheme = uri.scheme?.lowercase()
                     if (scheme != null && scheme != "http" && scheme != "https" && scheme != "about" && scheme != "data" && scheme != "javascript") {
@@ -1301,7 +1705,16 @@ private fun FullScreenWebContent(
 
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
+                    // 兜底：服务端 302 直接跳到「路径里混进空格」的地址时上头那处拦不到，
+                    // 页面刚上手就换成修好的地址（修好的地址不会再触发，不会成环）
+                    if (repairUrlIfNeeded(view, url)) return
                     applyCampusCardUserAgent(view, url)
+                    // 定位接管脚本尽早装上（幂等）：页面在 load 阶段就定位的也别漏
+                    injectGeolocationShim(view)
+                    // 门户：把 window.open 改成当前窗口跳转（幂等），否则点应用可能毫无反应
+                    if (shimWindowOpen) {
+                        view?.evaluateJavascript(WINDOW_OPEN_SHIM_JS, null)
+                    }
                     // document 早期注入 wx 桩（幂等），保证 U净 扫码/支付桥可用
                     if (enableScanBridge) {
                         view?.evaluateJavascript(WX_STUB_JS, null)
@@ -1323,8 +1736,15 @@ private fun FullScreenWebContent(
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     applyCampusCardUserAgent(view, url)
+                    // 定位接管脚本兜底再装一次（部分机型 onPageStarted 时 JS 上下文尚未就绪）
+                    injectGeolocationShim(view)
                     // 本次加载是否把「一次性自启」交给了页面
                     var autoStartHandedOff = false
+                    // 门户：window.open 兜底再注入一次（部分机型 onPageStarted 时 JS 上下文尚未就绪），
+                    // 也覆盖「门户跳走后又回到门户」这类情况
+                    if (shimWindowOpen) {
+                        view?.evaluateJavascript(WINDOW_OPEN_SHIM_JS, null)
+                    }
                     // 兜底再注入一次（部分机型 onPageStarted 时 JS 上下文尚未就绪）
                     if (enableScanBridge) {
                         view?.evaluateJavascript(WX_STUB_JS, null)
@@ -1377,6 +1797,22 @@ private fun FullScreenWebContent(
                         Log.i("WebAppScreen", "Blocked jweixin script: $reqUrl")
                         return WebResourceResponse(
                             "application/javascript",
+                            "utf-8",
+                            ByteArrayInputStream(ByteArray(0))
+                        )
+                    }
+
+                    // 子框架（iframe）里的跳转不走 shouldOverrideUrlLoading，这里兜一层：
+                    // 命中微信授权页 / 企业微信中转且不是主框架时，置出统一页状态并回一个空响应，
+                    // 免得 iframe 里渲染出微信自己的报错页。
+                    // （子框架里不做票据桥：那要把主框架整体导航过去，等于把人从门户里踢出去）
+                    if (request != null && !request.isForMainFrame && WebAppWechat.looksLikeWechatGate(reqUrl) &&
+                        (WebAppWechat.isWechatAuthorizeUrl(reqUrl) || WebAppWechat.isWeixinQyLoginUrl(reqUrl))
+                    ) {
+                        Log.i("WebAppScreen", "子框架里拦到需要微信的目标：$reqUrl")
+                        mainHandler.post { onWechatBlocked(reqUrl) }
+                        return WebResourceResponse(
+                            "text/plain",
                             "utf-8",
                             ByteArrayInputStream(ByteArray(0))
                         )
@@ -1507,6 +1943,7 @@ private fun FullScreenWebContent(
                         fileChooserLauncher.launch(intent)
                         true
                     }.getOrElse {
+                        Log.w("WebAppScreen", "拉起文件选择器失败", it)
                         filePathCallback?.onReceiveValue(null)
                         filePathCallback = null
                         false
@@ -1515,10 +1952,18 @@ private fun FullScreenWebContent(
             }
 
             loadUrl(targetUrl)
-        }
+        }.also { viewModel.holdSessionWebView(it) }
     }
 
     LaunchedEffect(webView) {
+        // 定位桥每次挂回来都要重新绑一次：容器被别的页面盖住过时换的是容器，不是 WebView，
+        // 而桥上的回调（跳系统授权）属于「当前这一个」容器。
+        geoController.bind(webView) { permissions -> geoPermissionLauncher.launch(permissions) }
+        // 挂回来的页面（可能早就加载完、脚本也跑过了）也要把接管脚本补上
+        injectGeolocationShim(webView)
+        // 挂回来的可能是一个已经加载完的页面（容器被别的页面盖住过）：它不会再回调进度，
+        // 不从 WebView 自己的进度补一下，顶部进度条就会永远停在 0
+        if (webView.progress >= 100) loadingProgress = 1f
         onWebViewReady(webView)
     }
 
@@ -1532,25 +1977,25 @@ private fun FullScreenWebContent(
             // 先把还挂着的网页对话框按「取消」落定，否则页面 JS 会永久卡住
             jsDialogState.cancelAll()
 
-            webView.stopLoading()
+            // 定位桥解绑：这一轮容器走了，挂起的定位请求不能再等（页面侧还有 25 秒兜底超时）
+            geoController.release()
 
-            // WebView 的方法必须在创建它的线程（主线程）上调用：放在 Dispatchers.IO 里
-            // 会直接抛 "A WebView method was called on thread ..."，等于什么都没清掉。
-            runCatching {
-                webView.clearCache(true)
-                webView.clearHistory()
-                WebStorage.getInstance().deleteAllData()
-            }.onFailure { Log.w("WebAppScreen", "清理 WebView 资源失败", it) }
-
-            webView.removeAllViews()
-            webView.destroy()
+            // 注意：这里**不销毁、也不清空** WebView。
+            //
+            // 容器卸载有两种情况：一是用户真的退出去了，二是被别的页面压住（门户里点开一卡通充值 /
+            // 付款码，压进来的是原生页或另一个 WebApp）。两种情况的卸载长得一模一样，而第二种要把
+            // 这一页原样端回来 —— 页面文档、选项卡、滚动位置都只在 WebView 自己的内存里。
+            //
+            // 所以销毁与清理统一挪到 [WebAppViewModel.onCleared]：导航条目真正从回退栈弹出时才走，
+            // 退出时的清理（缓存 / 历史 / WebStorage）与以前一致。
         }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
-            factory = { webView }
+            factory = { ctx -> FrameLayout(ctx) },
+            update = { holder -> holder.claimSessionWebView(webView) }
         )
 
         // 网页原生 alert / confirm / prompt：用应用自己的弹窗替代系统样式
@@ -1567,6 +2012,31 @@ private fun FullScreenWebContent(
             )
         }
     }
+}
+
+/**
+ * 把会话 WebView「认领」到当前容器上。
+ *
+ * 不能直接 `AndroidView(factory = { webView })`：一个 View 只能有一个父容器，而容器换页时
+ * 新旧两帧可能同时要求持有它（导航条目回来得比退场动画快的时候），`addView` 会直接抛
+ * 「child already has a parent」。所以外面套一层 FrameLayout，挂之前先把 WebView 从上一个
+ * 容器上摘下来 —— 同一个 WebView 因此在容器之间搬来搬去，页面本身不受影响。
+ */
+private fun FrameLayout.claimSessionWebView(webView: WebView) {
+    if (webView.parent === this) return
+    (webView.parent as? ViewGroup)?.removeView(webView)
+    addView(webView, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+}
+
+/**
+ * 装上网页定位接管脚本（见 [WebAppGeolocationScript]）。
+ *
+ * 脚本自己幂等（装过就退出、桥不在也退出），所以三处都注：`onPageStarted`（页面 load 阶段
+ * 就调用定位的页面）、`onPageFinished`（部分机型 `onPageStarted` 时 JS 上下文尚未就绪）、
+ * 以及容器挂回来时（页面可能早就跑完了）。
+ */
+private fun injectGeolocationShim(view: WebView?) {
+    view?.evaluateJavascript(WebAppGeolocationScript.JS, null)
 }
 
 /**
