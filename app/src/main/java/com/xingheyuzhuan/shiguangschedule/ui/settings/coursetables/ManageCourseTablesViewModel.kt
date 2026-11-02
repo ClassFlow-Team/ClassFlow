@@ -91,7 +91,7 @@ class ManageCourseTablesViewModel @Inject constructor(
     }
 
     suspend fun applySemesterConfig(
-        config: com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSemesterConfig?,
+        config: com.shiro.classflow.data.network.wbu.WbuSemesterConfig?,
         targetTableId: String
     ) {
         if (config == null) return

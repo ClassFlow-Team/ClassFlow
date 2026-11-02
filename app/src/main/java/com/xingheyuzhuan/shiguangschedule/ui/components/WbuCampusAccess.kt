@@ -1,21 +1,21 @@
 package com.xingheyuzhuan.shiguangschedule.ui.components
 
 import android.content.Context
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.AccessAction
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.AccessFailure
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.AccessLayer
-import com.xingheyuzhuan.shiguangschedule.data.model.wbu.CredentialService
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.CampusChannelDecision
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuAuthTransport
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuFailureDetector
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.replanCampusChannel
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.resolveCampusChannel
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.resolveCampusUseVpn
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuQueryClient
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSyncEngine
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.confirmedPasswordRejectionLayer
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.suggestedAction
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.directChannelTrouble
+import com.shiro.classflow.data.network.wbu.AccessAction
+import com.shiro.classflow.data.network.wbu.AccessFailure
+import com.shiro.classflow.data.network.wbu.AccessLayer
+import com.shiro.classflow.data.model.wbu.CredentialService
+import com.shiro.classflow.data.network.wbu.CampusChannelDecision
+import com.shiro.classflow.data.network.wbu.WbuAuthTransport
+import com.shiro.classflow.data.network.wbu.WbuFailureDetector
+import com.shiro.classflow.data.network.wbu.replanCampusChannel
+import com.shiro.classflow.data.network.wbu.resolveCampusChannel
+import com.shiro.classflow.data.network.wbu.resolveCampusUseVpn
+import com.shiro.classflow.data.network.wbu.WbuQueryClient
+import com.shiro.classflow.data.network.wbu.WbuSyncEngine
+import com.shiro.classflow.data.network.wbu.confirmedPasswordRejectionLayer
+import com.shiro.classflow.data.network.wbu.suggestedAction
+import com.shiro.classflow.data.network.wbu.directChannelTrouble
 import kotlinx.coroutines.CancellationException
 
 /**

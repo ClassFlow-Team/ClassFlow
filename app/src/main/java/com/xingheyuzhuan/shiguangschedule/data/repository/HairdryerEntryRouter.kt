@@ -1,8 +1,8 @@
 package com.xingheyuzhuan.shiguangschedule.data.repository
 
-import com.xingheyuzhuan.shiguangschedule.data.model.wbu.HairdryerDeviceType
-import com.xingheyuzhuan.shiguangschedule.data.model.wbu.HairdryerLaunchSource
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.UjingHairdryerEntryResolver
+import com.shiro.classflow.data.model.wbu.HairdryerDeviceType
+import com.shiro.classflow.data.model.wbu.HairdryerLaunchSource
+import com.shiro.classflow.data.network.wbu.UjingHairdryerEntryResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 

@@ -754,7 +754,7 @@ class WeeklyScheduleViewModel @Inject constructor(
 
     /** 写入学期配置（开学日期/总周数/作息时间）；config 为 null 时跳过。 */
     suspend fun applySemesterConfig(
-        config: com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSemesterConfig?,
+        config: com.shiro.classflow.data.network.wbu.WbuSemesterConfig?,
         targetTableId: String? = null
     ) {
         if (config == null) return

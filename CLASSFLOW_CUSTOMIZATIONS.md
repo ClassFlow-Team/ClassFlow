@@ -15,6 +15,26 @@ git diff 3eb39c2 --stat -- app/src/main/java app/src/main/res | sort -t'|' -k2 -
 2. **清单外文件出现差异 = 遗漏**，必须处理
 3. 独有文件（上游不存在）不参与 diff，无需处理
 
+## 包布局约定
+
+本仓库是上游的 fork，代码分两棵树，**合并上游时不要跨树搬文件**：
+
+| 树 | 路径 | 说明 |
+|---|---|---|
+| 上游基线 | `app/src/main/java/com/xingheyuzhuan/shiguangschedule/` | 与上游逐字对齐（除本清单列出的有意差异），路径 / `package` / 类名**禁止改动**，否则每次 merge 都会退化成手工移植 |
+| ClassFlow 独有 | `app/src/main/java/com/shiro/classflow/` | 上游不存在的自包含子系统：`data/network/{wbu,link}`、`data/network/NetworkAvailability.kt`、`data/model/{wbu,link}`、`data/link`、`ui/{campus,webapp,link}`、`ui/settings/credentials` |
+
+- `namespace` 仍是 `com.xingheyuzhuan.shiguangschedule`（`R` / `BuildConfig` 在旧包），
+  所以 `com.shiro.classflow.*` 下的文件需要显式 `import com.xingheyuzhuan.shiguangschedule.R`。
+- `applicationId` 为 `com.shiro.classflow`，与包布局无关。
+- 胶水层（`widget/`、`tool/`、`data/repository/`、`data/db/main/`、`ui/components/`、
+  `ui/theme/`、`ui/settings/`、`ui/schedule/`、`ui/schoolselection/`、根目录）留在上游包内，
+  清单里出现这些路径时按原路径理解；下文 §5 等章节里 `data/network/wbu/` 之类的路径
+  一律指 `com/shiro/classflow/` 下的同名子路径。
+
+> 历史：`707341c` 曾把全部 144 个文件搬进 `com/shiro/classflow`，导致上游 merge 无法自动合并，
+> 被 `61d6e76` 回滚。**只搬上游不存在的文件**是当前约定。
+
 ## 零差异文件（已对齐上游，merge 应自动合并，禁止再改）
 
 | 文件 | 说明 |
@@ -65,7 +85,7 @@ git diff 3eb39c2 --stat -- app/src/main/java app/src/main/res | sort -t'|' -k2 -
 | `data/repository/StyleSettingsRepository.kt` | ClassFlow 字段 setter |
 
 ### 5. WBU 教务同步与校园服务（独有子系统，上游无此文件）
-`data/network/wbu/`、`data/model/wbu/`、`ui/campus/`（成绩查询、空教室查询、学业完成度与课程进程）、`ui/components/WbuAuthBottomSheet.kt`、`WbuLoginSelectorBottomSheet.kt`、`ui/schedule/components/WbuSyncComponents.kt`、`ui/schoolselection/web/`（WebView 注入）、`WbuWebLoginAutofillStore.kt` 等——**上游不存在，merge 零冲突**
+代码在 `com/shiro/classflow/` 下：`data/network/wbu/`、`data/model/wbu/`、`ui/campus/`（成绩查询、空教室查询、学业完成度与课程进程）、`data/network/link/`、`data/model/link/`、`data/link/`、`ui/webapp/`、`ui/link/`、`ui/settings/credentials/`。留在上游包内的部分：`ui/components/WbuAuthBottomSheet.kt`、`WbuLoginSelectorBottomSheet.kt`、`ui/schedule/components/WbuSyncComponents.kt`、`ui/schoolselection/web/`（WebView 注入）、`WbuWebLoginAutofillStore.kt` 等——**上游不存在，merge 零冲突**
 
 - 凭据存储改造（`WbuAuthTransport.kt`）：key 由旧版扁平名改为「服务类型 × 账号」分桶（`<field>@<service>@<account>`，如 `password@ids@primary`、`cookies@jwxt@primary`），Cookie 按服务归属拆分持久化（运行时内存 jar 仍共用）；旧扁平 key 一次性**复制**迁移（`migrateLegacyCredentialKeysOnce`，`MyApplication` 启动调用），**保留旧数据不删**。新增 `data/model/wbu/CredentialService.kt`（服务枚举）、`WbuCredentialRepository.kt`、`CredentialVerifier.kt`。
 - 登录编排统一（**上游无此结构**）：`ui/campus/components/WbuCampusAuthSheet.kt` 升级为唯一登录编排宿主（WebVPN 门户登录 / 短信 / 滑块 / 二维码 / 证书异常询问 `SslIssueDialog` / 校园网确认回调 / 验证码回退回调 / `flowTagPrefix`），校园服务、课表页、导入弹窗、账号与凭据页共用；`ui/components/SslIssueDialog.kt` 为抽出的公共弹窗；`ui/components/WbuCourseImportSheet.kt` 瘦身为「导入管线 + 学期/重复课程弹窗」。
@@ -89,6 +109,29 @@ git diff 3eb39c2 --stat -- app/src/main/java app/src/main/res | sort -t'|' -k2 -
 - 换票链路的抗抖动与去重（**上游无此结构**）：`oauth2.0/authorize` 偶发吐 401（实测一次 401 后连续 20 次 302），过去一次抖动就被判成「登录态失效」把用户顶去重登，登录后又立刻撞同一跳。`WbuCampusCardClient.loginWithCasTgcFlow` 改为 `401/403/5xx` 先退避 800ms 原样重放**同一跳**一次，仍失败才抛 `WbuSessionExpiredException`（404 不重试：真 404 基本是 WAF 页，已被上层拦走；重试放在「登录页特征」判断之后，真过期仍然立刻报错）。换票总跳数上限提成 `MAX_HOPS = 15`。并发入口用 `data/network/wbu/SingleFlight.kt` 收口，且**放在 companion 里（进程级）**：该 client 在 16 处被 `new`，实例级单飞只能拦同一实例内的并发 —— `ensureValidAccessToken`（校验 → 刷新 → 换票全过程）与 `loginWithCasTgc`（换票本身）各自单飞，后来者共享同一次结果。抓包里 6 秒 3 轮令牌请求、3 条并行换票，正是平台「单活跃会话」互相顶号、回「已经在其他设备登录」的来源。单飞**只去重不缓存**（任务结束即清空），避免切换账号拿到旧 token；`SingleFlightTest` 覆盖并发共享、失败共享、结束后重跑、失败不污染、发起者取消不挂死五种情形。另外 `WbuNetworkDiagnostics`（OkHttp `EventListener`）记最近 40 条请求的 `host+path+状态码+对端 IP`（不含 query），设置页「复制网络诊断」可导出：对端落 `172.16/12`、`10/8`、`192.168/16` 即校内直连（不过云 WAF），其余为公网（可能过 WAF）——排查「到底是哪条路失败」时不要再靠猜。
 
 ### 6. 其他独有/定制
+
+**留在上游包内的 ClassFlow 独有文件**（路径相对 `com/xingheyuzhuan/shiguangschedule/`）——这些是与上游同包耦合的胶水层，不搬进 `com.shiro.classflow`：
+
+```
+AppEntryPoints.kt                      NavBridge.kt
+data/db/main/AppSettings.kt            data/db/main/AppSettingsDao.kt
+data/repository/HairdryerEntryRouter.kt
+data/repository/HairdryerHubRepository.kt
+data/repository/TimeSlotNormalization.kt
+tool/{GitHubUpdateSource,VersionNames,ScheduleImageExporter,SessionInstallManager,WakeupExportTool}.kt
+ui/components/{AppUpdateDialog,DownloadWelcomeOverlay,EntryOverlayController,LiquidGlassTopBar,
+  MarkdownBlockParser,MarkdownReleaseNotes,OnboardingOverlay,PortalCaptchaDialog,SavedPasswordField,
+  SemesterPickerBottomSheet,SliderCaptchaDialog,SslIssueDialog,UjingBrandLoading,WbuAuthBottomSheet,
+  WbuAuthPrompt,WbuCampusAccess,WbuCourseImportSheet,WbuFailureText,WbuLoadingPlaceholder,
+  WebJsDialogHost}.kt
+ui/schedule/components/WbuSyncComponents.kt
+ui/schoolselection/web/WbuWebLoginAutofillStore.kt
+ui/settings/additional/{LanguageSettingScreen,MoreOptionsViewModel}.kt
+ui/settings/style/WallpaperAdjustScreen.kt
+ui/settings/themesettings/ThemeSettingsViewModel.kt
+ui/theme/{ThemeClassFlow,ThemeGradients,TimePeriod}.kt
+widget/{moderate,large}/*Native{Provider,Renderer}.kt
+```
 
 - `ui/theme/ThemeClassFlow.kt`（Sakura/Afternoon/Evening 色板 + ClassFlowTheme）
 - 线上网页与短链服务端（**不入库**，本机维护、手动部署，全在 `web/` 下，已加入 `.gitignore`）：`web/site/` 官网静态站、`web/pages/` 「打开 App / 下载」落地页、`web/api/linkhub.php` 单文件短链后端（节点数据也在服务器上）、`web/tools/` 本机调试页；协议契约见 `LINK_HUB_PROTOCOL.md`。

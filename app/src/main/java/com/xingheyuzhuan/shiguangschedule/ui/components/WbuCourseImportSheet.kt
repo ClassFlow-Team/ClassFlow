@@ -30,10 +30,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.AccessFailure
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSyncEngine
-import com.xingheyuzhuan.shiguangschedule.ui.campus.components.WbuAuthTipsScenario
-import com.xingheyuzhuan.shiguangschedule.ui.campus.components.WbuCampusAuthSheet
+import com.shiro.classflow.data.network.wbu.AccessFailure
+import com.shiro.classflow.data.network.wbu.WbuSyncEngine
+import com.shiro.classflow.ui.campus.components.WbuAuthTipsScenario
+import com.shiro.classflow.ui.campus.components.WbuCampusAuthSheet
 import com.xingheyuzhuan.shiguangschedule.ui.settings.coursetables.ManageCourseTablesViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred

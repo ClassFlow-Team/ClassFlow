@@ -68,7 +68,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.rememberCoroutineScope
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.needsRelogin
+import com.shiro.classflow.data.network.wbu.needsRelogin
 import com.xingheyuzhuan.shiguangschedule.ui.components.WbuCourseImportSheet
 import com.xingheyuzhuan.shiguangschedule.ui.components.accessFailureText
 import com.xingheyuzhuan.shiguangschedule.ui.components.needLoginHintText

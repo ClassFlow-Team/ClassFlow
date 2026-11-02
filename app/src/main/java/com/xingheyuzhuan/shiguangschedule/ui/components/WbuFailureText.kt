@@ -2,12 +2,12 @@ package com.xingheyuzhuan.shiguangschedule.ui.components
 
 import android.content.Context
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.data.network.NoNetworkException
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.AccessFailure
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.AccessLayer
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.CredentialKind
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuFailureDetector
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.needsRelogin
+import com.shiro.classflow.data.network.NoNetworkException
+import com.shiro.classflow.data.network.wbu.AccessFailure
+import com.shiro.classflow.data.network.wbu.AccessLayer
+import com.shiro.classflow.data.network.wbu.CredentialKind
+import com.shiro.classflow.data.network.wbu.WbuFailureDetector
+import com.shiro.classflow.data.network.wbu.needsRelogin
 
 /**
  * 把结构化的 [AccessFailure] 渲染成用户看得懂的文案。

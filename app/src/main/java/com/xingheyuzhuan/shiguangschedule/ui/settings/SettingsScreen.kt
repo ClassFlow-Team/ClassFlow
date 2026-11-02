@@ -38,7 +38,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Destination
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuNetworkDiagnostics
+import com.shiro.classflow.data.network.wbu.WbuNetworkDiagnostics
 import com.xingheyuzhuan.shiguangschedule.ui.components.DatePickerModal
 import com.xingheyuzhuan.shiguangschedule.ui.components.DockSafeBottomPadding
 import com.xingheyuzhuan.shiguangschedule.ui.components.NavigationRailWidth
@@ -264,7 +264,7 @@ fun SettingsScreen(
                         icon = androidx.compose.material.icons.Icons.Rounded.EventSeat,
                         title = stringResource(R.string.item_library_seat),
                         subtitle = stringResource(R.string.desc_library_seat),
-                        onClick = { navBridge.navigate(Destination.WebApp(com.xingheyuzhuan.shiguangschedule.data.model.wbu.WebAppId.LIBRARY_SEAT.name)) }
+                        onClick = { navBridge.navigate(Destination.WebApp(com.shiro.classflow.data.model.wbu.WebAppId.LIBRARY_SEAT.name)) }
                     )
                     SettingDivider()
                     // 移动门户：校内办事与各业务系统的聚合入口
@@ -273,14 +273,14 @@ fun SettingsScreen(
                         icon = androidx.compose.material.icons.Icons.Rounded.Dashboard,
                         title = stringResource(R.string.item_mobile_portal),
                         subtitle = stringResource(R.string.desc_mobile_portal),
-                        onClick = { navBridge.navigate(Destination.WebApp(com.xingheyuzhuan.shiguangschedule.data.model.wbu.WebAppId.MOBILE_PORTAL.name)) }
+                        onClick = { navBridge.navigate(Destination.WebApp(com.shiro.classflow.data.model.wbu.WebAppId.MOBILE_PORTAL.name)) }
                     )
                     SettingDivider()
                     SettingTile(
                         icon = androidx.compose.material.icons.Icons.Rounded.CreditCard,
                         title = stringResource(R.string.service_campus_card),
                         subtitle = stringResource(R.string.desc_campus_card_app),
-                        onClick = { navBridge.navigate(Destination.WebApp(com.xingheyuzhuan.shiguangschedule.data.model.wbu.WebAppId.CAMPUS_CARD.name)) }
+                        onClick = { navBridge.navigate(Destination.WebApp(com.shiro.classflow.data.model.wbu.WebAppId.CAMPUS_CARD.name)) }
                     )
                     SettingDivider()
                     SettingTile(

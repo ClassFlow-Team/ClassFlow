@@ -61,7 +61,7 @@ import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.needsRelogin
+import com.shiro.classflow.data.network.wbu.needsRelogin
 import com.xingheyuzhuan.shiguangschedule.ui.components.WbuCourseImportSheet
 import com.xingheyuzhuan.shiguangschedule.ui.components.accessFailureText
 import com.xingheyuzhuan.shiguangschedule.ui.components.needLoginHintText

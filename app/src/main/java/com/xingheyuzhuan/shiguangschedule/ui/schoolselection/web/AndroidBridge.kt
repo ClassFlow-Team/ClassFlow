@@ -4,7 +4,7 @@ package com.xingheyuzhuan.shiguangschedule.ui.schoolselection.web
 import android.content.Context
 import android.os.Handler
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSyncEngine
+import com.shiro.classflow.data.network.wbu.WbuSyncEngine
 import com.xingheyuzhuan.shiguangschedule.data.repository.normalizeImportedTimeSlots
 import android.os.Looper
 import android.util.Log
