@@ -189,8 +189,10 @@ fun LinkHubScreen(
                 is LinkHubUiState.Unsupported -> UnsupportedBlock(
                     state = current,
                     onCopy = {
-                        copyToClipboard(context, rawLink)
-                        Toast.makeText(context, copiedHint, Toast.LENGTH_SHORT).show()
+                        if (rawLink.isNotBlank()) {
+                            copyToClipboard(context, rawLink)
+                            Toast.makeText(context, copiedHint, Toast.LENGTH_SHORT).show()
+                        }
                     },
                     onBack = { navBridge.popBackStack() }
                 )
@@ -233,9 +235,11 @@ fun LinkHubScreen(
 
 /** 用规范化形式重建原始链接（供「复制链接」使用）。 */
 private fun rebuildLink(code: String?, inline: String?, origin: String?): String = when {
-    // 内嵌链接对外只认 hub 域名：复制出来给别人扫，不应带上本机联调地址
-    !inline.isNullOrEmpty() -> LinkHubUrl.buildInlineUrl(payload = inline, code = code)
-    !code.isNullOrEmpty() -> LinkHubUrl.buildCodeUrl(code = code, origin = origin)
+    // 内嵌链接：有 hub 用 https（带浏览器落地页兜底），无 hub 用 classflow://（装了 App 就能开）
+    !inline.isNullOrEmpty() -> LinkHubUrl.buildInlineShareUrl(payload = inline, code = code)
+    // 服务端短码离开 hub 就没有意义
+    !code.isNullOrEmpty() && LinkHubUrl.isServerConfigured ->
+        LinkHubUrl.buildCodeUrl(code = code, origin = origin)
     else -> ""
 }
 

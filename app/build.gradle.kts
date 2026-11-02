@@ -32,41 +32,66 @@ android {
         ?: System.getenv("CLASSFLOW_UPDATE_API_URL")
         ?: ""
 
-    // U净 NFC/DeepLink 域名属于私有配置，不写入仓库代码：
-    // 通过 Gradle 属性 / local.properties（本机配置，Git 忽略）/ 环境变量注入；
-    // 均未提供（或为空）时直接报错，避免构建出指向错误域名的包。
-    val ujingNfcHost: String = sequenceOf(
-        project.findProperty("CLASSFLOW_UJING_NFC_HOST") as? String,
-        localProperties.getProperty("CLASSFLOW_UJING_NFC_HOST"),
-        System.getenv("CLASSFLOW_UJING_NFC_HOST"),
-    ).firstOrNull { !it.isNullOrBlank() }?.trim()
-        ?: throw GradleException(
-            "缺少 CLASSFLOW_UJING_NFC_HOST：请在 local.properties、Gradle -P 参数或环境变量中配置 U净 NFC/DeepLink 域名"
-        )
-
-    // 通用链接节点（/url/{code}、/u/{code}）的 hub 域名，同属私有配置，同样不写入仓库代码。
-    // 与 U净 域名不同：此项可缺省——未提供时回落到 U净 域名，保证 CI / 协作者无需新增密钥即可构建。
-    val linkHubHostRaw: String? = sequenceOf(
-        project.findProperty("CLASSFLOW_LINK_HUB_HOST") as? String,
-        localProperties.getProperty("CLASSFLOW_LINK_HUB_HOST"),
-        System.getenv("CLASSFLOW_LINK_HUB_HOST"),
-    ).firstOrNull { !it.isNullOrBlank() }?.trim()
-
-    val linkHubHost: String = linkHubHostRaw?.let { raw ->
+    // 私有配置统一校验：只接受主机名，不允许端口、路径、通配符等
+    // （NFC/DeepLink 过滤器与 host 白名单都按精确匹配使用）。
+    fun validateHost(raw: String, key: String): String {
         val normalized = raw
             .removePrefix("https://")
             .removePrefix("http://")
             .trimEnd('/')
             .substringBefore('/')
             .lowercase()
-        // 只接受主机名：不允许端口、路径、通配符等（NFC/DeepLink 过滤器与 host 白名单都按精确匹配使用）
         if (!normalized.matches(Regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"))) {
             throw GradleException(
-                "CLASSFLOW_LINK_HUB_HOST 非法：$raw（应为主机名，如 hub.example.com，不要带 scheme/端口/路径）"
+                "$key 非法：$raw（应为主机名，如 hub.example.com，不要带 scheme/端口/路径）"
             )
         }
-        normalized
-    } ?: ujingNfcHost
+        return normalized
+    }
+
+    // U净 NFC/DeepLink 域名属于私有配置，不写入仓库代码：
+    // 通过 Gradle 属性 / local.properties（本机配置，Git 忽略）/ 环境变量注入。
+    // 该配置现在可选：缺失时用无害占位 host，https NFC/App Links 不可用，
+    // 但 `classflow://` 自定义协议仍然完全可用（GitHub 自建包场景）。
+    val ujingNfcHostRaw: String? = sequenceOf(
+        project.findProperty("CLASSFLOW_UJING_NFC_HOST") as? String,
+        localProperties.getProperty("CLASSFLOW_UJING_NFC_HOST"),
+        System.getenv("CLASSFLOW_UJING_NFC_HOST"),
+    ).firstOrNull { !it.isNullOrBlank() }?.trim()
+
+    val hasUjingNfcHost = ujingNfcHostRaw != null
+    val ujingNfcHost: String = ujingNfcHostRaw?.let { validateHost(it, "CLASSFLOW_UJING_NFC_HOST") }
+        ?: "classflow.invalid"
+
+    if (!hasUjingNfcHost) {
+        logger.warn(
+            "CLASSFLOW_UJING_NFC_HOST 未配置：https NFC/App Links 不可用，仅 classflow:// 深链可用"
+        )
+    }
+
+    // 通用链接节点（/url/{code}、/u/{code}）的 hub 域名，同属私有配置，同样不写入仓库代码。
+    // 可缺省：未提供时回落到 U净 域名（或占位 host），保证 CI / 协作者无需新增密钥即可构建。
+    val linkHubHostRaw: String? = sequenceOf(
+        project.findProperty("CLASSFLOW_LINK_HUB_HOST") as? String,
+        localProperties.getProperty("CLASSFLOW_LINK_HUB_HOST"),
+        System.getenv("CLASSFLOW_LINK_HUB_HOST"),
+    ).firstOrNull { !it.isNullOrBlank() }?.trim()
+
+    val linkHubHostOverride = linkHubHostRaw?.let { validateHost(it, "CLASSFLOW_LINK_HUB_HOST") }
+    val hasLinkHubHost = linkHubHostOverride != null || hasUjingNfcHost
+    val linkHubHost: String = linkHubHostOverride ?: ujingNfcHost
+
+    // GitHub Releases 回退更新的仓库（owner/repo），可覆盖以便 fork 自建。
+    val githubUpdateRepo: String = sequenceOf(
+        project.findProperty("CLASSFLOW_GITHUB_REPO") as? String,
+        localProperties.getProperty("CLASSFLOW_GITHUB_REPO"),
+        System.getenv("CLASSFLOW_GITHUB_REPO"),
+    ).firstOrNull { !it.isNullOrBlank() }?.trim()
+        ?: "ClassFlow-Team/ClassFlow"
+
+    if (!githubUpdateRepo.matches(Regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"))) {
+        throw GradleException("CLASSFLOW_GITHUB_REPO 非法：$githubUpdateRepo（应为 owner/repo）")
+    }
 
     // 通用链接节点的本地联调地址（仅 debug 构建生效），例如 http://127.0.0.1:8090。
     // 配合 `adb reverse tcp:8090 tcp:8090`，可以不部署公网就把 Stage B（服务端 JSON 解析）跑通。
@@ -84,6 +109,9 @@ android {
         versionName = "1.1.2"
 
         buildConfigField("String", "UPDATE_API_URL", "\"$updateApiUrl\"")
+        buildConfigField("String", "GITHUB_UPDATE_REPO", "\"$githubUpdateRepo\"")
+        buildConfigField("Boolean", "HAS_UJING_NFC_HOST", "$hasUjingNfcHost")
+        buildConfigField("Boolean", "HAS_LINK_HUB_HOST", "$hasLinkHubHost")
         buildConfigField("String", "UJING_NFC_HOST", "\"$ujingNfcHost\"")
         buildConfigField("String", "LINK_HUB_HOST", "\"$linkHubHost\"")
         buildConfigField("String", "LINK_HUB_DEBUG_BASE", "\"$linkHubDebugBase\"")

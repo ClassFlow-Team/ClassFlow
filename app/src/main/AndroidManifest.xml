@@ -165,6 +165,22 @@
                 <data android:host="${linkHubHost}" />
                 <data android:pathPrefix="/s/" />
             </intent-filter>
+
+            <!-- classflow:// 自定义协议：浏览器 / 外部 App（不需要 autoVerify，也不依赖签名证书） -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="classflow" />
+            </intent-filter>
+
+            <!-- classflow:// NFC NDEF URI 记录（GitHub 自建包/无域名构建的主要入口） -->
+            <intent-filter>
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="classflow" />
+            </intent-filter>
+
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />

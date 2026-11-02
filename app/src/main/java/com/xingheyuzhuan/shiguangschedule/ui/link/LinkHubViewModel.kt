@@ -257,6 +257,10 @@ class LinkHubViewModel @Inject constructor(
                 LinkHubFetchResult.NotFound -> fail(LinkHubFailure.INVALID_LINK)
                 LinkHubFetchResult.Expired -> fail(LinkHubFailure.EXPIRED)
                 LinkHubFetchResult.UnsupportedVersion -> fail(LinkHubFailure.APP_TOO_OLD)
+                LinkHubFetchResult.ServerNotConfigured -> _state.value = LinkHubUiState.Failed(
+                    messageRes = R.string.link_hub_error_server_not_configured,
+                    retryable = false
+                )
 
                 LinkHubFetchResult.NetworkError,
                 LinkHubFetchResult.Malformed -> fail(LinkHubFailure.NETWORK)

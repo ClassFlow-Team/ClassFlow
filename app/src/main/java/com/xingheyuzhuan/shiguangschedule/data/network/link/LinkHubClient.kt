@@ -43,6 +43,9 @@ sealed interface LinkHubFetchResult {
     /** 网络异常 / 超时 / 重定向到站外等，可重试。 */
     data object NetworkError : LinkHubFetchResult
 
+    /** 当前构建没有配置链接服务端（无私有域名），短码无法解析。 */
+    data object ServerNotConfigured : LinkHubFetchResult
+
     /** 服务端返回了非 2xx（除 404/410），可重试。 */
     data class ServerError(val status: Int) : LinkHubFetchResult
 
@@ -96,6 +99,10 @@ class LinkHubClient @Inject constructor() {
         .build()
 
     suspend fun fetch(code: String, origin: String? = null): LinkHubFetchResult = withContext(Dispatchers.IO) {
+        // 无 hub 的构建（例如 GitHub 自建包）不要向 classflow.invalid 发请求
+        if (!LinkHubUrl.isServerConfigured) {
+            return@withContext LinkHubFetchResult.ServerNotConfigured
+        }
         // 走 /api/ 读接口，而不是分享链接本身：`/url/{code}` 通常被浏览器侧的落地页接管，
         // 做不了 Accept 协商，App 会拿到 HTML（详见 buildApiUrl 的注释）
         val url = LinkHubUrl.buildApiUrl(code = code, origin = origin)
