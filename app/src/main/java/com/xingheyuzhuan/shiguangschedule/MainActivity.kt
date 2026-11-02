@@ -125,7 +125,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
-import com.xingheyuzhuan.shiguangschedule.data.network.NetworkAvailability
+import com.shiro.classflow.data.network.NetworkAvailability
 import kotlinx.coroutines.launch
 import java.io.File
 import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
@@ -145,11 +145,11 @@ import com.xingheyuzhuan.shiguangschedule.ui.components.isOnboardingCompleted
 import com.xingheyuzhuan.shiguangschedule.ui.components.markOnboardingCompleted
 import com.xingheyuzhuan.shiguangschedule.ui.schedule.WeeklyScheduleScreen
 import com.xingheyuzhuan.shiguangschedule.ui.schoolselection.list.AdapterSelectionScreen
-import com.xingheyuzhuan.shiguangschedule.ui.campus.academic.AcademicProgressScreen
-import com.xingheyuzhuan.shiguangschedule.ui.campus.classroom.FreeClassroomScreen
-import com.xingheyuzhuan.shiguangschedule.ui.campus.courseselection.CourseSelectionScreen
-import com.xingheyuzhuan.shiguangschedule.ui.campus.grade.GradeQueryScreen
-import com.xingheyuzhuan.shiguangschedule.ui.campus.qrscan.QrScanScreen
+import com.shiro.classflow.ui.campus.academic.AcademicProgressScreen
+import com.shiro.classflow.ui.campus.classroom.FreeClassroomScreen
+import com.shiro.classflow.ui.campus.courseselection.CourseSelectionScreen
+import com.shiro.classflow.ui.campus.grade.GradeQueryScreen
+import com.shiro.classflow.ui.campus.qrscan.QrScanScreen
 import com.xingheyuzhuan.shiguangschedule.ui.schoolselection.list.SchoolSelectionListScreen
 import com.xingheyuzhuan.shiguangschedule.ui.schoolselection.web.WebViewScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.SettingsScreen
@@ -159,7 +159,7 @@ import com.xingheyuzhuan.shiguangschedule.ui.settings.additional.OpenSourceLicen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.backup.BackupScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.contribution.ContributionScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.conversion.CourseTableConversionScreen
-import com.xingheyuzhuan.shiguangschedule.ui.settings.credentials.CredentialManagementScreen
+import com.shiro.classflow.ui.settings.credentials.CredentialManagementScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.course.AddEditCourseScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.coursemanagement.CourseInstanceListScreen
 import com.xingheyuzhuan.shiguangschedule.ui.settings.coursemanagement.CourseNameListScreen
@@ -365,7 +365,7 @@ class MainActivity : AppCompatActivity() {
                 // classflow://：GitHub 自建包 / 无域名构建的主要 NFC 入口，始终注册
                 add(
                     IntentFilter(NfcAdapter.ACTION_NDEF_DISCOVERED).apply {
-                        addDataScheme(com.xingheyuzhuan.shiguangschedule.data.network.wbu.ClassFlowScheme.SCHEME)
+                        addDataScheme(com.shiro.classflow.data.network.wbu.ClassFlowScheme.SCHEME)
                     }
                 )
             }.toTypedArray()
@@ -407,7 +407,7 @@ class MainActivity : AppCompatActivity() {
 
         if (intent.action == ACTION_CAMPUS_CARD) {
             pendingDeepLink.value = Destination.WebApp(
-                com.xingheyuzhuan.shiguangschedule.data.model.wbu.WebAppId.CAMPUS_CARD.name
+                com.shiro.classflow.data.model.wbu.WebAppId.CAMPUS_CARD.name
             )
             return
         }
@@ -425,13 +425,13 @@ class MainActivity : AppCompatActivity() {
                 handleHairdryerEntry(
                     cd = cd,
                     raw = intent.getStringExtra(EXTRA_HAIRDRYER_RAW).orEmpty(),
-                    source = com.xingheyuzhuan.shiguangschedule.data.model.wbu.HairdryerLaunchSource.DIRECT
+                    source = com.shiro.classflow.data.model.wbu.HairdryerLaunchSource.DIRECT
                 )
             }
             return
         }
 
-        val hairdryer = com.xingheyuzhuan.shiguangschedule.data.network.wbu.CampusLinkRouter.extractHairdryer(intent)
+        val hairdryer = com.shiro.classflow.data.network.wbu.CampusLinkRouter.extractHairdryer(intent)
         if (hairdryer != null) {
             // 碰一碰（NFC 标签 / `/hd/{cd}` 深链）：能本地确定是蓝牙机就直接走原体验；
             // 只带设备码是因为 `/hd/{cd}` 不是贴纸原文，探测时得换成贴纸写法
@@ -439,15 +439,15 @@ class MainActivity : AppCompatActivity() {
             handleHairdryerEntry(
                 cd = hairdryer.cd,
                 raw = "",
-                source = com.xingheyuzhuan.shiguangschedule.data.model.wbu.HairdryerLaunchSource.NFC
+                source = com.shiro.classflow.data.model.wbu.HairdryerLaunchSource.NFC
             )
             return
         }
 
-        val destination = com.xingheyuzhuan.shiguangschedule.data.network.wbu.CampusLinkRouter.extractDestination(intent)
+        val destination = com.shiro.classflow.data.network.wbu.CampusLinkRouter.extractDestination(intent)
         if (destination != null) {
             pendingDeepLink.value = destination
-        } else if (com.xingheyuzhuan.shiguangschedule.data.network.wbu.CampusLinkRouter.isDownloadEntry(intent)) {
+        } else if (com.shiro.classflow.data.network.wbu.CampusLinkRouter.isDownloadEntry(intent)) {
             // 官网下载页（/w/download）：不打设备深链，播放专属入场动画
             entryOverlayDurationMs.value = DOWNLOAD_ENTRY_ANIM_MS
             showEntryOverlay.value = true
@@ -462,7 +462,7 @@ class MainActivity : AppCompatActivity() {
     private fun handleHairdryerEntry(
         cd: String,
         raw: String,
-        source: com.xingheyuzhuan.shiguangschedule.data.model.wbu.HairdryerLaunchSource
+        source: com.shiro.classflow.data.model.wbu.HairdryerLaunchSource
     ) {
         lifecycleScope.launch {
             val local = runCatching {
@@ -484,11 +484,11 @@ class MainActivity : AppCompatActivity() {
 
     /** 调起支付宝 U净 吹风机页面（显式包名 → 通用 Scheme → NFC Action → Universal Link 逐级兜底）。 */
     private fun launchHairdryerAlipay(cd: String) {
-        com.xingheyuzhuan.shiguangschedule.ui.campus.ujing.launchUjingHairdryer(
+        com.shiro.classflow.ui.campus.ujing.launchUjingHairdryer(
             context = this,
             cd = cd,
-            scheme = com.xingheyuzhuan.shiguangschedule.data.network.wbu.UjingQrLink.buildHairdryerAlipayScheme(cd),
-            ulinkUrl = com.xingheyuzhuan.shiguangschedule.data.network.wbu.UjingQrLink.buildHairdryerAlipayUrl(cd)
+            scheme = com.shiro.classflow.data.network.wbu.UjingQrLink.buildHairdryerAlipayScheme(cd),
+            ulinkUrl = com.shiro.classflow.data.network.wbu.UjingQrLink.buildHairdryerAlipayUrl(cd)
         )
     }
 
@@ -624,7 +624,7 @@ fun AppNavigation(
                 val water = destination as? Destination.UjingWater ?: return false
                 val shown = backStack.lastOrNull() as? Destination.UjingWater ?: return false
                 if (shown.cd != water.cd) return false
-                if (!com.xingheyuzhuan.shiguangschedule.ui.campus.ujing.UjingWaterViewModel
+                if (!com.shiro.classflow.ui.campus.ujing.UjingWaterViewModel
                         .hasResumableSession(water.cd)
                 ) {
                     return false
@@ -967,12 +967,12 @@ fun AppNavigation(
                             Destination.GradeQuery -> GradeQueryScreen(navBridge = navBridge)
                             Destination.FreeClassroomQuery -> FreeClassroomScreen(navBridge = navBridge)
                             Destination.AcademicProgress -> AcademicProgressScreen(navBridge = navBridge)
-                            Destination.LibraryBorrow -> com.xingheyuzhuan.shiguangschedule.ui.campus.library.LibraryScreen(navBridge = navBridge)
+                            Destination.LibraryBorrow -> com.shiro.classflow.ui.campus.library.LibraryScreen(navBridge = navBridge)
                             Destination.CredentialManagement -> CredentialManagementScreen(navBridge = navBridge)
                             Destination.CourseSelection -> CourseSelectionScreen(navBridge = navBridge)
                             Destination.QrScan -> QrScanScreen(navBridge = navBridge)
-                            Destination.CampusCardPayCode -> com.xingheyuzhuan.shiguangschedule.ui.campus.paycode.PayCodeScreen(navBridge = navBridge)
-                            Destination.HairdryerHub -> com.xingheyuzhuan.shiguangschedule.ui.campus.hairdryer.HairdryerHubScreen(navBridge = navBridge)
+                            Destination.CampusCardPayCode -> com.shiro.classflow.ui.campus.paycode.PayCodeScreen(navBridge = navBridge)
+                            Destination.HairdryerHub -> com.shiro.classflow.ui.campus.hairdryer.HairdryerHubScreen(navBridge = navBridge)
                             Destination.UpdateRepo -> UpdateRepoScreen(navBridge = navBridge)
                             Destination.NotificationSettings -> NotificationSettingsScreen(onBack = navBridge::popBackStack)
                             Destination.LanguageSettings -> LanguageSettingScreen(onBack = navBridge::popBackStack)
@@ -999,7 +999,7 @@ fun AppNavigation(
                                 appSettingsRepository = appSettingsRepository
                             )
 
-                            is Destination.WebApp -> com.xingheyuzhuan.shiguangschedule.ui.webapp.WebAppScreen(
+                            is Destination.WebApp -> com.shiro.classflow.ui.webapp.WebAppScreen(
                                 navBridge = navBridge,
                                 appId = destination.appId,
                                 initialTargetUrl = destination.initialTargetUrl,
@@ -1009,27 +1009,27 @@ fun AppNavigation(
                                 campusCardDeepLinkFallback = destination.campusCardDeepLinkFallback
                             )
 
-                            is Destination.UjingWater -> com.xingheyuzhuan.shiguangschedule.ui.campus.ujing.UjingWaterScreen(
+                            is Destination.UjingWater -> com.shiro.classflow.ui.campus.ujing.UjingWaterScreen(
                                 cd = destination.cd,
                                 scanId = destination.scanId,
                                 navBridge = navBridge
                             )
 
-                            is Destination.LinkHub -> com.xingheyuzhuan.shiguangschedule.ui.link.LinkHubScreen(
+                            is Destination.LinkHub -> com.shiro.classflow.ui.link.LinkHubScreen(
                                 navBridge = navBridge,
                                 code = destination.code,
                                 inline = destination.inline,
                                 origin = destination.origin
                             )
 
-                            is Destination.ShowerDirect -> com.xingheyuzhuan.shiguangschedule.ui.campus.shower.ShowerDirectScreen(
+                            is Destination.ShowerDirect -> com.shiro.classflow.ui.campus.shower.ShowerDirectScreen(
                                 navBridge = navBridge,
                                 system = destination.system,
                                 code = destination.code,
                                 port = destination.port
                             )
 
-                            is Destination.ShowerWater -> com.xingheyuzhuan.shiguangschedule.ui.campus.shower.ShowerWaterScreen(
+                            is Destination.ShowerWater -> com.shiro.classflow.ui.campus.shower.ShowerWaterScreen(
                                 deviceId = destination.deviceId,
                                 port = destination.port,
                                 implid = destination.implid,
@@ -1038,7 +1038,7 @@ fun AppNavigation(
                                 navBridge = navBridge
                             )
 
-                            is Destination.HairdryerLaunch -> com.xingheyuzhuan.shiguangschedule.ui.campus.hairdryer.HairdryerLaunchScreen(
+                            is Destination.HairdryerLaunch -> com.shiro.classflow.ui.campus.hairdryer.HairdryerLaunchScreen(
                                 navBridge = navBridge,
                                 cd = destination.cd,
                                 raw = destination.raw,

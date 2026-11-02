@@ -4,7 +4,7 @@ import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuAuthTransport
+import com.shiro.classflow.data.network.wbu.WbuAuthTransport
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
 import com.xingheyuzhuan.shiguangschedule.data.sync.SyncManager

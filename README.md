@@ -275,12 +275,20 @@ GitHub 自建包通常无法通过 https App Links 的签名验证，因此额�
 ## 项目结构
 
 ```text
-app/src/main/java/com/xingheyuzhuan/shiguangschedule/
-├── data/            # 数据层：网络、数据库、仓库、WBU 校园接口（network/wbu）
-├── ui/              # Compose 界面：课表、设置、校园服务、账号与凭据、扫码
-├── service/         # 前台服务与后台 Worker（闹钟、通知、更新）
-├── tool/            # 工具：更新安装、导入导出等
-└── MainActivity.kt  # 宿主与导航入口
+app/src/main/java/
+├── com/xingheyuzhuan/shiguangschedule/   # 上游基线：逐字对齐，merge 自动合并
+│   ├── data/            # 数据层：数据库、仓库、Room/proto 模型
+│   ├── ui/              # Compose 界面：课表、设置、主题、网页容器胶水层
+│   ├── service/         # 前台服务与后台 Worker（闹钟、通知、更新）
+│   ├── tool/            # 工具：更新安装、导入导出等
+│   ├── widget/          # 桌面小组件 Provider / Renderer
+│   └── MainActivity.kt  # 宿主与导航入口
+└── com/shiro/classflow/                  # ClassFlow 独有子系统（上游不存在）
+    ├── data/network/{wbu,link}/          # WBU 教务 / 校园服务客户端、通用链接节点
+    ├── data/model/{wbu,link}/            # 对应数据模型
+    ├── data/link/                        # 通用链接 handler 注册表
+    └── ui/{campus,webapp,link}/, ui/settings/credentials/
+                                            # 校园服务、网页容器、链接节点、账号与凭据
 picture/             # 应用截图与图标源文件
 ```
 

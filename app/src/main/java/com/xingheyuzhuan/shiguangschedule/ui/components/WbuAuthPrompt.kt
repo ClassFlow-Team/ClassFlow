@@ -42,8 +42,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
-import com.xingheyuzhuan.shiguangschedule.data.model.wbu.CredentialService
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuAuthTransport
+import com.shiro.classflow.data.model.wbu.CredentialService
+import com.shiro.classflow.data.network.wbu.WbuAuthTransport
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.CompletableDeferred
@@ -51,11 +51,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSyncEngine
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.PortalCaptchaData
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.PortalCaptchaResult
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.SliderCaptchaData
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.SliderCaptchaResult
+import com.shiro.classflow.data.network.wbu.WbuSyncEngine
+import com.shiro.classflow.data.network.wbu.PortalCaptchaData
+import com.shiro.classflow.data.network.wbu.PortalCaptchaResult
+import com.shiro.classflow.data.network.wbu.SliderCaptchaData
+import com.shiro.classflow.data.network.wbu.SliderCaptchaResult
 
 /**
  * 静默登录过程中需要用户**就地补一次输入**时的请求。

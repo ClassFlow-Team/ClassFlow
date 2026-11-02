@@ -210,7 +210,7 @@ sealed interface Destination : NavKey {
         val cd: String,
         /** 扫码原文（逐字回传：换成别的写法服务端会答「当前设备未绑定。」）。 */
         val raw: String = "",
-        val source: String = com.xingheyuzhuan.shiguangschedule.data.model.wbu.HairdryerLaunchSource.SCAN.name,
+        val source: String = com.shiro.classflow.data.model.wbu.HairdryerLaunchSource.SCAN.name,
         val scanId: Long = 0L
     ) : Destination
 }
