@@ -97,7 +97,20 @@ sealed interface Destination : NavKey {
          * 而设备页是 `requireAuth` 路由 —— 冷启动直接落在设备页时，路由守卫拿不到令牌，
          * 会把人扔到登录页。所以由容器在页面里等令牌出现，再切路由（见 `WebAppScreen`）。
          */
-        val pendingHashRoute: String? = null
+        val pendingHashRoute: String? = null,
+        /**
+         * 一卡通平台应用编码（`appCode`）：进平台后直接落到该应用页，而不是平台首页。
+         *
+         * 用于「旧一卡通链接改道」：门户里的一卡通入口全都指向旧微信服务（在 App 里只能落到
+         * 微信授权报错页），拦截后改为进新平台、并精确落到对应功能页（见 `CampusCardLegacyLink`）。
+         * 由 `WebAppViewModel` 用平台应用表把它解析成深链（学校改配置也不会失效）。
+         */
+        val campusCardAppCode: String? = null,
+        /**
+         * 平台应用深链的固定兜底（应用表拿不到时用），形如
+         * `/campus-card/?name=cardRecharge&feeitemid=410&hasinstallConfigForm=1`。
+         */
+        val campusCardDeepLinkFallback: String? = null
     ) : Destination
 
     @Serializable
