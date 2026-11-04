@@ -62,6 +62,12 @@ data class CredentialUiState(
      * 需要校园网的功能先用快速探测判断是否在校园网内，在校园网内就直接连接、不绕 WebVPN。
      */
     val autoCampusProbe: Boolean = true,
+
+    /**
+     * 「使用学校 DNS 解析校园域名」（默认开，**始终显示**）：
+     * 直连校园服务时用学校 DNS 解析 `*.wbu.edu.cn`，避开代理 fake-IP 给出的不可达地址。
+     */
+    val campusDns: Boolean = true,
     val webDavConfigured: Boolean = false,
     val useVpn: Boolean = false,
     val idsViaWebVpn: Boolean = false,
@@ -208,6 +214,18 @@ class CredentialManagementViewModel @Inject constructor(
     fun setAutoCampusProbe(enabled: Boolean) {
         wbuRepository.setAutoCampusProbeEnabled(enabled)
         WbuNetworkProbe.invalidateFastCache()
+        refreshTrigger.update { it + 1 }
+    }
+
+    /**
+     * 「使用学校 DNS 解析校园域名」：关掉即完全交回系统 resolver。
+     *
+     * 顺手清掉校内可达性的缓存：用户刚改完设置，不该继续用关闭前那个结论。
+     * 开关本身是每次解析时实时读的，所以**不需要重启、也不需要重建 OkHttp client**。
+     */
+    fun setCampusDns(enabled: Boolean) {
+        wbuRepository.setCampusDnsEnabled(enabled)
+        WbuNetworkProbe.invalidateReachableCache()
         refreshTrigger.update { it + 1 }
     }
 
@@ -473,6 +491,7 @@ class CredentialManagementViewModel @Inject constructor(
             usePcUserAgent = wbuRepository.isUsePcUserAgent(),
             skipCampusCheck = wbuRepository.isSkipCampusCheck(),
             autoCampusProbe = wbuRepository.isAutoCampusProbeEnabled(),
+            campusDns = wbuRepository.isCampusDnsEnabled(),
             selectSemesterOnImport = wbuRepository.isSelectSemesterOnImport(),
             keepTeacherId = wbuRepository.isKeepTeacherId(),
             keepBuilding = wbuRepository.isKeepBuilding(),

@@ -65,24 +65,27 @@ object WbuNetworkProbe {
     val campusState: StateFlow<Boolean?> = _campusState.asStateFlow()
 
     // 独立短超时 client，不复用 WbuSyncEngine 的 15s client
+    // 刻意不传 context：探测打的是裸 IP，不该装学校 DNS（否则 Dns → 探测 → Dns 循环）
     private val probeClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            .readTimeout(READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            .callTimeout(CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            .followRedirects(false)
-            .followSslRedirects(false)
-            .build()
+        WbuCampusNetwork.install(
+            OkHttpClient.Builder()
+                .connectTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .readTimeout(READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .callTimeout(CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .followRedirects(false)
+                .followSslRedirects(false)
+        ).build()
     }
 
     private val fastProbeClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(FAST_CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            .readTimeout(FAST_READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            .callTimeout(FAST_CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            .followRedirects(false)
-            .followSslRedirects(false)
-            .build()
+        WbuCampusNetwork.install(
+            OkHttpClient.Builder()
+                .connectTimeout(FAST_CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .readTimeout(FAST_READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .callTimeout(FAST_CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .followRedirects(false)
+                .followSslRedirects(false)
+        ).build()
     }
 
     // 快速探测的短缓存（值 + 写入时刻，单调时钟）
@@ -150,10 +153,94 @@ object WbuNetworkProbe {
      * 开了「自动校园网探测」用 [fastRefresh]（快速、带短缓存），
      * 关掉则沿用原来的 [refresh]（只增不减：关掉即回到加这个开关之前的行为）。
      *
-     * 不需要校园网的应用（一卡通 / U净 / 付款码 / `directOnly` 的网页应用）不要调用它。
+     * 需要校园网的流程（教务 / 一卡通 / 图书馆 / 选课 …）调用它。
      */
     suspend fun probeForCampusFlow(context: Context): Boolean =
         if (WbuAuthTransport.isAutoCampusProbeEnabled(context)) fastRefresh(context) else refresh()
+
+    // ------------------- 「能不能到校内」（供学校 DNS 用） -------------------
+
+    /**
+     * 独立于选通道探测的缓存。
+     *
+     * 为什么不共用 [fastRefresh] 的缓存：两者**语义不同**。
+     * - [fastRefresh] 回答「人在不在校园网」，用来选直连还是 WebVPN；
+     * - [probeCampusReachable] 回答「能不能到校内」，用来决定要不要用学校 DNS。
+     *
+     * 校园 VPN 用户、宿舍网线共享的用户都能「到校内」，却不在校园 WiFi 里；
+     * 反过来，某些代理规则下校园 WiFi 也可能到不了校内。混用一个值迟早会互相打脸。
+     */
+    @Volatile
+    private var reachableCacheValue: Boolean? = null
+
+    @Volatile
+    private var reachableCacheAtMs: Long = 0L
+
+    /** 校内可达性缓存时长：与快速探测一致，网络一变立刻作废。 */
+    private const val REACHABLE_CACHE_TTL_MS = 60_000L
+
+    /**
+     * 能否**到达校内**（不要求「人在校园网」）。
+     *
+     * 判据与 [fastRefresh] 相同：打一次校内认证页的裸 IP，拿回 2xx/3xx 即视为可达。
+     * 用裸 IP 是刻意的 —— 本函数的目的就是绕开 fake-IP，若自己也走域名就自相矛盾。
+     *
+     * 失败**也缓存**（60s）：校外用户每个请求都等一次探测超时才叫真慢；
+     * 而网络一变缓存立刻作废，不会把「刚进校园网」误判成不可达。
+     *
+     * 注意这与「学校 DNS 查询失败不缓存」是两回事：那次是解析结果本身不可信，
+     * 这次只是「可达性」这个开关状态的短时快照。
+     */
+    suspend fun probeCampusReachable(context: Context): Boolean = withContext(Dispatchers.IO) {
+        val appContext = context.applicationContext
+        watchNetworkChanges(appContext)
+
+        val now = SystemClock.elapsedRealtime()
+        reachableCacheValue?.let { cached ->
+            if (now - reachableCacheAtMs < REACHABLE_CACHE_TTL_MS) return@withContext cached
+        }
+
+        // 纯蜂窝基本到不了校内私网地址；但带 VPN 时不算（与 fastRefresh 同一判据）
+        if (!mightBeOnCampusNetwork(appContext)) return@withContext publishReachable(false)
+
+        publishReachable(probeHttp(fastProbeClient))
+    }
+
+    /**
+     * 同 [probeCampusReachable]，但**阻塞**调用。
+     *
+     * 存在的唯一原因：OkHttp 的 [okhttp3.Dns.lookup] 是同步 API，而 Dns 回调本来就在
+     * 工作线程上（不会卡 UI）。用它就不必要求「先有人调过异步探测」——
+     * 否则冷启动后的第一次域名解析会因为缓存为空而白白退回系统 DNS。
+     */
+    fun probeCampusReachableBlocking(context: Context): Boolean {
+        val appContext = context.applicationContext
+        watchNetworkChanges(appContext)
+
+        val now = SystemClock.elapsedRealtime()
+        reachableCacheValue?.let { cached ->
+            if (now - reachableCacheAtMs < REACHABLE_CACHE_TTL_MS) return cached
+        }
+
+        if (!mightBeOnCampusNetwork(appContext)) return publishReachable(false)
+
+        return publishReachable(probeHttp(fastProbeClient))
+    }
+
+    /** 校内可达性的**同步**快照（不触发探测），仅用于日志 / 其它只读场景。 */
+    fun campusReachableSnapshot(): Boolean = reachableCacheValue == true
+
+    /** 供测试 / 设置变更时清空。 */
+    fun invalidateReachableCache() {
+        reachableCacheValue = null
+        reachableCacheAtMs = 0L
+    }
+
+    private fun publishReachable(value: Boolean): Boolean {
+        reachableCacheValue = value
+        reachableCacheAtMs = SystemClock.elapsedRealtime()
+        return value
+    }
 
     private fun publishFast(value: Boolean): Boolean {
         fastCacheValue = value
@@ -175,17 +262,23 @@ object WbuNetworkProbe {
                 val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
                     ?: return
                 manager.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
-                    override fun onAvailable(network: Network) = invalidateFastCache()
+                    override fun onAvailable(network: Network) = invalidateAllCaches()
 
-                    override fun onLost(network: Network) = invalidateFastCache()
+                    override fun onLost(network: Network) = invalidateAllCaches()
 
                     override fun onCapabilitiesChanged(
                         network: Network,
                         networkCapabilities: NetworkCapabilities
-                    ) = invalidateFastCache()
+                    ) = invalidateAllCaches()
                 })
             }
         }
+    }
+
+    /** 网络一变，**两份**缓存都作废（选通道的 + 校内可达性的）。 */
+    private fun invalidateAllCaches() {
+        invalidateFastCache()
+        invalidateReachableCache()
     }
 
     /**
