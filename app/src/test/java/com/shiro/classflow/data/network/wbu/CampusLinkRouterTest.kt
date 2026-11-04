@@ -99,4 +99,21 @@ class CampusLinkRouterTest {
     fun classFlowUnknownPathReturnsNull() {
         assertNull(CampusLinkRouter.parse("classflow://other/abc"))
     }
+
+    @Test
+    fun parsesAppPageLinks() {
+        assertTrue(CampusLinkRouter.parse("classflow://pay") is Destination.CampusCardPayCode)
+        assertTrue(CampusLinkRouter.parse("classflow://pay/") is Destination.CampusCardPayCode)
+        assertTrue(CampusLinkRouter.parse("classflow://PAY") is Destination.CampusCardPayCode)
+        assertTrue(CampusLinkRouter.parse("classflow://scan") is Destination.QrScan)
+    }
+
+    @Test
+    fun appPageLinksIgnoreQueryButNotExtraSegments() {
+        // query 不参与路径判定：带个来源标记仍然进付款码页
+        assertTrue(CampusLinkRouter.parse("classflow://pay?from=nfc") is Destination.CampusCardPayCode)
+        // 这两条命名空间是「页」，不接受任何子路径
+        assertNull(CampusLinkRouter.parse("classflow://pay/code"))
+        assertNull(CampusLinkRouter.parse("classflow://scan/result"))
+    }
 }

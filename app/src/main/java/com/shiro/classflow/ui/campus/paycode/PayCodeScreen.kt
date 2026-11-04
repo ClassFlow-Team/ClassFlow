@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -108,6 +109,9 @@ private enum class PayCodeView {
  *
  * 与网页版的区别只在「怎么画」：取码接口、翻码节奏、脱机码回落都与平台 H5 一致，
  * 因此这里没有任何 WebView，进入即出码；展示期间屏幕常亮 + 亮度拉满，方便柜机扫码。
+ *
+ * 整页开启 `FLAG_SECURE`（见 [KeepScreenSecure]）：付款码等同于现金，禁止截屏 / 录屏 /
+ * 最近任务预览，放大展示层与主页面同处一个 Window，一并受保护。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -154,6 +158,9 @@ fun PayCodeScreen(
             )
         )
     }
+
+    // 整页禁截屏：加载中 / 报错 / 出码三种状态都不许截，放大层同属这个 Window
+    KeepScreenSecure()
 
     Scaffold(
         topBar = {
@@ -490,6 +497,33 @@ private fun KeepScreenBright() {
                 val attrs = w.attributes
                 attrs.screenBrightness = previous ?: -1f
                 w.attributes = attrs
+            }
+        }
+    }
+}
+
+/**
+ * 付款码页面禁止截屏 / 录屏 / 最近任务预览。
+ *
+ * 付款码等同于现金：一旦被截图外传，别人拿着图就能刷。`FLAG_SECURE` 是 **Window 级**开关
+ * （本 App 只有一个 Activity），所以离开页面必须恢复原状，否则整个应用的其它页面都会跟着截不了图。
+ *
+ * 只在进入前本来没有这个标志时才清除，避免把别处（将来可能加的）保护误关掉。
+ */
+@Composable
+private fun KeepScreenSecure() {
+    val activity = LocalContext.current.findActivity()
+
+    DisposableEffect(activity) {
+        val window = activity?.window
+        val alreadySecure = window
+            ?.attributes
+            ?.let { it.flags and WindowManager.LayoutParams.FLAG_SECURE != 0 }
+            ?: false
+        window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose {
+            if (!alreadySecure) {
+                window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
             }
         }
     }

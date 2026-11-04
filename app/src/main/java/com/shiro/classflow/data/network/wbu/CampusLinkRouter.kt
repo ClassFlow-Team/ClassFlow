@@ -18,9 +18,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
  * - `/s/{系统}/{设备号}[/{端口}]` -> 洗浴 `Destination.ShowerDirect`（见 [CampusShowerLink]）
  * - `/url/{code}`、短别名 `/u/{code}` -> 通用链接节点 `Destination.LinkHub`
  *   （host 必须是 [LinkHubUrl.host]，详见 `LINK_HUB_PROTOCOL.md`）
+ * - `/pay` -> 一卡通付款码原生页 `Destination.CampusCardPayCode`
+ * - `/scan` -> 扫一扫 `Destination.QrScan`
  *
  * 前四类是「设备直达命名空间」：链接内容即设备身份，离线可用、不需要服务端，
  * 因此**不校验域名**（能进 App 的链接已由 `AndroidManifest.xml` 的 intent-filter 限定在站点域名上）。
+ * 最后两类是应用内直达页：只要路径精确匹配，同样不校验域名。
+ * 由 `classflow://` 进来时，`MainActivity` / `WebViewScreen` 直接复用这里的分流。
  */
 object CampusLinkRouter {
 
@@ -37,6 +41,13 @@ object CampusLinkRouter {
             val afterScheme = if (schemeIdx >= 0) noQuery.substring(schemeIdx + 3) else noQuery
             val slashIdx = afterScheme.indexOf('/')
             if (slashIdx >= 0) afterScheme.substring(slashIdx) else "/"
+        }
+
+        // 0. 应用内直达页：/pay（付款码）、/scan（扫一扫）
+        //    只认精确路径：/pay/{多余段} 一律不路由，避免这条命名空间被当成可传参的入口。
+        when (path.trimEnd('/').lowercase()) {
+            "/pay" -> return Destination.CampusCardPayCode
+            "/scan" -> return Destination.QrScan
         }
 
         // 1. 饮水机直达: /w/{cd}

@@ -92,6 +92,8 @@ GitHub 自建包通常无法通过 https App Links 的签名校验，因此 App 
 短别名：      classflow://u/{code}
 内嵌：        classflow://url/{code}#<紧凑载荷>
 内嵌（省码）：classflow://u/#<紧凑载荷>
+付款码：      classflow://pay
+扫一扫：      classflow://scan
 三斜杠兼容：  classflow:///w/{设备码}
 ```
 
@@ -101,13 +103,16 @@ GitHub 自建包通常无法通过 https App Links 的签名校验，因此 App 
 - `classflow://w/abc` 与 `classflow:///w/abc` 都规范化为 `https://<hub>/w/abc`；
 - query 与 fragment 原样保留；
 - 拒绝 userinfo、显式端口、未知路径首段；
-- 允许的首段只有 `w`、`wm`、`hd`、`s`、`url`、`u`，更细的格式仍由原路由校验。
+- 允许的首段只有 `w`、`wm`、`hd`、`s`、`url`、`u`、`pay`、`scan`，更细的格式仍由原路由校验。
 
 行为与安全边界：
 
 - prod 与 dev 共用同一个 scheme；两者同时安装时系统会弹选择器（与 https App Links 一致）；
 - 自定义 scheme 没有所有权验证，任何 App / 网页都能调用：URL 不得携带密码、Token、Cookie；
 - 通用节点仍走确认页；`autoApply` 不因来源是 `classflow://` 而放宽；
+- `pay` / `scan` 是**应用内直达页**（付款码原生页 / 扫一扫）：只认精确路径，`classflow://pay/{多余段}`
+  一律不路由；query 被忽略。两者都不携带任何凭据，登录仍由页面自己按需静默完成；
+- 付款码原生页整页开启 `FLAG_SECURE`：截屏、录屏与最近任务预览为空，离开页面即恢复；
 - 没有真实 hub 的构建：设备直达与内嵌载荷可用，服务端短码返回「未配置链接服务」，不会向 `classflow.invalid` 发请求。
 
 ## 3. 线格式 A：服务端 JSON 信封
@@ -343,7 +348,7 @@ intent://<host><path>[#载荷]#Intent;scheme=https;action=android.intent.action.
 | `campus_shower` 校园洗浴（第 3.1 节） | ✅ 已实现：服务端短码与 `0x15` 内嵌均**免确认**直达一卡通洗浴（1 栋 `CheckKsPos` 正证、2-3 栋 lifeService） |
 | 服务端 JSON 解析（线格式 A，App 侧） | ✅ 已完成：`LinkHubClient` 取信封、按 origin 请求、404/410/网络异常分类与重试、HTML 兜底交内置 WebView |
 | hub host 的 VIEW / `autoVerify` 过滤器 | ✅ 已注册并验证通过：`/url/`、`/u/` + 设备命名空间 `/w/`、`/wm/`、`/hd/`（下载页 `/w/download` 就靠它进 App）；assetlinks.json 含 prod/dev 包名，真机 `pm get-app-links` = verified |
-| `classflow://` VIEW / NDEF 过滤器（第 2.2 节） | ✅ 已实现：浏览器 `ACTION_VIEW` + NFC `NDEF_DISCOVERED`，无需域名验证；NFC 前台分发同时注册 `classflow` scheme；无 hub 构建仍可用 |
+| `classflow://` VIEW / NDEF 过滤器（第 2.2 节） | ✅ 已实现：浏览器 `ACTION_VIEW` + NFC `NDEF_DISCOVERED`，无需域名验证；NFC 前台分发同时注册 `classflow` scheme；无 hub 构建仍可用；`classflow://pay` / `classflow://scan` 走 `CampusLinkRouter` 的应用内直达页分支（只认精确路径） |
 | 落地页按钮 → App（`intent://`，`web/` 不入库） | ✅ 已实现并在真机（Chrome 151 / Android 16）验证：`/u/{code}` → 节点确认卡片、`/u/#载荷` → 内嵌确认卡片、`/w/download` → 下载入场动画 |
 | 免确认节点不闪确认页 | ✅ 已实现：页面外壳（标题栏 + 卡片）只在「需要用户读内容」时才出现；免确认节点从第一帧到跳转全程只有一层与目标页首屏同款的品牌过渡 |
 | 服务端实现 | ✅ 已在私有环境落地（`GET /api/v1/nodes/{code}` 给 App 读；`/url/{code}` 由落地页接管；`POST/PUT/DELETE /api/v1/nodes[/{code}]` 提供创建、改内容、撤销） |

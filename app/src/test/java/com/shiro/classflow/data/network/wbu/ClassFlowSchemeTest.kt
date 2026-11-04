@@ -64,6 +64,16 @@ class ClassFlowSchemeTest {
     }
 
     @Test
+    fun canonicalizesAppPages() {
+        assertEquals("https://$host/pay", ClassFlowScheme.canonicalize("classflow://pay"))
+        // 尾斜杠原样保留（路由层会 trim），与 query / fragment 的处理保持一致
+        assertEquals("https://$host/pay/", ClassFlowScheme.canonicalize("classflow://pay/"))
+        assertEquals("https://$host/scan", ClassFlowScheme.canonicalize("classflow://scan"))
+        // 首段统一小写
+        assertEquals("https://$host/pay", ClassFlowScheme.canonicalize("CLASSFLOW://PAY"))
+    }
+
+    @Test
     fun rejectsNonClassFlowScheme() {
         assertNull(ClassFlowScheme.canonicalize("https://$host/w/abc"))
         assertNull(ClassFlowScheme.canonicalize("classflow:/w/abc"))

@@ -204,7 +204,7 @@ registers `classflow://`. It needs no `assetlinks.json` and does not depend on t
 The prod and dev flavors share the same scheme; if both are installed, Android shows a chooser
 (the same behaviour as the existing https App Links).
 
-Paths mirror the https deep links:
+Paths mirror the https deep links for devices; the last two are in-app pages exposed only through `classflow://`:
 
 ```text
 Water dispenser:   classflow://w/{device code}
@@ -216,11 +216,17 @@ Generic node:      classflow://url/{code}
 Short alias:       classflow://u/{code}
 Inline payload:    classflow://url/{code}#{payload}
 Inline, no code:   classflow://u/#{payload}
+Payment code:      classflow://pay
+QR scanner:        classflow://scan
 ```
 
 The triple-slash form is also accepted (`classflow:///w/{device code}`).
 
 - **NFC tags**: write the URI directly, e.g. `classflow://w/0011202004140940`; an NTAG213 is enough.
+- **Payment code / QR scanner**: `classflow://pay` and `classflow://scan` are in-app pages with no device
+  identity; they reject any sub-path (`classflow://pay/xxx` does nothing) and ignore the query string.
+  The native payment-code screen sets `FLAG_SECURE`, so screenshots, screen recordings and the recents
+  thumbnail are blank while it is open; the flag is cleared when you leave the page.
 - **Web buttons**: prefer `intent://` with a fallback when the app is not installed:
 
 ```html

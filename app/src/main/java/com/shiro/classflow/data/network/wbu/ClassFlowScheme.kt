@@ -15,6 +15,8 @@ import com.xingheyuzhuan.shiguangschedule.BuildConfig
  * classflow://url/{code}#{p}  -> https://<hub>/url/{code}#{p}
  * classflow://u/#{p}          -> https://<hub>/u/#{p}
  * classflow:///w/{cd}         -> https://<hub>/w/{cd}
+ * classflow://pay             -> https://<hub>/pay           付款码（原生页）
+ * classflow://scan            -> https://<hub>/scan          扫一扫
  * ```
  *
  * 规范化后直接交给 [CampusLinkRouter] / [UjingQrLink] / [com.shiro.classflow.data.network.link.LinkHubUrl]，
@@ -24,8 +26,12 @@ object ClassFlowScheme {
 
     const val SCHEME = "classflow"
 
-    /** 只允许进入现有路由的命名空间；更细的格式由各路由自己校验。 */
-    private val ALLOWED_FIRST_SEGMENTS = setOf("w", "wm", "hd", "s", "url", "u")
+    /**
+     * 只允许进入现有路由的命名空间；更细的格式由各路由自己校验。
+     *
+     * `pay` / `scan` 是应用内直达页（付款码 / 扫一扫），没有设备身份参数。
+     */
+    private val ALLOWED_FIRST_SEGMENTS = setOf("w", "wm", "hd", "s", "url", "u", "pay", "scan")
 
     /** 是否为 `classflow:` 协议（大小写不敏感）。 */
     fun isClassFlowUri(raw: String): Boolean {

@@ -246,7 +246,7 @@ GitHub 自建包通常无法通过 https App Links 的签名验证，因此额�
 它不需要 `assetlinks.json`，也不依赖签名证书；正式版与 dev 版共用同一 scheme，
 两者同时安装时由系统弹出选择器（与现有 https App Links 行为一致）。
 
-路径与 https 深链完全一致：
+路径与 https 深链一致（设备直达走 https App Links；下面两条应用内直达页只提供 `classflow://`）：
 
 ```text
 饮水机：      classflow://w/{设备码}
@@ -258,11 +258,16 @@ GitHub 自建包通常无法通过 https App Links 的签名验证，因此额�
 短别名：      classflow://u/{code}
 内嵌载荷：    classflow://url/{code}#{payload}
 内嵌省码：    classflow://u/#{payload}
+付款码：      classflow://pay
+扫一扫：      classflow://scan
 ```
 
 同时兼容三斜杠写法（`classflow:///w/{设备码}`）。
 
 - **NFC 标签**：直接写 `classflow://w/0011202004140940`，NTAG213 容量足够。
+- **付款码 / 扫一扫**：`classflow://pay`、`classflow://scan` 是两个应用内直达页，没有设备身份参数，
+  也不接受任何子路径（`classflow://pay/xxx` 不会跳转）；`?` 后面的 query 会被忽略。
+  付款码原生页开启 `FLAG_SECURE`：截屏、录屏与最近任务预览都是黑的，离开页面即恢复。
 - **网页按钮**：推荐使用 `intent://` + 未安装兜底：
 
 ```html
@@ -271,8 +276,7 @@ GitHub 自建包通常无法通过 https App Links 的签名验证，因此额�
 </a>
 ```
 
-- **安全边界**：自定义 scheme 没有所有权验证，任何 App / 网页都能调用；不要在其中携带密码、Token 等敏感信息。设备码仍走原有格式校验，通用节点仍保留确认页。
-- 没有配置 `CLASSFLOW_LINK_HUB_HOST` 的构建：设备直达与内嵌载荷可用，服务端短码会明确提示「未配置链接服务」；复制内嵌分享链接时自动使用 `classflow://`。
+- **安全边界**：自定义 scheme 没有所有权验证，任何 App / 网页都能调用；不要在其中携带密码、Token 等敏感信息。设备码仍走原有格式校验，通用节点仍保留确认页。- 没有配置 `CLASSFLOW_LINK_HUB_HOST` 的构建：设备直达与内嵌载荷可用，服务端短码会明确提示「未配置链接服务」；复制内嵌分享链接时自动使用 `classflow://`。
 
 ## 项目结构
 
