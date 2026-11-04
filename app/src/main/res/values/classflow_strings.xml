@@ -737,6 +737,8 @@
     <string name="item_auto_campus_probe">自动校园网探测</string>
     <string name="a11y_long_press_login">长按打开登录面板</string>
     <string name="desc_auto_campus_probe">开启 WebVPN 时，需要校园网的功能先用快速探测判断是否在校园网内；在校园网内直接连接，不绕 WebVPN</string>
+    <string name="item_campus_dns">使用学校 DNS 解析校园域名</string>
+    <string name="desc_campus_dns">直连校园服务时用学校 DNS 解析 wbu.edu.cn 域名，避免代理的 fake-IP 把域名指向连不上的地址。关闭后完全交给系统解析</string>
     <string name="item_login">登录</string>
     <string name="desc_login_service">重新登录以更新该服务的授权状态</string>
     <string name="err_no_valid_credentials">无有效凭据，请先用「登录同步」完成登录</string>
@@ -1059,6 +1061,7 @@
     <string name="fail_unexpected">操作没成功，学校系统返回的内容不符预期，请稍后重试</string>
     <string name="desc_enter_unified_auth_password">本机没有保存统一认证密码，输入后继续</string>
     <string name="action_use_webvpn_once">改用 WebVPN</string>
+    <string name="action_use_direct_once">改用直连</string>
 
     <!-- 一卡通付款码（原生页面） -->
     <string name="title_campus_pay_code">付款码</string>
@@ -1144,4 +1147,42 @@
     <string name="hairdryer_message_shortcut_updated">桌面图标已更新</string>
     <string name="hairdryer_message_shortcut_already">桌面上已经有这台吹风机的图标了</string>
     <string name="hairdryer_message_shortcut_failed">添加失败，请稍后再试</string>
+
+    <!-- 一卡通账单（旧平台原生账单 / 流水） -->
+    <string name="service_campus_card_bill">一卡通账单</string>
+    <string name="desc_campus_card_bill">旧平台账单与流水，能看当天交易，详情更全</string>
+    <string name="title_campus_card_bill">一卡通账单</string>
+    <string name="loading_campus_card_bill">正在读取一卡通账单…</string>
+    <string name="bill_mode_bill">账单</string>
+    <string name="bill_mode_flow">流水</string>
+    <string name="bill_current_month">本月</string>
+    <string name="bill_month_format">%1$d年%2$d月</string>
+    <string name="bill_month_bill">查看月账单</string>
+    <string name="bill_total_expense">本月支出</string>
+    <string name="bill_latest_balance">最近余额</string>
+    <string name="bill_empty">本月暂无账单</string>
+    <string name="bill_flow_empty">暂无流水</string>
+    <string name="bill_cancelled">已取消，未获取到账单</string>
+    <string name="bill_cancelled_refresh">已取消刷新，显示的是上次的数据</string>
+    <string name="bill_no_more">没有更多了</string>
+    <string name="bill_total_count">共 %1$d 笔</string>
+    <string name="bill_detail_title">交易详情</string>
+    <string name="bill_detail_merchant">商户</string>
+    <string name="bill_detail_time">交易时间</string>
+    <string name="bill_detail_type">交易类型</string>
+    <string name="bill_detail_account">交易账号</string>
+    <string name="bill_detail_description">交易说明</string>
+    <string name="bill_detail_serial">流水号</string>
+    <string name="bill_detail_effect_time">入账时间</string>
+    <string name="bill_detail_balance">交易后余额</string>
+    <string name="bill_detail_account_type">账户类型</string>
+    <string name="bill_month_summary_title">%1$s账单</string>
+    <string name="bill_month_no_data">本月暂无消费</string>
+    <string name="bill_year_trend">年度趋势</string>
+    <string name="bill_year_prev">上一年</string>
+    <string name="bill_year_next">下一年</string>
+    <string name="bill_year_no_data">%1$d 年暂无消费</string>
+    <string name="bill_error_load">账单加载失败，请重试</string>
+    <string name="bill_action_relogin">重新登录</string>
+    <string name="bill_balance_short">余额 ¥%1$s</string>
 </resources>
