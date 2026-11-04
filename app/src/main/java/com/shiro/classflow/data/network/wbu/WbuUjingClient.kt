@@ -142,6 +142,22 @@ class WbuUjingClient(
     )
 
     /**
+     * 洗衣机设备详情（`washer/devices/program/info?deviceId=`）里与命名相关的字段。
+     *
+     * [deviceNo] 是纯机号（`000002`），标题就是「店铺名-机号」（如「南B-11-02」）；
+     * [deviceTypeName]（`10kg滚筒机`）只用于日志，刻意不进标题。
+     * [storeName]（如「南B-11」）与 [serviceSubjectName]（如「武汉商学院-南」）是
+     * 校园设备管理页的标题 / 小标题来源（实测 2026-11-04）。
+     */
+    data class WasherDeviceInfo(
+        val deviceId: String,
+        val deviceNo: String?,
+        val deviceTypeName: String?,
+        val storeName: String?,
+        val serviceSubjectName: String?
+    )
+
+    /**
      * 吹风机扫码结果（`controlBox/devices/scan`）。
      *
      * [createOrderEnabled] 只表示「现在能不能下单」，不能当设备类型用：
@@ -485,6 +501,37 @@ class WbuUjingClient(
                 rawData = data
             )
         }
+    }
+
+    /**
+     * 洗衣机设备详情（washer-h5 首页 `fetchDeviceProgramById` 用的同一接口）。
+     *
+     * `scanWasherCode` 只给 [WasherScanResult.lastUseDeviceId]，不给任何名字；
+     * H5 拿到 deviceId 后再查这一步才有「000002-10kg滚筒机 / 南B-11」。
+     * 仅供后台补名使用，失败返 null 不阻断使用流程。
+     */
+    suspend fun washerDeviceInfo(deviceId: String): WasherDeviceInfo? = withContext(Dispatchers.IO) {
+        runCatching {
+            val req = Request.Builder()
+                .url("$UJING_API/$UJING_CLIENT_PATH/washer/devices/program/info?deviceId=$deviceId")
+                .get()
+                .apply { ujHeaders("BO").forEach { (k, v) -> header(k, v) } }
+                .build()
+
+            httpClient.newCall(req).execute().use { resp ->
+                val bodyStr = resp.body?.string().orEmpty()
+                val json = JSONObject(bodyStr)
+                if (json.optInt("code") != 0) return@runCatching null
+                val data = json.optJSONObject("data") ?: return@runCatching null
+                WasherDeviceInfo(
+                    deviceId = data.optString("deviceId").takeIf { it.isNotBlank() } ?: deviceId,
+                    deviceNo = data.optString("deviceNo").takeIf { it.isNotBlank() },
+                    deviceTypeName = data.optString("deviceTypeName").takeIf { it.isNotBlank() },
+                    storeName = data.optString("storeName").takeIf { it.isNotBlank() },
+                    serviceSubjectName = data.optString("serviceSubjectName").takeIf { it.isNotBlank() }
+                )
+            }
+        }.getOrNull()
     }
 
     /**

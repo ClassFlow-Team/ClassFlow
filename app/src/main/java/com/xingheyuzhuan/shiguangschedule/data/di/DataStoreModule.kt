@@ -20,6 +20,8 @@ val Context.appSettingsDataStore: DataStore<Preferences> by preferencesDataStore
 private val Context.apiConfigDataStore: DataStore<Preferences> by preferencesDataStore(name = "api_config")
 // 吹风机记录 / 判型策略：独立文件，天然不参与 WebDAV 同步（只存本机）
 private val Context.hairdryerHubDataStore: DataStore<Preferences> by preferencesDataStore(name = "hairdryer_hub")
+// 校园设备管理（饮水机 / 洗衣机 / 洗浴）使用记录：独立文件，天然不参与 WebDAV 同步（只存本机）
+private val Context.campusDeviceHubDataStore: DataStore<Preferences> by preferencesDataStore(name = "campus_device_hub")
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -65,5 +67,17 @@ object DataStoreModule {
     @Named("HairdryerHub")
     fun provideHairdryerHubDataStore(@ApplicationContext context: Context): DataStore<Preferences> {
         return context.hairdryerHubDataStore
+    }
+
+    /**
+     * 校园设备管理页（饮水机 / 洗衣机 / 洗浴）的本地存储（使用记录 + 桌面快捷方式图标）。
+     *
+     * 刻意放在独立文件：这些是「这台手机自己的使用习惯」，不属于要跟 WebDAV 同步的设置。
+     */
+    @Provides
+    @Singleton
+    @Named("CampusDeviceHub")
+    fun provideCampusDeviceHubDataStore(@ApplicationContext context: Context): DataStore<Preferences> {
+        return context.campusDeviceHubDataStore
     }
 }

@@ -485,11 +485,23 @@ fun WebAppScreen(
          */
         var deepLinkAutoStarted by rememberSaveable(pendingAutoScan) { mutableStateOf(false) }
 
+        // 洗衣机深链这次导航条目是否已记过使用：重建（转屏 / 进程恢复）时不重复计数
+        var washerUseRecorded by rememberSaveable(pendingAutoScan) { mutableStateOf(false) }
+
         LaunchedEffect(pendingAutoScan) {
             if (isWasherDeepLink) {
                 // /wm/{uuid}：先解析洗衣机 H5 真实入口，避免只停在一卡通首页
                 when (val result = WasherEntryResolver.resolve(context, pendingAutoScan)) {
-                    is WasherEntryResolver.Result.Ready -> resolvedInitialUrl = result.url
+                    is WasherEntryResolver.Result.Ready -> {
+                        resolvedInitialUrl = result.url
+                        // 真正用上了（拿到直达地址）：记进校园设备管理。
+                        // 扫码路径（QrScanViewModel）自己会记，这里只管深链路径；
+                        // 同一个导航条目重建时不重复记（record 本身幂等，但次数不该虚增）。
+                        if (!washerUseRecorded) {
+                            washerUseRecorded = true
+                            runCatching { WasherEntryResolver.recordUse(context, pendingAutoScan) }
+                        }
+                    }
                     is WasherEntryResolver.Result.Unavailable -> washerNotice = result.availability
                     WasherEntryResolver.Result.Failed -> resolvedInitialUrl = null
                 }

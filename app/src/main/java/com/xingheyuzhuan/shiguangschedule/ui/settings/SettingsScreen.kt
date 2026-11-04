@@ -307,6 +307,46 @@ fun SettingsScreen(
                         onClick = { navBridge.navigate(Destination.HairdryerHub) }
                     )
                     SettingDivider()
+                    // 校园设备管理：饮水机 / 洗衣机 / 洗浴的使用记录与桌面快捷方式
+                    SettingTile(
+                        icon = androidx.compose.material.icons.Icons.Rounded.WaterDrop,
+                        title = stringResource(R.string.item_device_hub_water),
+                        subtitle = stringResource(R.string.desc_device_hub),
+                        onClick = {
+                            navBridge.navigate(
+                                Destination.CampusDeviceHub(
+                                    com.shiro.classflow.data.model.wbu.CampusDeviceKind.WATER.name
+                                )
+                            )
+                        }
+                    )
+                    SettingDivider()
+                    SettingTile(
+                        icon = androidx.compose.material.icons.Icons.Rounded.LocalLaundryService,
+                        title = stringResource(R.string.item_device_hub_washer),
+                        subtitle = stringResource(R.string.desc_device_hub),
+                        onClick = {
+                            navBridge.navigate(
+                                Destination.CampusDeviceHub(
+                                    com.shiro.classflow.data.model.wbu.CampusDeviceKind.WASHER.name
+                                )
+                            )
+                        }
+                    )
+                    SettingDivider()
+                    SettingTile(
+                        icon = androidx.compose.material.icons.Icons.Rounded.Shower,
+                        title = stringResource(R.string.item_device_hub_shower),
+                        subtitle = stringResource(R.string.desc_device_hub),
+                        onClick = {
+                            navBridge.navigate(
+                                Destination.CampusDeviceHub(
+                                    com.shiro.classflow.data.model.wbu.CampusDeviceKind.SHOWER.name
+                                )
+                            )
+                        }
+                    )
+                    SettingDivider()
                     SettingTile(
                         icon = androidx.compose.material.icons.Icons.Rounded.HowToReg,
                         title = stringResource(R.string.item_course_selection),

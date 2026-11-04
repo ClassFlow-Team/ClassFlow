@@ -5,12 +5,15 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xingheyuzhuan.shiguangschedule.R
+import com.shiro.classflow.data.model.wbu.CampusDeviceEntry
+import com.shiro.classflow.data.model.wbu.CampusDeviceKind
 import com.shiro.classflow.data.network.wbu.AccessFailure
 import com.shiro.classflow.data.network.wbu.AccessLayer
 import com.shiro.classflow.data.network.wbu.WbuFailureDetector
 import com.shiro.classflow.data.network.wbu.WbuShowerWaterClient
 import com.shiro.classflow.data.network.wbu.WbuShowerWaterSocket
 import com.shiro.classflow.data.network.wbu.needsRelogin
+import com.xingheyuzhuan.shiguangschedule.data.repository.CampusDeviceHubRepository
 import com.xingheyuzhuan.shiguangschedule.ui.components.accessFailureText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -81,7 +84,8 @@ data class ShowerWaterUiState(
  */
 @HiltViewModel
 class ShowerWaterViewModel @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val deviceHubRepository: CampusDeviceHubRepository,
 ) : ViewModel() {
 
     private val client = WbuShowerWaterClient(context)
@@ -142,7 +146,35 @@ class ShowerWaterViewModel @Inject constructor(
         this.port = port?.takeIf { it.isNotBlank() }
         this.billing = billing
         _uiState.update { it.copy(deviceNo = deviceId.trim(), stage = ShowerWaterUiStage.Loading()) }
+        recordDeviceUse(deviceId.trim(), this.port)
         refreshInternal(showBusy = false)
+    }
+
+    /**
+     * 把这次洗浴使用记进「校园设备管理」（进页即记：正证为淋浴本身就是「用上了」，
+     * 页面后续只查状态 / 开单 / 结束，不存在失败的尝试）。
+     *
+     * 网页路径（`ShowerDirectViewModel`）自己会记 —— 那边 [nativeShower] 为空才走网页，
+     * 两边按这个约定互斥，同一次使用只记一遍。记录失败只打日志。
+     */
+    private fun recordDeviceUse(deviceNo: String, port: String?) {
+        viewModelScope.launch {
+            runCatching {
+                deviceHubRepository.record(
+                    CampusDeviceEntry(
+                        kind = CampusDeviceKind.SHOWER,
+                        key = CampusDeviceHubRepository.showerKey(
+                            com.shiro.classflow.data.network.wbu.CampusShowerLink.SYSTEM_LIFE,
+                            deviceNo,
+                            port
+                        ),
+                        system = com.shiro.classflow.data.network.wbu.CampusShowerLink.SYSTEM_LIFE,
+                        port = port,
+                        deviceNo = deviceNo,
+                    )
+                )
+            }.onFailure { Log.w(TAG, "记录洗浴使用失败", it) }
+        }
     }
 
     /** 手动「刷新状态」：重新查一次服务端（用户要的那个按钮）。 */

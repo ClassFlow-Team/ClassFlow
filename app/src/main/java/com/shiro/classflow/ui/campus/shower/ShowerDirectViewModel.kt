@@ -5,10 +5,13 @@ import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xingheyuzhuan.shiguangschedule.R
+import com.shiro.classflow.data.model.wbu.CampusDeviceEntry
+import com.shiro.classflow.data.model.wbu.CampusDeviceKind
 import com.shiro.classflow.data.network.wbu.CampusShowerEntryResolver
 import com.shiro.classflow.data.network.wbu.CampusShowerLink
 import com.shiro.classflow.data.network.wbu.WbuAuthTransport
 import com.shiro.classflow.data.network.wbu.needsRelogin
+import com.xingheyuzhuan.shiguangschedule.data.repository.CampusDeviceHubRepository
 import com.xingheyuzhuan.shiguangschedule.ui.components.shouldAttemptSavedPasswordLogin
 import com.xingheyuzhuan.shiguangschedule.ui.components.silentUnifiedAuthLogin
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -54,7 +57,8 @@ sealed interface ShowerDirectUiState {
 @HiltViewModel
 class ShowerDirectViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val resolver: CampusShowerEntryResolver
+    private val resolver: CampusShowerEntryResolver,
+    private val deviceHubRepository: CampusDeviceHubRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ShowerDirectUiState>(ShowerDirectUiState.Resolving)
@@ -128,6 +132,7 @@ class ShowerDirectViewModel @Inject constructor(
                 when (result) {
                     is CampusShowerEntryResolver.Result.Ready -> {
                         _state.value = ShowerDirectUiState.Opening
+                        recordDeviceUse(result)
                         _openWebApp.tryEmit(result)
                     }
 
@@ -146,6 +151,33 @@ class ShowerDirectViewModel @Inject constructor(
                         _state.value = ShowerDirectUiState.Failed(R.string.link_hub_error_network, retryable = true)
                 }
                 return@launch
+            }
+        }
+    }
+
+    /**
+     * 把这次洗浴使用记进「校园设备管理」（解析成功那一刻调用）。
+     *
+     * 2-3 栋原生淋浴页（[ShowerWaterScreen]）自己会记 —— 这里的 [CampusShowerEntryResolver
+     * .Result.Ready.nativeShower] 非空时正是那一跳，跳过以免同一次使用记两遍。
+     * 重试成功会再次走到这里：record 幂等（同设备合并），但次数是真实的重试使用。
+     */
+    private fun recordDeviceUse(ready: CampusShowerEntryResolver.Result.Ready) {
+        if (ready.nativeShower != null) return
+        viewModelScope.launch {
+            runCatching {
+                deviceHubRepository.record(
+                    CampusDeviceEntry(
+                        kind = CampusDeviceKind.SHOWER,
+                        key = CampusDeviceHubRepository.showerKey(system, code, port),
+                        raw = ready.initialUrl,
+                        system = system,
+                        port = port,
+                        // 1 栋正证时服务端给的所属区域名（如「马影河宿舍1栋」）；2-3 栋为 null
+                        storeName = ready.storeName,
+                        deviceNo = code,
+                    )
+                )
             }
         }
     }

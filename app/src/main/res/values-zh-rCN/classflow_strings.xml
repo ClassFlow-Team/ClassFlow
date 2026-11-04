@@ -1151,6 +1151,39 @@
     <string name="hairdryer_message_shortcut_already">桌面上已经有这台吹风机的图标了</string>
     <string name="hairdryer_message_shortcut_failed">添加失败，请稍后再试</string>
 
+    <!-- 校园设备管理（饮水机 / 洗衣机 / 洗浴：使用记录 / 重命名 / 桌面快捷方式） -->
+    <string name="item_device_hub_water">饮水机</string>
+    <string name="item_device_hub_washer">洗衣机</string>
+    <string name="item_device_hub_shower">洗浴</string>
+    <string name="desc_device_hub">使用记录、重命名与桌面快捷方式</string>
+    <string name="title_device_hub_water">饮水机</string>
+    <string name="title_device_hub_washer">洗衣机</string>
+    <string name="title_device_hub_shower">洗浴</string>
+    <string name="device_section_history">使用记录</string>
+    <string name="device_history_use_count">用过 %1$d 次</string>
+    <string name="device_history_last_used">上次 %1$s</string>
+    <string name="device_history_empty_water">还没有记录：扫一台饮水机，或在记录里给它建个桌面图标，这里就会留下它。</string>
+    <string name="device_history_empty_washer">还没有记录：扫一台洗衣机，或在记录里给它建个桌面图标，这里就会留下它。</string>
+    <string name="device_history_empty_shower">还没有记录：扫一个控水器，或在记录里给它建个桌面图标，这里就会留下它。</string>
+    <string name="device_action_use">直接使用</string>
+    <string name="device_action_rename">重命名</string>
+    <string name="device_action_pin_shortcut">添加到桌面</string>
+    <string name="device_action_copy_id">复制机号</string>
+    <string name="device_action_delete">删除</string>
+    <string name="device_action_scan_water">扫一台饮水机</string>
+    <string name="device_action_scan_washer">扫一台洗衣机</string>
+    <string name="device_action_scan_shower">扫一个控水器</string>
+    <string name="device_rename_title">重命名</string>
+    <string name="device_rename_hint">留空则用默认名称</string>
+    <string name="device_icon_picker_title">选择桌面图标</string>
+    <string name="device_icon_picker_hint">图标只影响桌面快捷方式的外观</string>
+    <string name="device_message_shortcut_requested">已请求添加到桌面</string>
+    <string name="device_message_shortcut_updated">桌面图标已更新</string>
+    <string name="device_message_shortcut_already">桌面上已经有这台设备的图标了</string>
+    <string name="device_message_shortcut_unsupported">当前桌面不支持添加图标，可在系统桌面里手动添加</string>
+    <string name="device_message_shortcut_failed">添加失败，请稍后再试</string>
+    <string name="device_message_copied">机号已复制</string>
+
     <!-- 一卡通账单（旧平台原生账单 / 流水） -->
     <string name="service_campus_card_bill">一卡通账单</string>
     <string name="desc_campus_card_bill">旧平台账单与流水，能看当天交易，详情更全</string>

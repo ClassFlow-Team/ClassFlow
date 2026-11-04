@@ -1151,6 +1151,39 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="hairdryer_message_shortcut_already">桌面上已經有這台吹風機的圖示了</string>
     <string name="hairdryer_message_shortcut_failed">加入失敗，請稍後再試</string>
 
+    <!-- Campus device hub (water dispenser / washer / shower: history, rename, shortcuts) -->
+    <string name="item_device_hub_water">Water dispenser</string>
+    <string name="item_device_hub_washer">Washer</string>
+    <string name="item_device_hub_shower">Shower</string>
+    <string name="desc_device_hub">History, rename and home-screen shortcuts</string>
+    <string name="title_device_hub_water">Water dispenser</string>
+    <string name="title_device_hub_washer">Washer</string>
+    <string name="title_device_hub_shower">Shower</string>
+    <string name="device_section_history">History</string>
+    <string name="device_history_use_count">Used %1$d times</string>
+    <string name="device_history_last_used">Last %1$s</string>
+    <string name="device_history_empty_water">Nothing yet — scan a water dispenser, or pin one to your home screen, and it will show up here.</string>
+    <string name="device_history_empty_washer">Nothing yet — scan a washer, or pin one to your home screen, and it will show up here.</string>
+    <string name="device_history_empty_shower">Nothing yet — scan a water controller, or pin one to your home screen, and it will show up here.</string>
+    <string name="device_action_use">Use now</string>
+    <string name="device_action_rename">Rename</string>
+    <string name="device_action_pin_shortcut">Add to home screen</string>
+    <string name="device_action_copy_id">Copy device ID</string>
+    <string name="device_action_delete">Delete</string>
+    <string name="device_action_scan_water">Scan a water dispenser</string>
+    <string name="device_action_scan_washer">Scan a washer</string>
+    <string name="device_action_scan_shower">Scan a water controller</string>
+    <string name="device_rename_title">Rename</string>
+    <string name="device_rename_hint">Leave empty to use the default name</string>
+    <string name="device_icon_picker_title">Choose an icon</string>
+    <string name="device_icon_picker_hint">The icon only changes how the shortcut looks</string>
+    <string name="device_message_shortcut_requested">Home-screen shortcut requested</string>
+    <string name="device_message_shortcut_updated">Home-screen icon updated</string>
+    <string name="device_message_shortcut_already">This device is already pinned to your home screen</string>
+    <string name="device_message_shortcut_unsupported">Your launcher does not support adding icons; add it manually instead</string>
+    <string name="device_message_shortcut_failed">Could not add the shortcut, try again later</string>
+    <string name="device_message_copied">Device ID copied</string>
+
     <!-- Campus card bill (native bill / transactions from the legacy platform) -->
     <string name="service_campus_card_bill">Campus Card Bill</string>
     <string name="desc_campus_card_bill">Bills and transactions from the legacy platform, including today\'s activity</string>

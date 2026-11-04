@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 校园设备桌面快捷方式预设图标：饮水机。
+     自带底色：浅色 / 深色桌面都能看清，也不依赖 Launcher 的图标底色。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 圆角底色 -->
+    <path
+        android:fillColor="#0288D1"
+        android:pathData="M0,24 A24,24 0 0 1 24,0 H84 A24,24 0 0 1 108,24 V84 A24,24 0 0 1 84,108 H24 A24,24 0 0 1 0,84 Z" />
+
+    <!-- 机身（白色圆角竖板） -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M38,18 H70 A5,5 0 0 1 75,23 V85 A5,5 0 0 1 70,90 H38 A5,5 0 0 1 33,85 V23 A5,5 0 0 1 38,18 Z" />
+
+    <!-- 水桶（蓝色，机身上半段） -->
+    <path
+        android:fillColor="#4FC3F7"
+        android:pathData="M44,24 H64 A3,3 0 0 1 67,27 V46 A3,3 0 0 1 64,49 H44 A3,3 0 0 1 41,46 V27 A3,3 0 0 1 44,24 Z" />
+
+    <!-- 接水口（底色上的凹槽） -->
+    <path
+        android:fillColor="#0288D1"
+        android:pathData="M47,58 H61 A3,3 0 0 1 64,61 V66 A3,3 0 0 1 61,69 H47 A3,3 0 0 1 44,66 V61 A3,3 0 0 1 47,58 Z" />
+
+    <!-- 出水滴 -->
+    <path
+        android:fillType="nonZero"
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,72 C57,77 61,80.5 61,84 A7,7 0 0 1 47,84 C47,80.5 51,77 54,72 Z" />
+</vector>

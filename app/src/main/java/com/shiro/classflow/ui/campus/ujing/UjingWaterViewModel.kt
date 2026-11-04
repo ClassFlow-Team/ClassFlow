@@ -4,7 +4,6 @@ import com.xingheyuzhuan.shiguangschedule.R
 
 import android.app.Application
 import android.util.Log
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.shiro.classflow.data.network.NoNetworkException
 import com.shiro.classflow.data.network.wbu.AccessFailure
@@ -18,10 +17,16 @@ import com.shiro.classflow.data.network.wbu.WbuSessionExpiredException
 import com.shiro.classflow.data.network.wbu.WbuUjingClient
 import com.shiro.classflow.data.network.wbu.directChannelTrouble
 import com.shiro.classflow.data.network.wbu.needsRelogin
+import com.shiro.classflow.data.model.wbu.CampusDeviceEntry
+import com.shiro.classflow.data.model.wbu.CampusDeviceKind
+import com.xingheyuzhuan.shiguangschedule.data.repository.CampusDeviceHubRepository
 import com.xingheyuzhuan.shiguangschedule.ui.components.accessFailureText
 import com.xingheyuzhuan.shiguangschedule.ui.components.shouldOfferWebVpnOnce
 import com.xingheyuzhuan.shiguangschedule.ui.components.silentUnifiedAuthLogin
 import com.xingheyuzhuan.shiguangschedule.ui.components.userFacingMessage
+import androidx.lifecycle.AndroidViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -64,7 +69,11 @@ data class UjingWaterUiState(
     val needLogin: Boolean = false
 )
 
-class UjingWaterViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class UjingWaterViewModel @Inject constructor(
+    application: Application,
+    private val deviceHubRepository: CampusDeviceHubRepository,
+) : AndroidViewModel(application) {
 
     data class WaterSession(
         val cd: String,
@@ -112,6 +121,12 @@ class UjingWaterViewModel(application: Application) : AndroidViewModel(applicati
     private var pollJob: Job? = null
     private var currentCd: String = ""
     private var hasStarted: Boolean = false
+
+    /** 已经向使用记录补过店铺名的订单 id：轮询每 2.5 秒一次，同一单只补一次。 */
+    private val namesFilledOrders = mutableSetOf<Long>()
+
+    private fun namesFilledForOrder(orderId: Long): Boolean =
+        !namesFilledOrders.add(orderId)
 
     /** 本次取水是否已经自动改过一次隧道：只自动试一次，失败就交给用户，避免来回切。 */
     private var autoTunnelTried: Boolean = false
@@ -206,6 +221,9 @@ class UjingWaterViewModel(application: Application) : AndroidViewModel(applicati
                 // 4. 下单出水
                 _uiState.update { it.copy(stage = UjingWaterUiStage.Loading(getApplication<Application>().getString(R.string.status_dispensing_water))) }
                 val order = ujingClient.dispenseWater(cd)
+
+                // 真正用上了：记进校园设备管理（下单成功才算，失败尝试不留痕）
+                recordDeviceUse(subject)
 
                 // 5. 进入出水进行中状态并开启监听
                 val activeStage = UjingWaterUiStage.Active(
@@ -400,6 +418,23 @@ class UjingWaterViewModel(application: Application) : AndroidViewModel(applicati
                 current.copy(stage = current.stage.copy(detail = detail))
             } else current
         }
+        // 订单详情里有店铺名（currentInfo 接口不给，只有这里给）：
+        // 顺手补进使用记录，列表标题就能显示「南B-11」而不是一串设备码。
+        // 注意：detail.deviceNo 是**取水点水表号**，同层楼的几台机器会完全一样（实测两条不同 cd
+        // 都是 000006），不能当机号用 —— 饮水机的机号取 cd 尾号，由 CampusDeviceEntry 自己算。
+        // 只补店铺名 + 主体名，且同一单只补一次（轮询每 2.5 秒一次，不必反复整表重写）。
+        if (detail.storeName != null && !namesFilledForOrder(detail.orderId)) {
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching {
+                    deviceHubRepository.fillNames(
+                        kind = CampusDeviceKind.WATER,
+                        key = currentCd,
+                        storeName = detail.storeName,
+                        subjectName = subject.subjectName,
+                    )
+                }.onFailure { Log.w(TAG, "补全饮水机名称失败", it) }
+            }
+        }
     }
 
     private fun stopStatusWatch() {
@@ -407,6 +442,28 @@ class UjingWaterViewModel(application: Application) : AndroidViewModel(applicati
         pollJob = null
         mqttClient?.stop()
         mqttClient = null
+    }
+
+    /**
+     * 把这次取水记进「校园设备管理」（下单成功那一刻调用）。
+     *
+     * 恢复旧订单（[start] 的缓存分支）不走这里 —— 那不是一次新的使用，不该重复计数。
+     * 记录失败只打日志：使用记录是锦上添花，不能把取水流程带崩。
+     */
+    private fun recordDeviceUse(subject: WbuUjingClient.WaterServiceSubject) {
+        val app = getApplication<Application>()
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                deviceHubRepository.record(
+                    CampusDeviceEntry(
+                        kind = CampusDeviceKind.WATER,
+                        key = currentCd,
+                        storeName = subject.storeName,
+                        subjectName = subject.subjectName,
+                    )
+                )
+            }.onFailure { Log.w(TAG, "记录饮水机使用失败", it) }
+        }
     }
 
     /**

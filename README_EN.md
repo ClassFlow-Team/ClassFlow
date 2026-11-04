@@ -49,7 +49,8 @@
 | Payment code | Native campus-code screen: code on entry, auto-rotation, balance, screen kept on at full brightness; QR, CODE128 barcode and a digits view, with an official-page fallback |
 | Scan | Let your phone complete the unified-auth QR login for a PC (status 2 → 1) and route Ujing device codes / shower controllers / generic link nodes; ZXing-C++ / ZXing engines (zxing-cpp by default), gallery import supported |
 | Ujing devices | Jump straight to water dispensers, hair dryers, washers and dryers from their QR codes |
-| Desktop shortcuts | Long-press the app icon for "Scan", "Campus Card" and "Payment Code" |
+| Campus device hub | Usage history, rename and home-screen shortcuts for water dispensers, washers and showers (the hair dryer has its own detection screen); records stay on this device |
+| Desktop shortcuts | Long-press the app icon for "Scan", "Campus Card" and "Payment Code"; a specific hair dryer, water dispenser, washer or shower can also be pinned, launching it in one tap |
 
 ### 👤 Accounts & credentials
 

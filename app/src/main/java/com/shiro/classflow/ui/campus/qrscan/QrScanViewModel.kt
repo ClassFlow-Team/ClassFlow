@@ -430,6 +430,16 @@ class QrScanViewModel @Inject constructor(
                         val launchUrl = cardClient.resolveAppLaunchUrl(com.shiro.classflow.data.network.wbu.WbuUjingClient.WASHER_APP_ID, token)
                         val separator = if (launchUrl?.contains("?") == true) "&" else "?"
                         val initialUrl = if (launchUrl != null) "${launchUrl}${separator}scanResult=$encodedRaw" else null
+                        // 真正用上了（拿到直达地址）：记进校园设备管理。
+                        // 深链路径（/wm/{uuid} → WasherEntryResolver）自己会记，这里只管扫码路径。
+                        if (initialUrl != null) {
+                            runCatching {
+                                com.shiro.classflow.data.network.wbu.WasherEntryResolver.recordUse(context, washer.raw)
+                            }
+                        }
+                        // 后台补名（店铺名 / 机号）：不影响跳转；复用刚才已经连上的会话
+                        com.shiro.classflow.data.network.wbu.WasherEntryResolver
+                            .enrichNames(context, washer.raw, result.lastUseDeviceId, ujingClient)
                         _scanEvent.emit(QrScanEvent.NavigateToWasher(initialUrl = initialUrl, pendingAutoScan = washer.raw))
                     }
 
@@ -450,6 +460,13 @@ class QrScanViewModel @Inject constructor(
                 val launchUrl = if (token != null) cardClient.resolveAppLaunchUrl(com.shiro.classflow.data.network.wbu.WbuUjingClient.WASHER_APP_ID, token) else null
                 val separator = if (launchUrl?.contains("?") == true) "&" else "?"
                 val initialUrl = if (launchUrl != null) "${launchUrl}${separator}scanResult=$encodedRaw" else null
+                // 拿到了直达地址就是「用上了」：兜底路径与 Ready 一样要留记录，
+                // 否则扫码接口偶发失败时用户明明用了却查不到这台机器。
+                if (initialUrl != null) {
+                    runCatching {
+                        com.shiro.classflow.data.network.wbu.WasherEntryResolver.recordUse(context, washer.raw)
+                    }
+                }
                 _scanEvent.emit(QrScanEvent.NavigateToWasher(initialUrl = initialUrl, pendingAutoScan = washer.raw))
             }
         }

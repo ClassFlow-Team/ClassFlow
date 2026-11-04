@@ -52,7 +52,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
@@ -66,7 +66,7 @@ fun UjingWaterScreen(
     cd: String,
     scanId: Long = 0L,
     navBridge: NavBridge,
-    viewModel: UjingWaterViewModel = viewModel()
+    viewModel: UjingWaterViewModel = hiltViewModel()
 ) {
     // 本进程有没有受理过这个页面（只在内存里，重建后一定是 false）。
     // 它和「保存状态」里的那个标记配一起，才能区分「这次新打开」和「被系统恢复出来的旧页面」。

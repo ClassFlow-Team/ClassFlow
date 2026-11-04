@@ -1151,6 +1151,39 @@
     <string name="hairdryer_message_shortcut_already">桌面上已经有这台吹风机的图标了</string>
     <string name="hairdryer_message_shortcut_failed">添加失败，请稍后再试</string>
 
+    <!-- 校園裝置管理（飲水機 / 洗衣機 / 洗浴：使用記錄 / 重新命名 / 桌面捷徑） -->
+    <string name="item_device_hub_water">飲水機</string>
+    <string name="item_device_hub_washer">洗衣機</string>
+    <string name="item_device_hub_shower">洗浴</string>
+    <string name="desc_device_hub">使用記錄、重新命名與桌面捷徑</string>
+    <string name="title_device_hub_water">飲水機</string>
+    <string name="title_device_hub_washer">洗衣機</string>
+    <string name="title_device_hub_shower">洗浴</string>
+    <string name="device_section_history">使用記錄</string>
+    <string name="device_history_use_count">用過 %1$d 次</string>
+    <string name="device_history_last_used">上次 %1$s</string>
+    <string name="device_history_empty_water">還沒有記錄：掃一台飲水機，或在記錄裡給它建個桌面圖示，這裡就會留下它。</string>
+    <string name="device_history_empty_washer">還沒有記錄：掃一台洗衣機，或在記錄裡給它建個桌面圖示，這裡就會留下它。</string>
+    <string name="device_history_empty_shower">還沒有記錄：掃一個控水器，或在記錄裡給它建個桌面圖示，這裡就會留下它。</string>
+    <string name="device_action_use">直接使用</string>
+    <string name="device_action_rename">重新命名</string>
+    <string name="device_action_pin_shortcut">加到桌面</string>
+    <string name="device_action_copy_id">複製機號</string>
+    <string name="device_action_delete">刪除</string>
+    <string name="device_action_scan_water">掃一台飲水機</string>
+    <string name="device_action_scan_washer">掃一台洗衣機</string>
+    <string name="device_action_scan_shower">掃一個控水器</string>
+    <string name="device_rename_title">重新命名</string>
+    <string name="device_rename_hint">留空則用預設名稱</string>
+    <string name="device_icon_picker_title">選擇桌面圖示</string>
+    <string name="device_icon_picker_hint">圖示只影響桌面捷徑的外觀</string>
+    <string name="device_message_shortcut_requested">已請求加到桌面</string>
+    <string name="device_message_shortcut_updated">桌面圖示已更新</string>
+    <string name="device_message_shortcut_already">桌面上已經有這台裝置的圖示了</string>
+    <string name="device_message_shortcut_unsupported">目前桌面不支援加入圖示，可在系統桌面裡手動加入</string>
+    <string name="device_message_shortcut_failed">加入失敗，請稍後再試</string>
+    <string name="device_message_copied">機號已複製</string>
+
     <!-- 一卡通帳單（舊平台原生帳單 / 流水） -->
     <string name="service_campus_card_bill">一卡通帳單</string>
     <string name="desc_campus_card_bill">舊平台帳單與流水，可看當天交易，詳情更完整</string>

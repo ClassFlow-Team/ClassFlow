@@ -2,8 +2,16 @@ package com.shiro.classflow.data.network.wbu
 
 import android.content.Context
 import android.util.Log
+import com.shiro.classflow.data.model.wbu.CampusDeviceEntry
+import com.shiro.classflow.data.model.wbu.CampusDeviceKind
+import com.xingheyuzhuan.shiguangschedule.data.repository.CampusDeviceHubRepository
 import java.net.URLEncoder
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -48,6 +56,11 @@ object WasherEntryResolver {
                 val scan = runCatching { ujingClient.scanWasherCode(washerRaw) }
                     .onFailure { Log.w(TAG, "scanWasherCode 被拒，仍按扫码链路兜底直达 H5", it) }
                     .getOrNull()
+                // 补名不占状态：设备被占用 / 离线时 scan 里照样带着 deviceId，
+                // 名字该补还是要补（不然「正在运行中」这台机器的标题永远是 uuid 尾号）。
+                if (scan != null) {
+                    enrichNames(context, washerRaw, scan.lastUseDeviceId, ujingClient)
+                }
                 val unavailable = scan?.availability as? WasherAvailability.Unavailable
                 if (scan != null && unavailable != null) {
                     Log.i(TAG, "洗衣机不可下单: ${unavailable.reason} (status=${scan.status}, raw=${scan.rawData})")
@@ -63,4 +76,107 @@ object WasherEntryResolver {
                 Log.w(TAG, "解析洗衣机入口失败: $washerRaw", it)
             }.getOrDefault(Result.Failed)
         }
+
+    /**
+     * 把这次洗衣机使用记进「校园设备管理」（拿到直达地址后调用）。
+     *
+     * 这是一个 object（非 Hilt 注入），记录经 [CampusDeviceHubRepositoryHolder] 拿单例。
+     * 记录失败只打日志：使用记录不能把洗衣机直达带崩。
+     */
+    fun recordUse(context: Context, washerRaw: String) {
+        val key = uuidOf(washerRaw) ?: return
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                CampusDeviceHubRepositoryHolder.get(context)?.record(washerEntry(key, washerRaw))
+            }.onFailure { Log.w(TAG, "记录洗衣机使用失败", it) }
+        }
+    }
+
+    /**
+     * 后台补全洗衣机记录的名字（`washer/devices/program/info`，实测 2026-11-04）。
+     *
+     * `scanWasherCode` 只回 deviceId（不是 uuid），名字要拿 deviceId 再查一步才有：
+     * storeName「南B-11」、纯机号 deviceNo「000002」、主体名「武汉商学院-南」。
+     * 型号名（`deviceTypeName`「10kg滚筒机」）刻意不进标题 —— 标题只放「店铺名-机号」。
+     *
+     * 两条入口路径（扫码 / `/wm/` 深链）共用。补名是锦上添花：任何失败只打日志。
+     *
+     * @param ujingClient 调用方若已建好会话（扫码路径本来就连着）就复用，避免再跑一遍换票。
+     */
+    fun enrichNames(
+        context: Context,
+        washerRaw: String,
+        lastUseDeviceId: String?,
+        ujingClient: WbuUjingClient? = null,
+    ) {
+        val key = uuidOf(washerRaw) ?: return
+        if (lastUseDeviceId.isNullOrBlank()) return
+        val appContext = context.applicationContext
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                // record 与本方法并发（扫码路径两者同时起），等记录先落库再补名
+                val repo = CampusDeviceHubRepositoryHolder.get(appContext) ?: return@launch
+                var recorded = false
+                for (attempt in 0 until 5) {
+                    recorded = repo.entriesOf(CampusDeviceKind.WASHER).first()
+                        .any { it.key == key }
+                    if (recorded) break
+                    delay(600)
+                }
+                if (!recorded) return@launch
+
+                val client = ujingClient ?: run {
+                    val cardClient = WbuCampusCardClient(appContext)
+                    WbuUjingClient(appContext, cardClient).also {
+                        it.connect(cardClient.ensureValidAccessToken(), WbuUjingClient.WASHER_APP_ID)
+                    }
+                }
+                val info = client.washerDeviceInfo(lastUseDeviceId) ?: return@launch
+                repo.fillNames(
+                    CampusDeviceKind.WASHER,
+                    key = key,
+                    storeName = info.storeName,
+                    subjectName = info.serviceSubjectName,
+                    // 纯机号（000002），不是「000002-10kg滚筒机」：标题只需要前者
+                    deviceNo = info.deviceNo
+                )
+                Log.i(TAG, "洗衣机补名: ${info.storeName} / ${info.deviceNo}")
+            }.onFailure { Log.w(TAG, "洗衣机补名失败（不影响使用）: $lastUseDeviceId", it) }
+        }
+    }
+
+    /** 从小天鹅原文里取 uuid（`?uuid=` 参数）；不是小天鹅链接时按原文末段兜底。 */
+    fun uuidOf(washerRaw: String): String? =
+        washerRaw.toHttpUrlOrNull()?.queryParameter("uuid")?.trim()?.takeIf { it.isNotBlank() }
+            ?: Regex("uuid=([^&#]+)").find(washerRaw)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
+
+    /** 洗衣机记录条目（QrScanViewModel 与深链两条路共用，保证同一次使用只记一条）。 */
+    fun washerEntry(key: String, raw: String): CampusDeviceEntry = CampusDeviceEntry(
+        kind = CampusDeviceKind.WASHER,
+        key = key,
+        raw = raw,
+        // 刻意不预置 deviceNo：扫码只给 deviceId，任何「先塞个 uuid 尾号占位」的写法
+        // 都会被 fillNames 的「只补空缺」规则挡住，导致真正的机号（000002）永远写不进去。
+        // 补名失败时标题会落到 seq 的「洗衣机 N」，比 uuid 尾巴可读。
+    )
+}
+
+/**
+ * [CampusDeviceHubRepository] 的进程级持有者：给 object 形态的解析器
+ * （`WasherEntryResolver` / `CampusShowerEntryResolver`）一个不依赖 Hilt 注入的取用口。
+ *
+ * 必须早于任何记录调用前初始化（MainActivity `onCreate`），取不到时记录静默跳过 ——
+ * 使用记录是锦上添花，绝不能让直达流程因此失败。
+ */
+object CampusDeviceHubRepositoryHolder {
+
+    @Volatile
+    private var repository: CampusDeviceHubRepository? = null
+
+    fun init(repository: CampusDeviceHubRepository) {
+        this.repository = repository
+    }
+
+    /** 进程级单例（由 `CampusDeviceHubRepositoryHolder.init` 注入）；未初始化时返回 null（记录静默跳过）。 */
+    fun get(context: Context): CampusDeviceHubRepository? = repository
 }

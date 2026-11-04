@@ -209,6 +209,22 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_HAIRDRYER_CD = "hairdryer_cd"
         const val EXTRA_HAIRDRYER_RAW = "hairdryer_raw"
 
+        /**
+         * 桌面快捷方式「某台校园设备」（饮水机 / 洗衣机 / 洗浴，见 `CampusDeviceShortcuts`）。
+         *
+         * 附带设备身份 extras：桌面图标点了就该直接执行，不再问一遍。
+         */
+        const val ACTION_WATER_DEVICE = "com.xingheyuzhuan.shiguangschedule.action.WATER_DEVICE"
+        const val ACTION_WASHER_DEVICE = "com.xingheyuzhuan.shiguangschedule.action.WASHER_DEVICE"
+        const val ACTION_SHOWER_DEVICE = "com.xingheyuzhuan.shiguangschedule.action.SHOWER_DEVICE"
+
+        /** 快捷方式 extra：设备类型 / 设备标识 / 扫码原文 / 洗浴系统与端口。 */
+        const val EXTRA_DEVICE_KIND = "device_kind"
+        const val EXTRA_DEVICE_KEY = "device_key"
+        const val EXTRA_DEVICE_RAW = "device_raw"
+        const val EXTRA_DEVICE_SYSTEM = "device_system"
+        const val EXTRA_DEVICE_PORT = "device_port"
+
         /** 官网下载页入口的入场动画时长。 */
         private const val DOWNLOAD_ENTRY_ANIM_MS = 2700
 
@@ -235,6 +251,9 @@ class MainActivity : AppCompatActivity() {
 
     @Inject
     lateinit var hairdryerEntryRouter: com.xingheyuzhuan.shiguangschedule.data.repository.HairdryerEntryRouter
+
+    @Inject
+    lateinit var campusDeviceHubRepository: com.xingheyuzhuan.shiguangschedule.data.repository.CampusDeviceHubRepository
 
     @Inject
     lateinit var courseConversionRepository: CourseConversionRepository
@@ -266,6 +285,10 @@ class MainActivity : AppCompatActivity() {
         // Intent 里还写着旧组件名；启动时顺手改指向新类，旧图标才不会点开就报「类不存在」。
         lifecycleScope.launch(Dispatchers.IO) {
             HairdryerShortcuts.migrateLegacyIntents(applicationContext)
+            // 校园设备记录的进程级持有者：object 形态的解析器（洗衣机 / 洗浴直达）
+            // 记录使用时从这里拿单例，拿不到就静默跳过（记录不能挡直达）
+            com.shiro.classflow.data.network.wbu.CampusDeviceHubRepositoryHolder
+                .init(campusDeviceHubRepository)
         }
         setContent {
             val settings by appSettingsRepository.getAppSettings()
@@ -445,6 +468,15 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        // 桌面快捷方式「某台校园设备」（饮水机 / 洗衣机 / 洗浴）：点图标就是要用那台设备
+        if (intent.action == ACTION_WATER_DEVICE ||
+            intent.action == ACTION_WASHER_DEVICE ||
+            intent.action == ACTION_SHOWER_DEVICE
+        ) {
+            handleCampusDeviceShortcut(intent)
+            return
+        }
+
         val hairdryer = com.shiro.classflow.data.network.wbu.CampusLinkRouter.extractHairdryer(intent)
         if (hairdryer != null) {
             // 碰一碰（NFC 标签 / `/hd/{cd}` 深链）：能本地确定是蓝牙机就直接走原体验；
@@ -492,6 +524,46 @@ class MainActivity : AppCompatActivity() {
                     raw = raw,
                     source = source.name
                 )
+            }
+        }
+    }
+
+    /**
+     * 桌面快捷方式「某台校园设备」（饮水机 / 洗衣机 / 洗浴）。
+     *
+     * 从 extras 还原设备身份，直接落对应目的地：
+     * - 饮水机 → 原生取水页（下单流程自己处理防重入）；
+     * - 洗衣机 → 一卡通 WebApp（`scanResult` 载体走一次性自启，重建不重放）；
+     * - 洗浴 → `ShowerDirect` 落地页（设备正证 / 原生页选择都在那一跳）。
+     */
+    private fun handleCampusDeviceShortcut(intent: android.content.Intent) {
+        val kind = com.shiro.classflow.data.model.wbu.CampusDeviceKind
+            .fromNameOrNull(intent.getStringExtra(EXTRA_DEVICE_KIND))
+            ?: return
+        val entry = com.shiro.classflow.ui.campus.device.CampusDeviceShortcuts.entryFromIntent(
+            kind = kind,
+            key = intent.getStringExtra(EXTRA_DEVICE_KEY),
+            raw = intent.getStringExtra(EXTRA_DEVICE_RAW),
+            system = intent.getStringExtra(EXTRA_DEVICE_SYSTEM),
+            port = intent.getStringExtra(EXTRA_DEVICE_PORT),
+        ) ?: return
+
+        pendingDeepLink.value = when (kind) {
+            com.shiro.classflow.data.model.wbu.CampusDeviceKind.WATER ->
+                Destination.UjingWater(cd = entry.key)
+
+            com.shiro.classflow.data.model.wbu.CampusDeviceKind.WASHER ->
+                Destination.WebApp(
+                    appId = com.shiro.classflow.data.model.wbu.WebAppId.CAMPUS_CARD.name,
+                    pendingAutoScan = entry.raw.ifBlank {
+                        "http://app.littleswan.com/u_download.html?type=Ujing&uuid=${entry.key}"
+                    }
+                )
+
+            com.shiro.classflow.data.model.wbu.CampusDeviceKind.SHOWER -> {
+                val (system, code, port) = com.xingheyuzhuan.shiguangschedule.data.repository
+                    .CampusDeviceHubRepository.showerParts(entry.key)
+                Destination.ShowerDirect(system = system, code = code, port = port)
             }
         }
     }
@@ -988,6 +1060,11 @@ fun AppNavigation(
                             Destination.CampusCardPayCode -> com.shiro.classflow.ui.campus.paycode.PayCodeScreen(navBridge = navBridge)
                             Destination.CampusCardBill -> com.shiro.classflow.ui.campus.bill.CampusCardBillScreen(navBridge = navBridge)
                             Destination.HairdryerHub -> com.shiro.classflow.ui.campus.hairdryer.HairdryerHubScreen(navBridge = navBridge)
+
+                            is Destination.CampusDeviceHub -> com.shiro.classflow.ui.campus.device.CampusDeviceHubScreen(
+                                navBridge = navBridge,
+                                kindName = destination.kind
+                            )
                             Destination.UpdateRepo -> UpdateRepoScreen(navBridge = navBridge)
                             Destination.NotificationSettings -> NotificationSettingsScreen(onBack = navBridge::popBackStack)
                             Destination.LanguageSettings -> LanguageSettingScreen(onBack = navBridge::popBackStack)

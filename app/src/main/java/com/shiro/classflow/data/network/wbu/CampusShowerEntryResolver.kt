@@ -27,11 +27,15 @@ class CampusShowerEntryResolver @Inject constructor(
          *
          * [nativeShower] 非空表示这台设备已经正证过、确实是**淋浴**（`getDevicesType` = 101）：
          * 调用方应改走原生页 `Destination.ShowerWater`（[initialUrl] 只作为备用地址）。
+         *
+         * [storeName] 是服务端给的设备位置名（1 栋 `CheckKsPos` 的 `CostDsp`，如「马影河宿舍1栋」；
+         * 2-3 栋接口不给，恒为 null）。记录使用时当店铺名用，列表标题就有可读的位置了。
          */
         data class Ready(
             val initialUrl: String,
             val pendingAutoScan: String?,
-            val nativeShower: NativeShower? = null
+            val nativeShower: NativeShower? = null,
+            val storeName: String? = null
         ) : Result
 
         /** 服务端明确判定设备机号无效。 */
@@ -62,7 +66,10 @@ class CampusShowerEntryResolver @Inject constructor(
                     } else {
                         Result.Ready(
                             initialUrl = launchUrl,
-                            pendingAutoScan = ShowerQrLink.syntheticYktRaw(posno)
+                            pendingAutoScan = ShowerQrLink.syntheticYktRaw(posno),
+                            // CostDsp（所属区域名）只在 RetNo==0 的 Valid 分支里有值，
+                            // 无效机号的响应里是默认值「控水定额消费」，不会误传
+                            storeName = check.classLabel
                         )
                     }
                 }

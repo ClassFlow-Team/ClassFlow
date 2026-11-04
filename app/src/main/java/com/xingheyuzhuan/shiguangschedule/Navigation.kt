@@ -69,6 +69,18 @@ sealed interface Destination : NavKey {
      */
     @Serializable data object HairdryerHub : Destination
 
+    /**
+     * 校园设备管理页（校园服务 → 饮水机 / 洗衣机 / 洗浴）：使用记录 + 桌面快捷方式。
+     *
+     * 与吹风机页同一套骨架，只是没有判型设置 —— 这三类设备的直达目标由设备身份唯一决定。
+     * 记录同样是**本机**的（`campus_device_hub`，不参与 WebDAV 同步）。
+     */
+    @Serializable
+    data class CampusDeviceHub(
+        /** `CampusDeviceKind` 的名字（WATER / WASHER / SHOWER）。 */
+        val kind: String
+    ) : Destination
+
     // --- 动态传参页面 ---
 
     @Serializable
