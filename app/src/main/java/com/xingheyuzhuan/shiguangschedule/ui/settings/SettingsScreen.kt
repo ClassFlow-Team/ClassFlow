@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -281,6 +282,14 @@ fun SettingsScreen(
                         title = stringResource(R.string.service_campus_card),
                         subtitle = stringResource(R.string.desc_campus_card_app),
                         onClick = { navBridge.navigate(Destination.WebApp(com.shiro.classflow.data.model.wbu.WebAppId.CAMPUS_CARD.name)) }
+                    )
+                    SettingDivider()
+                    // 旧平台账单：数据比新平台及时，详情更全（完全原生，不经过 WebView）
+                    SettingTile(
+                        icon = Icons.AutoMirrored.Rounded.ReceiptLong,
+                        title = stringResource(R.string.service_campus_card_bill),
+                        subtitle = stringResource(R.string.desc_campus_card_bill),
+                        onClick = { navBridge.navigate(Destination.CampusCardBill) }
                     )
                     SettingDivider()
                     SettingTile(
