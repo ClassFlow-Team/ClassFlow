@@ -87,6 +87,17 @@
     <string name="item_auto_check_update">Auto-check Updates</string>
     <string name="desc_auto_check_update">Silently check for new versions on startup</string>
     <string name="item_update_channel">Update Channel</string>
+    <string name="item_update_check_frequency">Check Frequency</string>
+    <string name="desc_update_check_frequency">Only check automatically at startup once this interval has elapsed since the last check</string>
+    <string name="dialog_update_check_frequency">Choose Check Frequency</string>
+    <string name="interval_every_launch">Every launch</string>
+    <string name="interval_6_hours">Every 6 hours</string>
+    <string name="interval_12_hours">Every 12 hours</string>
+    <string name="interval_24_hours">Every 24 hours (default)</string>
+    <string name="interval_3_days">Every 3 days</string>
+    <string name="interval_7_days">Every 7 days</string>
+    <string name="status_official_update_source">Using the official update endpoint</string>
+    <string name="status_github_update_source">Checking updates via GitHub Releases</string>
     <string name="format_skipped_update_version">Skipped v%1$s (tap to check)</string>
     <string name="status_custom_update_source_set">Custom update server configured</string>
     <string name="status_get_latest_support">Get support for the latest version</string>
@@ -99,7 +110,7 @@
     <string name="toast_install_failed">Installation failed: %1$s</string>
     <string name="action_configure_address">Configure</string>
     <string name="title_custom_update_server">Custom Update Server</string>
-    <string name="desc_custom_update_server">Enter a custom API URL to use your own update server. Leave blank to use the official endpoint.</string>
+    <string name="desc_custom_update_server">Enter a custom API URL to use your own update server. Leave blank to use the built-in source (official endpoint or GitHub Releases).</string>
     <string name="hint_custom_update_server_input">Enter custom API URL (leave blank for default)</string>
     <string name="label_ignored_version">Ignored version: %1$s</string>
     <string name="toast_restored_version_reminder">Reminders restored for this version</string>
@@ -281,6 +292,11 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="channel_beta_desc">Early preview of upcoming features</string>
     <string name="channel_dev_title">Dev</string>
     <string name="channel_dev_desc">Cutting-edge features with highest update frequency</string>
+    <string name="dialog_select_github_update_channel">Choose GitHub update channel</string>
+    <string name="channel_github_release_title">Release</string>
+    <string name="channel_github_release_desc">Only releases marked as a normal release on GitHub</string>
+    <string name="channel_github_prerelease_title">PreRelease</string>
+    <string name="channel_github_prerelease_desc">Include releases marked as a pre-release on GitHub</string>
     <string name="title_wbu_direct_import">Direct Import</string>
     <string name="desc_wbu_direct_import">Fast sync via native API with semester choice &amp; merge</string>
     <string name="badge_recommended">Recommended</string>
@@ -508,6 +524,17 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="item_library_seat">Library Seat Booking</string>
     <string name="desc_library_seat">Seat booking, floor plans, check-ins and live status</string>
     <string name="title_library_seat">Library Seat Booking</string>
+
+    <!-- Mobile portal (ydmh): one entry point for campus services -->
+    <string name="item_mobile_portal">Mobile Portal</string>
+    <string name="desc_mobile_portal">One entry point for campus services and business systems</string>
+    <string name="wechat_auth_title">WeChat authorisation required</string>
+    <string name="wechat_auth_message">This app has to be authorised inside WeChat, and ClassFlow cannot do that step for you. Copy the link and open it in WeChat instead.</string>
+    <string name="wechat_auth_target_host">Target site: %1$s</string>
+    <string name="wechat_auth_copy">Copy link</string>
+    <string name="wechat_auth_copied">Link copied — open it in WeChat</string>
+    <string name="wechat_auth_back">Back</string>
+
     <string name="status_fetching_webapp_token">Fetching unified authentication token...</string>
     <string name="title_load_failed">Page Load Failed</string>
     <string name="action_exit">Exit</string>
@@ -713,6 +740,8 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="item_auto_campus_probe">Auto campus network detection</string>
     <string name="a11y_long_press_login">Long-press to open the login panel</string>
     <string name="desc_auto_campus_probe">With WebVPN on, campus-only features first run a quick check; when on campus they connect directly instead of going through WebVPN</string>
+    <string name="item_campus_dns">Resolve campus domains with the school DNS</string>
+    <string name="desc_campus_dns">When connecting directly, resolve wbu.edu.cn domains with the school DNS so a proxy\'s fake-IP cannot point them at unreachable addresses. Turn off to use the system resolver only</string>
     <string name="item_login">Sign in</string>
     <string name="desc_login_service">Sign in again to refresh this service\'s authorization</string>
     <string name="err_no_valid_credentials">No valid credentials. Please use "Sign-in sync" to log in first.</string>
@@ -738,6 +767,9 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="shortcut_short_campus_card">Campus Card</string>
     <string name="item_qr_scan">Scan QR code</string>
     <string name="desc_qr_scan">Scan the unified-auth login QR code to confirm sign-in on your computer</string>
+    <string name="item_network_diagnostics">Copy network diagnostics</string>
+    <string name="desc_network_diagnostics">Records the peer IP and status code of recent campus requests to tell on-campus direct access from off-campus gateway access</string>
+    <string name="toast_diagnostics_copied">Network diagnostics copied</string>
     <string name="title_qr_scan">Scan</string>
     <string name="a11y_qr_scan_photo">Read a QR code from an image</string>
     <string name="qr_scan_photo_no_code">No QR code found in the image — try another one, or scan the code directly</string>
@@ -945,6 +977,9 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="format_export_image_filename">%1$s_schedule_%2$s.png</string>
     <string name="update_source_official">Official update service</string>
     <string name="err_update_server_not_configured">Update server address not configured</string>
+    <string name="err_github_rate_limited">GitHub rate limit reached. Please try again later.</string>
+    <string name="err_github_no_release">No published releases in the GitHub repository</string>
+    <string name="err_github_no_compatible_asset">This release has no package for the current device architecture</string>
     <string name="format_err_server_response">Server error: HTTP %1$d</string>
     <string name="format_err_arch_not_available">Version %1$s is available but no package for current architecture (%2$s)</string>
     <string name="err_no_download_url">No valid download URL provided</string>
@@ -984,6 +1019,7 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="link_hub_error_expired">This shared content has expired</string>
     <string name="link_hub_error_app_version">Update the app to use this content</string>
     <string name="link_hub_error_network">Network error, could not fetch this shared content</string>
+    <string name="link_hub_error_server_not_configured">This build has no link service configured, so server codes cannot be resolved</string>
     <string name="link_hub_error_shower_invalid">Shower device not found. Check the water controller number.</string>
     <string name="link_hub_error_not_json">This shared content cannot be opened right now, please try again later</string>
     <string name="link_hub_open_in_browser">Open in browser</string>
@@ -1019,12 +1055,16 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="fail_sms_code_rejected">Incorrect verification code. Please try again</string>
     <string name="fail_captcha_rejected">Incorrect image captcha. Please try again</string>
     <string name="fail_not_on_campus">Not on the campus network, so a direct connection is unavailable</string>
+    <string name="fail_no_network">No network connection. Connect to a network and try again</string>
     <string name="fail_network_unreachable">Network connection failed. Please check your network and retry</string>
     <string name="fail_webvpn_unreachable">Cannot reach WebVPN. Please check your network and retry</string>
     <string name="fail_unified_auth_unreachable">Cannot reach unified authentication. Please check your network and retry</string>
+    <string name="fail_waf_blocked">Your campus gateway blocked the direct connection to unified authentication. Try again over WebVPN</string>
+    <string name="fail_waf_blocked_webvpn">The gateway still blocks this request over WebVPN. Retry later or open it in the web page instead</string>
     <string name="fail_unexpected">The operation did not succeed. The school system returned an unexpected response; please retry later</string>
     <string name="desc_enter_unified_auth_password">No unified-authentication password is saved on this device. Enter it to continue</string>
     <string name="action_use_webvpn_once">Use WebVPN for this try</string>
+    <string name="action_use_direct_once">Use a direct connection for this try</string>
 
     <!-- Campus-card payment code (native page) -->
     <string name="title_campus_pay_code">Payment Code</string>
@@ -1110,4 +1150,42 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="hairdryer_message_shortcut_updated">桌面圖示已更新</string>
     <string name="hairdryer_message_shortcut_already">桌面上已經有這台吹風機的圖示了</string>
     <string name="hairdryer_message_shortcut_failed">加入失敗，請稍後再試</string>
+
+    <!-- Campus card bill (native bill / transactions from the legacy platform) -->
+    <string name="service_campus_card_bill">Campus Card Bill</string>
+    <string name="desc_campus_card_bill">Bills and transactions from the legacy platform, including today\'s activity</string>
+    <string name="title_campus_card_bill">Campus Card Bill</string>
+    <string name="loading_campus_card_bill">Loading your campus card bill…</string>
+    <string name="bill_mode_bill">Bills</string>
+    <string name="bill_mode_flow">Transactions</string>
+    <string name="bill_current_month">This month</string>
+    <string name="bill_month_format">%2$d/%1$d</string>
+    <string name="bill_month_bill">Monthly bill</string>
+    <string name="bill_total_expense">Spent this month</string>
+    <string name="bill_latest_balance">Latest balance</string>
+    <string name="bill_empty">No bills this month</string>
+    <string name="bill_flow_empty">No transactions</string>
+    <string name="bill_cancelled">Cancelled — no bill data loaded</string>
+    <string name="bill_cancelled_refresh">Refresh cancelled — showing the previous data</string>
+    <string name="bill_no_more">No more records</string>
+    <string name="bill_total_count">%1$d records</string>
+    <string name="bill_detail_title">Transaction details</string>
+    <string name="bill_detail_merchant">Merchant</string>
+    <string name="bill_detail_time">Time</string>
+    <string name="bill_detail_type">Type</string>
+    <string name="bill_detail_account">Account</string>
+    <string name="bill_detail_description">Description</string>
+    <string name="bill_detail_serial">Serial number</string>
+    <string name="bill_detail_effect_time">Posted at</string>
+    <string name="bill_detail_balance">Balance after</string>
+    <string name="bill_detail_account_type">Account type</string>
+    <string name="bill_month_summary_title">%1$s bill</string>
+    <string name="bill_month_no_data">No spending this month</string>
+    <string name="bill_year_trend">Yearly trend</string>
+    <string name="bill_year_prev">Previous year</string>
+    <string name="bill_year_next">Next year</string>
+    <string name="bill_year_no_data">No spending in %1$d</string>
+    <string name="bill_error_load">Failed to load the bill. Please try again.</string>
+    <string name="bill_action_relogin">Sign in again</string>
+    <string name="bill_balance_short">Balance ¥%1$s</string>
 </resources>

@@ -40,6 +40,10 @@ app/release.jks
 /release_notes_*.txt
 /CHANGELOG.md
 
+# 抓包文件（含 Cookie / 票据，不入库；排查时放本机，别提交）
+*.har
+*.har.gz
+
 # 线上网页与短链服务端全都在 web/（本机维护、手动部署，暂不入库；含私有域名与节点数据）
 #   site/   官网静态站（独立域名，纯静态）
 #   pages/  「打开 App / 下载」落地页（纯静态，部署在 hub 站点的 /pages/index.php）

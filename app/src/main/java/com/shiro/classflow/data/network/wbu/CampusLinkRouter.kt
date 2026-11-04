@@ -1,0 +1,201 @@
+package com.shiro.classflow.data.network.wbu
+
+import android.content.Intent
+import android.net.Uri
+import android.nfc.NdefMessage
+import android.nfc.NfcAdapter
+import com.xingheyuzhuan.shiguangschedule.Destination
+import com.shiro.classflow.data.network.link.LinkHubUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+
+/**
+ * 校园 NFC 标签触碰、网页链接与外部 Intent 的集中路由分发器。
+ *
+ * 规范（方案 A）：
+ * - `/w/{cd}` -> 饮水机原生出水页面 `Destination.UjingWater(cd)`
+ * - `/wm/{uuid}` -> 洗衣机 H5 页面 `Destination.WebApp`
+ * - `/hd/{cd}` -> 吹风机（由 [extractHairdryer] 单独处理：调起支付宝 U净 页面）
+ * - `/s/{系统}/{设备号}[/{端口}]` -> 洗浴 `Destination.ShowerDirect`（见 [CampusShowerLink]）
+ * - `/url/{code}`、短别名 `/u/{code}` -> 通用链接节点 `Destination.LinkHub`
+ *   （host 必须是 [LinkHubUrl.host]，详见 `LINK_HUB_PROTOCOL.md`）
+ *
+ * 前四类是「设备直达命名空间」：链接内容即设备身份，离线可用、不需要服务端，
+ * 因此**不校验域名**（能进 App 的链接已由 `AndroidManifest.xml` 的 intent-filter 限定在站点域名上）。
+ */
+object CampusLinkRouter {
+
+    /**
+     * 解析任意 String 或 Uri，若符合校园直达规范，返回目标 Destination。
+     */
+    fun parse(uriString: String, scanId: Long = 0L): Destination? {
+        val trimmed = ClassFlowScheme.canonicalize(uriString) ?: uriString.trim()
+        val okhttpUrl = trimmed.toHttpUrlOrNull()
+        val path = okhttpUrl?.encodedPath ?: run {
+            val qIdx = trimmed.indexOfAny(charArrayOf('?', '#'))
+            val noQuery = if (qIdx >= 0) trimmed.substring(0, qIdx) else trimmed
+            val schemeIdx = noQuery.indexOf("://")
+            val afterScheme = if (schemeIdx >= 0) noQuery.substring(schemeIdx + 3) else noQuery
+            val slashIdx = afterScheme.indexOf('/')
+            if (slashIdx >= 0) afterScheme.substring(slashIdx) else "/"
+        }
+
+        // 1. 饮水机直达: /w/{cd}
+        val waterMatch = Regex("^/w/([a-zA-Z0-9_-]+)", RegexOption.IGNORE_CASE).find(path)
+        if (waterMatch != null) {
+            val cd = waterMatch.groupValues[1]
+            // 保留段（如官网下载页 /w/download）不是设备码，不做深链路由
+            if (cd.isNotBlank() && !UjingQrLink.isReservedSegment(cd)) {
+                return Destination.UjingWater(cd = cd, scanId = scanId)
+            }
+        }
+
+        // 2. 洗衣机直达: /wm/{uuid}
+        val washerMatch = Regex("^/wm/([a-zA-Z0-9_-]+)", RegexOption.IGNORE_CASE).find(path)
+        if (washerMatch != null) {
+            val uuid = washerMatch.groupValues[1]
+            if (uuid.isNotBlank() && !UjingQrLink.isReservedSegment(uuid)) {
+                val washerRaw = "http://app.littleswan.com/u_download.html?type=Ujing&uuid=$uuid"
+                return Destination.WebApp(
+                    appId = com.shiro.classflow.data.model.wbu.WebAppId.CAMPUS_CARD.name,
+                    pendingAutoScan = washerRaw
+                )
+            }
+        }
+
+        // 3. 洗浴直达: /s/y/{机号}、/s/l/{设备号}[/{端口}]
+        CampusShowerLink.parse(trimmed)?.let { direct ->
+            return when (direct) {
+                is CampusShowerLink.Direct.Ykt -> Destination.ShowerDirect(
+                    system = direct.system,
+                    code = direct.posno,
+                    scanId = scanId
+                )
+
+                is CampusShowerLink.Direct.Life -> Destination.ShowerDirect(
+                    system = direct.system,
+                    code = direct.imei,
+                    port = direct.port,
+                    scanId = scanId
+                )
+            }
+        }
+
+        // 4. 通用链接节点: /url/{code}、短别名 /u/{code}（服务端短码或内嵌 fragment 载荷）
+        //    先于 U净 兜底解析：内嵌载荷是 base64url，不会与设备码形式冲突
+        LinkHubUrl.parse(trimmed)?.let { node ->
+            return Destination.LinkHub(
+                code = node.code,
+                inline = node.inline,
+                origin = node.origin,
+                scanId = scanId
+            )
+        }
+
+        // 5. 通用 U 净/小天鹅链接兜底解析
+        val ujingRes = UjingQrLink.parse(trimmed)
+        if (ujingRes is UjingQrLink.Result.Water) {
+            return Destination.UjingWater(cd = ujingRes.cd, scanId = scanId)
+        }
+        if (ujingRes is UjingQrLink.Result.Washer) {
+            return Destination.WebApp(
+                appId = com.shiro.classflow.data.model.wbu.WebAppId.CAMPUS_CARD.name,
+                pendingAutoScan = ujingRes.raw
+            )
+        }
+
+        return null
+    }
+
+    /**
+     * 解析任意 Uri，若符合校园直达规范，返回目标 Destination。
+     */
+    fun parse(uri: Uri, scanId: Long = 0L): Destination? = parse(uri.toString(), scanId)
+
+    /**
+     * 从接收到的 Intent 中安全提取 URI 并路由。
+     * 支持标准 data、NdefMessage URI 记录。
+     */
+    fun extractDestination(intent: Intent?): Destination? {
+        if (intent == null) return null
+        val scanId = System.currentTimeMillis()
+
+        // 1. 优先使用 intent.data
+        intent.data?.let { uri ->
+            parse(uri, scanId)?.let { return it }
+        }
+
+        // 2. NFC NDEF_DISCOVERED 时解析 NdefMessage
+        @Suppress("DEPRECATION")
+        val rawMessages = intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES)
+        if (rawMessages != null) {
+            for (raw in rawMessages) {
+                val msg = raw as? NdefMessage ?: continue
+                for (record in msg.records) {
+                    val uri = record.toUri() ?: continue
+                    parse(uri, scanId)?.let { return it }
+                }
+            }
+        }
+
+        return null
+    }
+
+    /**
+     * 是否是官网/下载页（保留段，如 `/w/download`）入口。
+     * 这类链接不做设备深链路由，但可用来触发专属欢迎动画。
+     */
+    fun isDownloadEntry(intent: Intent?): Boolean {
+        if (intent == null) return false
+
+        intent.data?.let { if (isDownloadUri(it)) return true }
+
+        @Suppress("DEPRECATION")
+        val rawMessages = intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES) ?: return false
+        for (raw in rawMessages) {
+            val msg = raw as? NdefMessage ?: continue
+            for (record in msg.records) {
+                val uri = record.toUri() ?: continue
+                if (isDownloadUri(uri)) return true
+            }
+        }
+        return false
+    }
+
+    private fun isDownloadUri(uri: Uri): Boolean {
+        val normalized = ClassFlowScheme.canonicalize(uri.toString())?.let { Uri.parse(it) } ?: uri
+        val path = normalized.encodedPath?.lowercase().orEmpty()
+        val knownPath = path.startsWith("/w/") || path.startsWith("/wm/") || path.startsWith("/hd/")
+        if (!knownPath) return false
+        val segment = normalized.lastPathSegment?.trim().orEmpty()
+        return segment.isNotEmpty() && UjingQrLink.isReservedSegment(segment)
+    }
+
+    /**
+     * 从接收到的 Intent 中安全提取吹风机设备信息（若符合吹风机规范）。
+     */
+    fun extractHairdryer(intent: Intent?): UjingQrLink.Result.Hairdryer? {
+        if (intent == null) return null
+
+        intent.data?.let { uri ->
+            val raw = ClassFlowScheme.canonicalize(uri.toString()) ?: uri.toString()
+            val res = UjingQrLink.parse(raw)
+            if (res is UjingQrLink.Result.Hairdryer) return res
+        }
+
+        @Suppress("DEPRECATION")
+        val rawMessages = intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES)
+        if (rawMessages != null) {
+            for (raw in rawMessages) {
+                val msg = raw as? NdefMessage ?: continue
+                for (record in msg.records) {
+                    val uri = record.toUri() ?: continue
+                    val normalized = ClassFlowScheme.canonicalize(uri.toString()) ?: uri.toString()
+                    val res = UjingQrLink.parse(normalized)
+                    if (res is UjingQrLink.Result.Hairdryer) return res
+                }
+            }
+        }
+
+        return null
+    }
+}

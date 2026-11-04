@@ -85,6 +85,17 @@
     <string name="item_auto_check_update">自動檢查更新</string>
     <string name="desc_auto_check_update">啟動應用時靜默檢查是否有新版本</string>
     <string name="item_update_channel">更新渠道</string>
+    <string name="item_update_check_frequency">檢查頻率</string>
+    <string name="desc_update_check_frequency">啟動時距上次檢查超過該間隔才自動檢查</string>
+    <string name="dialog_update_check_frequency">選擇檢查頻率</string>
+    <string name="interval_every_launch">每次啟動</string>
+    <string name="interval_6_hours">每 6 小時</string>
+    <string name="interval_12_hours">每 12 小時</string>
+    <string name="interval_24_hours">每 24 小時（預設）</string>
+    <string name="interval_3_days">每 3 天</string>
+    <string name="interval_7_days">每 7 天</string>
+    <string name="status_official_update_source">使用官方更新介面</string>
+    <string name="status_github_update_source">使用 GitHub Releases 檢查更新</string>
     <string name="format_skipped_update_version">已略過版本 %1$s（點擊可檢查）</string>
     <string name="status_custom_update_source_set">已設定自訂更新來源</string>
     <string name="status_get_latest_support">獲取最新版本支援</string>
@@ -97,7 +108,7 @@
     <string name="toast_install_failed">安裝失敗：%1$s</string>
     <string name="action_configure_address">配置位址</string>
     <string name="title_custom_update_server">自訂更新伺服器</string>
-    <string name="desc_custom_update_server">如需使用自建更新服務，可輸入自訂 API 介面位址。留空則預設使用官方介面。</string>
+    <string name="desc_custom_update_server">如需使用自建更新服務，可輸入自訂 API 介面位址。留空則使用建置內建更新來源（官方介面或 GitHub Releases）。</string>
     <string name="hint_custom_update_server_input">輸入自訂 API 位址（留空使用預設）</string>
     <string name="label_ignored_version">已忽略版本：%1$s</string>
     <string name="toast_restored_version_reminder">已恢復該版本的自動提醒</string>
@@ -281,6 +292,11 @@
     <string name="channel_beta_desc">優先體驗新功能，包含少量灰度特性</string>
     <string name="channel_dev_title">開發版 (dev)</string>
     <string name="channel_dev_desc">包含最新開發中的預覽特性，更新頻率最高</string>
+    <string name="dialog_select_github_update_channel">選擇 GitHub 更新頻道</string>
+    <string name="channel_github_release_title">Release（正式版）</string>
+    <string name="channel_github_release_desc">只取得 GitHub 上標記為正式發佈的版本</string>
+    <string name="channel_github_prerelease_title">PreRelease（預發佈）</string>
+    <string name="channel_github_prerelease_desc">包含 GitHub 上標記為 Pre-release 的測試版本</string>
     <string name="title_wbu_direct_import">WBU 教務直連匯入</string>
     <string name="desc_wbu_direct_import">原生介面極速同步，支援學期選擇與衝突合併</string>
     <string name="badge_recommended">推薦</string>
@@ -508,6 +524,17 @@
     <string name="item_library_seat">圖書館座位預約</string>
     <string name="desc_library_seat">在線座位預約、樓層選座、簽到與使用狀態</string>
     <string name="title_library_seat">圖書館座位預約</string>
+
+    <!-- 行動入口（ydmh）：校內辦事與各業務系統的聚合入口 -->
+    <string name="item_mobile_portal">行動入口</string>
+    <string name="desc_mobile_portal">校內辦事與各業務系統的統一入口</string>
+    <string name="wechat_auth_title">需要微信授權</string>
+    <string name="wechat_auth_message">此應用需要在微信裡完成授權，ClassFlow 無法代替微信完成這一步。可以先複製連結，再到微信中開啟。</string>
+    <string name="wechat_auth_target_host">目標站點：%1$s</string>
+    <string name="wechat_auth_copy">複製連結</string>
+    <string name="wechat_auth_copied">已複製連結，可在微信中開啟</string>
+    <string name="wechat_auth_back">返回</string>
+
     <string name="status_fetching_webapp_token">正在獲取統一身分認證訪問憑證...</string>
     <string name="title_load_failed">頁面載入失敗</string>
     <string name="action_exit">退出</string>
@@ -713,6 +740,8 @@
     <string name="item_auto_campus_probe">自動校園網路探測</string>
     <string name="a11y_long_press_login">長按開啟登入面板</string>
     <string name="desc_auto_campus_probe">開啟 WebVPN 時，需要校園網路的功能會先用快速探測判斷是否位於校園網路內；在校園網路內就直接連線，不繞 WebVPN</string>
+    <string name="item_campus_dns">使用學校 DNS 解析校園網域名稱</string>
+    <string name="desc_campus_dns">直連校園服務時用學校 DNS 解析 wbu.edu.cn 網域名稱，避免代理的 fake-IP 把網域名稱指向連不上的位址。關閉後完全交給系統解析</string>
     <string name="item_login">登入</string>
     <string name="desc_login_service">重新登入以更新該服務的授權狀態</string>
     <string name="err_no_valid_credentials">無有效憑據，請先用「登入同步」完成登入</string>
@@ -738,6 +767,9 @@
     <string name="shortcut_short_campus_card">一卡通</string>
     <string name="item_qr_scan">掃一掃</string>
     <string name="desc_qr_scan">掃描統一認證登入二維碼，確認電腦端登入</string>
+    <string name="item_network_diagnostics">複製網路診斷</string>
+    <string name="desc_network_diagnostics">記錄最近校園請求的對端 IP 與狀態碼，排查「校內直連 / 校外過閘道」用</string>
+    <string name="toast_diagnostics_copied">網路診斷已複製</string>
     <string name="title_qr_scan">掃一掃</string>
     <string name="a11y_qr_scan_photo">從圖片中辨識二維碼</string>
     <string name="qr_scan_photo_no_code">圖片裡沒找到二維碼，換一張或直接對著二維碼掃描</string>
@@ -945,6 +977,9 @@
     <string name="format_export_image_filename">%1$s_課表_%2$s.png</string>
     <string name="update_source_official">官方更新服務</string>
     <string name="err_update_server_not_configured">未設定更新伺服器位址，無法檢查更新</string>
+    <string name="err_github_rate_limited">GitHub 請求過於頻繁，請稍後再試</string>
+    <string name="err_github_no_release">GitHub 儲存庫還沒有已發佈的版本</string>
+    <string name="err_github_no_compatible_asset">該版本沒有適用於目前裝置架構的安裝包</string>
     <string name="format_err_server_response">伺服器回應異常: HTTP %1$d</string>
     <string name="format_err_arch_not_available">新版本 %1$s 已發布，但針對當前架構 (%2$s) 的安裝包暫未開放</string>
     <string name="err_no_download_url">更新資訊中未提供有效的下載位址</string>
@@ -984,6 +1019,7 @@
     <string name="link_hub_error_expired">此分享內容已失效</string>
     <string name="link_hub_error_app_version">需要更新 App 後才能使用此內容</string>
     <string name="link_hub_error_network">網路異常，無法取得此分享內容</string>
+    <string name="link_hub_error_server_not_configured">此建置未設定連結服務，無法解析伺服器短碼</string>
     <string name="link_hub_error_shower_invalid">未識別到該洗浴設備，請確認控水器編號是否正確</string>
     <string name="link_hub_error_not_json">此分享內容暫時無法開啟，請稍後再試</string>
     <string name="link_hub_open_in_browser">用瀏覽器開啟</string>
@@ -1019,12 +1055,16 @@
     <string name="fail_sms_code_rejected">驗證碼不正確，請重新輸入</string>
     <string name="fail_captcha_rejected">圖形驗證碼不正確，請重新輸入</string>
     <string name="fail_not_on_campus">目前不在校園網，無法直連學校系統</string>
+    <string name="fail_no_network">未連接網路，請先連接網路後重試</string>
     <string name="fail_network_unreachable">網路連線失敗，請檢查網路後重試</string>
     <string name="fail_webvpn_unreachable">連不上 WebVPN，請檢查網路後重試</string>
     <string name="fail_unified_auth_unreachable">連不上統一身份認證，請檢查網路後重試</string>
+    <string name="fail_waf_blocked">校外直連統一身份認證時被校園閘道攔截，改用 WebVPN 再試</string>
+    <string name="fail_waf_blocked_webvpn">經 WebVPN 存取仍被閘道攔截，請稍後重試或改用網頁開啟</string>
     <string name="fail_unexpected">操作未成功，學校系統回傳的內容不符預期，請稍後重試</string>
     <string name="desc_enter_unified_auth_password">本機沒有儲存統一認證密碼，輸入後繼續</string>
     <string name="action_use_webvpn_once">改用 WebVPN</string>
+    <string name="action_use_direct_once">改用直連</string>
 
     <!-- 一卡通付款碼（原生頁面） -->
     <string name="title_campus_pay_code">付款碼</string>
@@ -1110,4 +1150,42 @@
     <string name="hairdryer_message_shortcut_updated">桌面图标已更新</string>
     <string name="hairdryer_message_shortcut_already">桌面上已经有这台吹风机的图标了</string>
     <string name="hairdryer_message_shortcut_failed">添加失败，请稍后再试</string>
+
+    <!-- 一卡通帳單（舊平台原生帳單 / 流水） -->
+    <string name="service_campus_card_bill">一卡通帳單</string>
+    <string name="desc_campus_card_bill">舊平台帳單與流水，可看當天交易，詳情更完整</string>
+    <string name="title_campus_card_bill">一卡通帳單</string>
+    <string name="loading_campus_card_bill">正在讀取一卡通帳單…</string>
+    <string name="bill_mode_bill">帳單</string>
+    <string name="bill_mode_flow">流水</string>
+    <string name="bill_current_month">本月</string>
+    <string name="bill_month_format">%1$d年%2$d月</string>
+    <string name="bill_month_bill">查看月帳單</string>
+    <string name="bill_total_expense">本月支出</string>
+    <string name="bill_latest_balance">最近餘額</string>
+    <string name="bill_empty">本月暫無帳單</string>
+    <string name="bill_flow_empty">暫無流水</string>
+    <string name="bill_cancelled">已取消，未取得帳單</string>
+    <string name="bill_cancelled_refresh">已取消重新整理，顯示的是上次的資料</string>
+    <string name="bill_no_more">沒有更多了</string>
+    <string name="bill_total_count">共 %1$d 筆</string>
+    <string name="bill_detail_title">交易詳情</string>
+    <string name="bill_detail_merchant">商家</string>
+    <string name="bill_detail_time">交易時間</string>
+    <string name="bill_detail_type">交易類型</string>
+    <string name="bill_detail_account">交易帳號</string>
+    <string name="bill_detail_description">交易說明</string>
+    <string name="bill_detail_serial">流水號</string>
+    <string name="bill_detail_effect_time">入帳時間</string>
+    <string name="bill_detail_balance">交易後餘額</string>
+    <string name="bill_detail_account_type">帳戶類型</string>
+    <string name="bill_month_summary_title">%1$s帳單</string>
+    <string name="bill_month_no_data">本月暫無消費</string>
+    <string name="bill_year_trend">年度趨勢</string>
+    <string name="bill_year_prev">上一年</string>
+    <string name="bill_year_next">下一年</string>
+    <string name="bill_year_no_data">%1$d 年暫無消費</string>
+    <string name="bill_error_load">帳單載入失敗，請重試</string>
+    <string name="bill_action_relogin">重新登入</string>
+    <string name="bill_balance_short">餘額 ¥%1$s</string>
 </resources>

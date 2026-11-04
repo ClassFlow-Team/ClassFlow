@@ -1,21 +1,21 @@
 package com.xingheyuzhuan.shiguangschedule.ui.components
 
 import android.content.Context
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.AccessAction
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.AccessFailure
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.AccessLayer
-import com.xingheyuzhuan.shiguangschedule.data.model.wbu.CredentialService
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.CampusChannelDecision
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuAuthTransport
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuFailureDetector
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.replanCampusChannel
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.resolveCampusChannel
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.resolveCampusUseVpn
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuQueryClient
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSyncEngine
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.confirmedPasswordRejectionLayer
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.suggestedAction
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.unreachableOnDirectChannel
+import com.shiro.classflow.data.network.wbu.AccessAction
+import com.shiro.classflow.data.network.wbu.AccessFailure
+import com.shiro.classflow.data.network.wbu.AccessLayer
+import com.shiro.classflow.data.model.wbu.CredentialService
+import com.shiro.classflow.data.network.wbu.CampusChannelDecision
+import com.shiro.classflow.data.network.wbu.WbuAuthTransport
+import com.shiro.classflow.data.network.wbu.WbuFailureDetector
+import com.shiro.classflow.data.network.wbu.replanCampusChannel
+import com.shiro.classflow.data.network.wbu.resolveCampusChannel
+import com.shiro.classflow.data.network.wbu.resolveCampusUseVpn
+import com.shiro.classflow.data.network.wbu.WbuQueryClient
+import com.shiro.classflow.data.network.wbu.WbuSyncEngine
+import com.shiro.classflow.data.network.wbu.confirmedPasswordRejectionLayer
+import com.shiro.classflow.data.network.wbu.suggestedAction
+import com.shiro.classflow.data.network.wbu.directChannelTrouble
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -56,15 +56,16 @@ suspend fun <T> campusAccess(
     service: CredentialService,
     flowTag: String,
     useWebVpnOnce: Boolean = false,
+    useDirectOnce: Boolean = false,
     block: suspend (useVpn: Boolean) -> T
 ): CampusAccessResult<T> {
     val savedUseVpn = WbuSyncEngine.getSavedUseVpn(context)
     // 需要校园网：开了「自动校园网探测」就先快速探一次 —— 人在校园网里就直连，不绕 WebVPN。
-    // 「本次改用 WebVPN」是用户的显式指定，不再探测。
-    val decision = if (useWebVpnOnce) {
-        CampusChannelDecision(useVpn = true, decidedByProbe = false)
-    } else {
-        resolveCampusChannel(context, savedUseVpn)
+    // 「本次改用 WebVPN」/「本次改回直连」都是用户的显式指定，不再探测。
+    val decision = when {
+        useWebVpnOnce -> CampusChannelDecision(useVpn = true, decidedByProbe = false)
+        useDirectOnce -> CampusChannelDecision(useVpn = false, decidedByProbe = false)
+        else -> resolveCampusChannel(context, savedUseVpn)
     }
     var useVpn = decision.useVpn
 
@@ -93,9 +94,10 @@ suspend fun <T> campusAccess(
     var first = attempt()
     if (first !is CampusAccessResult.Failed) return first
 
-    // 3) 直连连一个响应都没拿到，而通道是探测定的：重算一次通道，翻成 WebVPN 就按新通道再走一遍。
+    // 3) 直连根本没走到学校系统（一个响应都没拿到，或被校外那道 WAF 拦下），而通道是探测定的：
+    //    重算一次通道，翻成 WebVPN 就按新通道再走一遍。
     //    这一步专治「判据过期」：短缓存里可能还写着「在校园网」，人却已经走出了 WiFi 范围。
-    if (decision.decidedByProbe && first.failure.unreachableOnDirectChannel) {
+    if (decision.decidedByProbe && first.failure.directChannelTrouble) {
         val replanned = replanCampusChannel(context, savedUseVpn)
         if (replanned.useVpn != useVpn) {
             useVpn = replanned.useVpn
@@ -385,7 +387,7 @@ suspend fun prepareWbuSyncSession(
     }
 
     var (engine, failure) = prepare()
-    if (failure != null && decision.decidedByProbe && failure.unreachableOnDirectChannel) {
+    if (failure != null && decision.decidedByProbe && failure.directChannelTrouble) {
         val replanned = replanCampusChannel(context, savedUseVpn)
         if (replanned.useVpn != decision.useVpn) {
             decision = replanned
@@ -400,3 +402,7 @@ suspend fun prepareWbuSyncSession(
 /** 失败原因是否应该给一个「改用 WebVPN」按钮。 */
 fun AccessFailure.shouldOfferWebVpnOnce(useVpn: Boolean): Boolean =
     suggestedAction(webVpnEnabled = useVpn) == AccessAction.UseWebVpnOnce
+
+/** 失败原因是否应该给一个「改回直连」按钮（[shouldOfferWebVpnOnce] 的对称动作）。 */
+fun AccessFailure.shouldOfferDirectOnce(useVpn: Boolean): Boolean =
+    suggestedAction(webVpnEnabled = useVpn) == AccessAction.UseDirectOnce

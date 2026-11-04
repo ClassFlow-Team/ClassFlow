@@ -97,11 +97,12 @@ import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.BuildConfig
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.data.model.wbu.CredentialService
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.CampusLinkRouter
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuAuthTransport
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuNetworkProbe
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSyncEngine
+import com.shiro.classflow.data.model.wbu.CredentialService
+import com.shiro.classflow.data.network.wbu.CampusLinkRouter
+import com.shiro.classflow.data.network.wbu.ClassFlowScheme
+import com.shiro.classflow.data.network.wbu.WbuAuthTransport
+import com.shiro.classflow.data.network.wbu.WbuNetworkProbe
+import com.shiro.classflow.data.network.wbu.WbuSyncEngine
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseConversionRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseTableRepository
@@ -1270,6 +1271,18 @@ private fun handleNonHttpNavigation(context: Context, navBridge: NavBridge, rawU
     val scheme = uri.scheme?.lowercase().orEmpty()
     if (scheme.isEmpty() || scheme in WEBVIEW_NATIVE_SCHEMES) return false
 
+    // classflow://：能命中应用内路由就直接切原生页，避免 WebView 渲染 ERR_UNKNOWN_URL_SCHEME
+    if (scheme == ClassFlowScheme.SCHEME) {
+        val destination = CampusLinkRouter.parse(rawUrl)
+        if (destination != null) {
+            Log.d("WebViewScreen", "classflow:// 命中应用内深链，转原生页面: $rawUrl")
+            navBridge.replace(destination)
+            return true
+        }
+        Log.d("WebViewScreen", "classflow:// 未命中路由，交给系统: $rawUrl")
+        return launchExternally(context, uri)
+    }
+
     if (scheme == "intent") {
         val intent = runCatching { Intent.parseUri(rawUrl, Intent.URI_INTENT_SCHEME) }.getOrNull()
         val innerUrl = listOfNotNull(
@@ -1277,7 +1290,10 @@ private fun handleNonHttpNavigation(context: Context, navBridge: NavBridge, rawU
             intent?.getStringExtra("browser_fallback_url"),
             // 部分站点直接写 scheme=https;package=...，此时 data 就是内层地址
             intent?.dataString,
-        ).firstOrNull { it.startsWith("http://") || it.startsWith("https://") }
+        ).firstOrNull {
+            it.startsWith("http://") || it.startsWith("https://") ||
+                ClassFlowScheme.isClassFlowUri(it)
+        }
 
         if (innerUrl != null) {
             val destination = CampusLinkRouter.parse(innerUrl)

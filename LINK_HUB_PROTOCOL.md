@@ -2,7 +2,8 @@
 
 > 面向服务端与 App 双方的契约文档。App 侧实现见
 > `data/network/link/LinkHubUrl.kt`、`data/network/link/LinkHubCompactCodec.kt`、
-> `ui/link/`；仓库代码不写死真实域名，hub host 由 `CLASSFLOW_LINK_HUB_HOST` 私有注入。
+> `ui/link/`；仓库代码不写死真实域名，hub host 由 `CLASSFLOW_LINK_HUB_HOST` 私有注入
+> （可选；未配置时服务端短码不可用，内嵌载荷与 `classflow://` 设备直达仍可用）。
 
 ## 1. 定位
 
@@ -17,7 +18,7 @@
 
 入口三条，最终都进入 App 的节点确认页：
 
-1. **NFC 触碰**：标签写 `NDEF URI 记录`；App 在后台由 `NDEF_DISCOVERED` 过滤器接住，在前台由 `enableForegroundDispatch` 接住（不要求 `assetlinks.json`）。
+1. **NFC 触碰**：标签写 `NDEF URI 记录`；App 在后台由 `NDEF_DISCOVERED` 过滤器接住，在前台由 `enableForegroundDispatch` 接住（不要求 `assetlinks.json`）。也可以直接写 `classflow://...`（见 §2.2），GitHub 自建包同样可用。
 2. **外部链接（VIEW）**：hub host 的 `autoVerify` 过滤器注册 `/url/`、`/u/`（通用节点）与 `/w/`、`/wm/`、`/hd/`、`/s/`（hub 站同时也是设备直达站点，下载页 `/w/download` 就在这儿）；U净 host 单独一个 filter 注册 `/w/`、`/wm/`、`/hd/`（域名验证按 host 逐个进行，互不牵连）。两个 host 的 `.well-known/assetlinks.json` 都含 `com.shiro.classflow` 与 `com.shiro.classflow.dev`，真机 `pm get-app-links` 显示均为 `verified`：**直接导航**到这些链接（系统浏览器地址栏、聊天软件点链接、扫码）能进 App。dev 与 prod 同时安装时，系统按惯例可能弹一次选择器。
    ⚠️ 但落地页上的按钮**不能只靠 App Links**：落地页与深链同在 hub 域下，Chrome 不会把**同域**导航交给系统（详见 §6.1），所以落地页在用户点击时改用 `intent://` 显式唤起。
 3. **App 内扫一扫**：相机或相册选图解码后走同一套路由。
@@ -73,6 +74,41 @@
 > 而洗浴只有「系统 + 设备号」两个字段 —— 1 栋 5 位机号打包成二进制后反而**比明文更长**，
 > 2-3 栋的设备号更是凭空多出 8 个字符。`/s/...` 既更短，也人可读：贴纸上的链接一眼能看懂，
 > 任何扫码工具都能直接解析，不必自带 base64 解码器。
+
+### 2.2 `classflow://` 自定义协议
+
+GitHub 自建包通常无法通过 https App Links 的签名校验，因此 App 额外注册了 `classflow://`。
+它**不依赖 `assetlinks.json`、不依赖签名证书**，任何安装包都能接住浏览器与 NFC 标签。
+
+路径与 https 完全一致，canonicalize 后复用同一套路由（`ClassFlowScheme` → `CampusLinkRouter`）：
+
+```
+饮水机：      classflow://w/{设备码}
+洗衣机：      classflow://wm/{uuid}
+吹风机：      classflow://hd/{设备码}
+洗浴 · 1栋：  classflow://s/y/{机号}
+洗浴 · 2-3栋: classflow://s/l/{设备号}[/{端口}]
+通用节点：    classflow://url/{code}
+短别名：      classflow://u/{code}
+内嵌：        classflow://url/{code}#<紧凑载荷>
+内嵌（省码）：classflow://u/#<紧凑载荷>
+三斜杠兼容：  classflow:///w/{设备码}
+```
+
+规范化规则：
+
+- scheme 大小写不敏感；
+- `classflow://w/abc` 与 `classflow:///w/abc` 都规范化为 `https://<hub>/w/abc`；
+- query 与 fragment 原样保留；
+- 拒绝 userinfo、显式端口、未知路径首段；
+- 允许的首段只有 `w`、`wm`、`hd`、`s`、`url`、`u`，更细的格式仍由原路由校验。
+
+行为与安全边界：
+
+- prod 与 dev 共用同一个 scheme；两者同时安装时系统会弹选择器（与 https App Links 一致）；
+- 自定义 scheme 没有所有权验证，任何 App / 网页都能调用：URL 不得携带密码、Token、Cookie；
+- 通用节点仍走确认页；`autoApply` 不因来源是 `classflow://` 而放宽；
+- 没有真实 hub 的构建：设备直达与内嵌载荷可用，服务端短码返回「未配置链接服务」，不会向 `classflow.invalid` 发请求。
 
 ## 3. 线格式 A：服务端 JSON 信封
 
@@ -307,6 +343,7 @@ intent://<host><path>[#载荷]#Intent;scheme=https;action=android.intent.action.
 | `campus_shower` 校园洗浴（第 3.1 节） | ✅ 已实现：服务端短码与 `0x15` 内嵌均**免确认**直达一卡通洗浴（1 栋 `CheckKsPos` 正证、2-3 栋 lifeService） |
 | 服务端 JSON 解析（线格式 A，App 侧） | ✅ 已完成：`LinkHubClient` 取信封、按 origin 请求、404/410/网络异常分类与重试、HTML 兜底交内置 WebView |
 | hub host 的 VIEW / `autoVerify` 过滤器 | ✅ 已注册并验证通过：`/url/`、`/u/` + 设备命名空间 `/w/`、`/wm/`、`/hd/`（下载页 `/w/download` 就靠它进 App）；assetlinks.json 含 prod/dev 包名，真机 `pm get-app-links` = verified |
+| `classflow://` VIEW / NDEF 过滤器（第 2.2 节） | ✅ 已实现：浏览器 `ACTION_VIEW` + NFC `NDEF_DISCOVERED`，无需域名验证；NFC 前台分发同时注册 `classflow` scheme；无 hub 构建仍可用 |
 | 落地页按钮 → App（`intent://`，`web/` 不入库） | ✅ 已实现并在真机（Chrome 151 / Android 16）验证：`/u/{code}` → 节点确认卡片、`/u/#载荷` → 内嵌确认卡片、`/w/download` → 下载入场动画 |
 | 免确认节点不闪确认页 | ✅ 已实现：页面外壳（标题栏 + 卡片）只在「需要用户读内容」时才出现；免确认节点从第一帧到跳转全程只有一层与目标页首屏同款的品牌过渡 |
 | 服务端实现 | ✅ 已在私有环境落地（`GET /api/v1/nodes/{code}` 给 App 读；`/url/{code}` 由落地页接管；`POST/PUT/DELETE /api/v1/nodes[/{code}]` 提供创建、改内容、撤销） |

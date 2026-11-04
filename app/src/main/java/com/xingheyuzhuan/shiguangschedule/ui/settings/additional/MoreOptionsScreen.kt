@@ -77,14 +77,17 @@ import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.BuildConfig
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Destination
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSyncEngine
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WebVpnClient
+import com.shiro.classflow.data.network.wbu.WbuSyncEngine
+import com.shiro.classflow.data.network.wbu.WebVpnClient
 import androidx.compose.material.icons.automirrored.filled.AltRoute
 import androidx.compose.material.icons.filled.Sync
 import com.xingheyuzhuan.shiguangschedule.data.model.UpdateChannelType
+import com.xingheyuzhuan.shiguangschedule.data.model.UpdateCheckInterval
 import com.xingheyuzhuan.shiguangschedule.tool.InstallResult
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateChecker
+import com.xingheyuzhuan.shiguangschedule.tool.UpdateSource
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateStatus
+import com.xingheyuzhuan.shiguangschedule.tool.resolveUpdateSource
 import com.xingheyuzhuan.shiguangschedule.ui.components.AppDownloadProgressDialog
 import com.xingheyuzhuan.shiguangschedule.ui.components.AppUpdateFoundDialog
 import com.xingheyuzhuan.shiguangschedule.ui.components.InstallPermissionPromptDialog
@@ -112,7 +115,10 @@ fun MoreOptionsScreen(
     val customUpdateApiUrl by viewModel.customUpdateApiUrl.collectAsState()
     val ignoredUpdateVersion by viewModel.ignoredUpdateVersion.collectAsState()
     val updateChannel by viewModel.updateChannel.collectAsState()
-    val effectiveApiUrl = customUpdateApiUrl.ifBlank { BuildConfig.UPDATE_API_URL }.trim()
+    val updateCheckInterval by viewModel.updateCheckInterval.collectAsState()
+    val isGitHubUpdateSource = remember(customUpdateApiUrl) {
+        resolveUpdateSource(customUpdateApiUrl, BuildConfig.UPDATE_API_URL) == UpdateSource.GITHUB
+    }
 
     var updateStatus by remember { mutableStateOf<UpdateStatus>(UpdateStatus.Idle) }
     var showResultDialog by remember { mutableStateOf(false) }
@@ -120,6 +126,8 @@ fun MoreOptionsScreen(
     var showInstallPermissionDialog by remember { mutableStateOf(false) }
     var showServerUrlDialog by remember { mutableStateOf(false) }
     var showChannelDialog by remember { mutableStateOf(false) }
+    var showGitHubChannelDialog by remember { mutableStateOf(false) }
+    var showIntervalDialog by remember { mutableStateOf(false) }
     var inputServerUrl by remember { mutableStateOf("") }
     var pendingApkFile by remember { mutableStateOf<File?>(null) }
 
@@ -159,14 +167,13 @@ fun MoreOptionsScreen(
     }
 
     fun startCheck() {
-        if (effectiveApiUrl.isBlank()) {
-            inputServerUrl = customUpdateApiUrl
-            showServerUrlDialog = true
-            return
-        }
+        // 没有自定义接口时不再强制配置服务器：构建内置来源（官方接口或 GitHub Releases）可直接使用
         updateStatus = UpdateStatus.Checking
         coroutineScope.launch {
-            updateStatus = updateChecker.checkUpdate(effectiveApiUrl, updateChannel)
+            updateStatus = updateChecker.checkUpdate(
+                customApiUrl = customUpdateApiUrl,
+                channel = updateChannel
+            )
         }
     }
 
@@ -461,7 +468,7 @@ fun MoreOptionsScreen(
 
                 ListItem(
                     modifier = Modifier.clickable {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/shiro123444/ClassFlow/issues"))
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/ClassFlow-Team/ClassFlow/issues"))
                         context.startActivity(intent)
                     },
                     headlineContent = { Text(stringResource(R.string.item_feedback)) },
@@ -524,9 +531,62 @@ fun MoreOptionsScreen(
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp)
 
                 ListItem(
-                    modifier = Modifier.clickable { showChannelDialog = true },
+                    modifier = Modifier.clickable(enabled = autoCheckUpdate) {
+                        showIntervalDialog = true
+                    },
+                    headlineContent = { Text(stringResource(R.string.item_update_check_frequency)) },
+                    supportingContent = {
+                        Text(
+                            text = stringResource(updateCheckInterval.labelRes),
+                            color = if (autoCheckUpdate) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            }
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.Default.Sync,
+                            contentDescription = null,
+                            tint = if (autoCheckUpdate) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                            }
+                        )
+                    },
+                    trailingContent = {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
+                    }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp)
+
+                ListItem(
+                    modifier = Modifier.clickable {
+                        if (isGitHubUpdateSource) {
+                            showGitHubChannelDialog = true
+                        } else {
+                            showChannelDialog = true
+                        }
+                    },
                     headlineContent = { Text(stringResource(R.string.item_update_channel)) },
-                    supportingContent = { Text(stringResource(UpdateChannelType.fromId(updateChannel).titleRes)) },
+                    supportingContent = {
+                        Text(
+                            stringResource(
+                                if (isGitHubUpdateSource) {
+                                    if (updateChannel == UpdateChannelType.STABLE.channelId) {
+                                        R.string.channel_github_release_title
+                                    } else {
+                                        R.string.channel_github_prerelease_title
+                                    }
+                                } else {
+                                    UpdateChannelType.fromId(updateChannel).titleRes
+                                }
+                            )
+                        )
+                    },
                     leadingContent = {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.AltRoute,
@@ -553,7 +613,8 @@ fun MoreOptionsScreen(
                             text = when {
                                 ignoredUpdateVersion.isNotBlank() -> stringResource(R.string.format_skipped_update_version, ignoredUpdateVersion)
                                 customUpdateApiUrl.isNotBlank() -> stringResource(R.string.status_custom_update_source_set)
-                                else -> stringResource(R.string.status_get_latest_support)
+                                BuildConfig.UPDATE_API_URL.isNotBlank() -> stringResource(R.string.status_official_update_source)
+                                else -> stringResource(R.string.status_github_update_source)
                             },
                             maxLines = 1
                         )
@@ -809,6 +870,45 @@ fun MoreOptionsScreen(
             coroutineScope.launch {
                 snackbarHostState.showSnackbar(context.getString(R.string.toast_channel_switched, context.getString(UpdateChannelType.fromId(newChannel).titleRes)))
             }
+        }
+    )
+
+    GitHubUpdateChannelDialog(
+        showDialog = showGitHubChannelDialog,
+        isPrerelease = updateChannel != UpdateChannelType.STABLE.channelId,
+        onDismiss = { showGitHubChannelDialog = false },
+        onSelectChannel = { prerelease ->
+            // GitHub 只有两档：Release -> stable；PreRelease -> beta（非 stable 即允许 prerelease）
+            val channelId = if (prerelease) {
+                UpdateChannelType.BETA.channelId
+            } else {
+                UpdateChannelType.STABLE.channelId
+            }
+            viewModel.onUpdateChannelChanged(channelId)
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(
+                    context.getString(
+                        R.string.toast_channel_switched,
+                        context.getString(
+                            if (prerelease) {
+                                R.string.channel_github_prerelease_title
+                            } else {
+                                R.string.channel_github_release_title
+                            }
+                        )
+                    )
+                )
+            }
+        }
+    )
+
+    UpdateCheckIntervalDialog(
+        showDialog = showIntervalDialog,
+        currentInterval = updateCheckInterval,
+        onDismiss = { showIntervalDialog = false },
+        onSelectInterval = { interval ->
+            viewModel.onUpdateCheckIntervalChanged(interval)
+            showIntervalDialog = false
         }
     )
 

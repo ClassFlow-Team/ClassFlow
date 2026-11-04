@@ -73,6 +73,26 @@ data class CustomUpdateResponse(
     @SerialName("download_info") val downloadInfo: DownloadInfoResponse? = null
 )
 
+/** 更新检查的实际来源。 */
+enum class UpdateSource { API, GITHUB }
+
+/**
+ * 解析更新来源：
+ * - 用户手填自定义接口 → API；
+ * - 否则编译时注入了更新接口 → API；
+ * - 两者都没有 → GitHub Releases。
+ *
+ * 编译时配置了接口的构建不会在失败时回退 GitHub，避免混用不同渠道/签名的包。
+ */
+internal fun resolveUpdateSource(
+    customApiUrl: String?,
+    buildApiUrl: String = BuildConfig.UPDATE_API_URL
+): UpdateSource {
+    val hasCustom = !customApiUrl.isNullOrBlank()
+    val hasBuild = buildApiUrl.isNotBlank()
+    return if (hasCustom || hasBuild) UpdateSource.API else UpdateSource.GITHUB
+}
+
 class UpdateChecker(private val context: Context) {
 
     companion object {
@@ -155,19 +175,38 @@ class UpdateChecker(private val context: Context) {
     }
 
     /**
-     * 检查更新
-     * @param customApiUrl 自定义接口地址（若为空则使用 BuildConfig.UPDATE_API_URL）
+     * 检查更新。
+     *
+     * 来源路由见 [resolveUpdateSource]：
+     * - 自定义接口 / 编译时接口 → [checkUpdateFromApi]；
+     * - 都没有 → GitHub Releases。
+     *
+     * @param customApiUrl 用户手填的自定义接口地址（留空则使用构建内置来源）
      * @param channel 更新渠道（如 stable, beta, dev，默认 stable）
      */
     suspend fun checkUpdate(
         customApiUrl: String? = null,
         channel: String = "stable"
     ): UpdateStatus = withContext(Dispatchers.IO) {
-        val apiUrl = customApiUrl?.trim()?.takeIf { it.isNotBlank() } ?: BuildConfig.UPDATE_API_URL.trim()
-        if (apiUrl.isBlank()) {
-            return@withContext UpdateStatus.Error(context.getString(R.string.err_update_server_not_configured))
-        }
+        val apiUrl = customApiUrl?.trim()?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.UPDATE_API_URL.trim()
 
+        if (apiUrl.isNotBlank()) {
+            checkUpdateFromApi(apiUrl, channel)
+        } else {
+            GitHubUpdateSource(
+                context = context,
+                httpClient = httpClient,
+                deviceArch = getDeviceArch()
+            ).checkUpdate(channel)
+        }
+    }
+
+    /**
+     * 通过更新接口检查。
+     */
+    private suspend fun checkUpdateFromApi(apiUrl: String, channel: String): UpdateStatus =
+        withContext(Dispatchers.IO) {
         try {
             val arch = getDeviceArch()
             val lang = getCurrentLanguageTag()
@@ -406,24 +445,7 @@ class UpdateChecker(private val context: Context) {
         return if (targetApk.exists() && targetApk.length() > 0) targetApk else null
     }
 
-    private fun normalizeVersionName(version: String): String {
-        return version.trim().removePrefix("v").substringBefore("+").trim()
-    }
+    private fun normalizeVersionName(version: String): String = VersionNames.normalize(version)
 
-    private fun compareVersion(remote: String, local: String): Int {
-        val remoteParts = remote.split(Regex("[^0-9]+"))
-            .filter { it.isNotBlank() }
-            .map { it.toIntOrNull() ?: 0 }
-        val localParts = local.split(Regex("[^0-9]+"))
-            .filter { it.isNotBlank() }
-            .map { it.toIntOrNull() ?: 0 }
-
-        val maxSize = maxOf(remoteParts.size, localParts.size)
-        for (index in 0 until maxSize) {
-            val left = remoteParts.getOrElse(index) { 0 }
-            val right = localParts.getOrElse(index) { 0 }
-            if (left != right) return left.compareTo(right)
-        }
-        return 0
-    }
+    private fun compareVersion(remote: String, local: String): Int = VersionNames.compare(remote, local)
 }

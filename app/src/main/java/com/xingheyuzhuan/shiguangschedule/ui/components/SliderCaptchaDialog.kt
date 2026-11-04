@@ -49,8 +49,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.SliderCaptchaData
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.SliderCaptchaResult
+import com.shiro.classflow.data.network.wbu.SliderCaptchaData
+import com.shiro.classflow.data.network.wbu.SliderCaptchaResult
 import kotlin.math.max
 import kotlin.math.roundToInt
 private fun decodeBase64Image(base64: String): ImageBitmap? {

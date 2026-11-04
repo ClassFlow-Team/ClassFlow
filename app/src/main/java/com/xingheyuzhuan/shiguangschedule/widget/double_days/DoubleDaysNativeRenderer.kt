@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.view.View
 import android.widget.RemoteViews
-import com.xingheyuzhuan.shiguangschedule.MainActivity
+import com.shiro.classflow.MainActivity
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.widget.WidgetCourseProto
 import com.xingheyuzhuan.shiguangschedule.widget.WidgetSnapshot

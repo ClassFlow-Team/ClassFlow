@@ -123,6 +123,7 @@
 # 保留 Room 实体类和 Data Model，防止数据库字段解析失败
 -keep class com.xingheyuzhuan.shiguangschedule.data.db.** { *; }
 -keep class com.xingheyuzhuan.shiguangschedule.data.model.** { *; }
+-keep class com.shiro.classflow.data.model.** { *; }
 
 # -------------------------------------------------------------------------
 # 10. 极简优化：Release 版本自动删除所有调试与普通信息日志 (Log.d/v/i)

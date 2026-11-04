@@ -2,7 +2,11 @@ package com.xingheyuzhuan.shiguangschedule.ui.settings
 import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
 import androidx.hilt.navigation.compose.hiltViewModel
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,6 +39,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.Destination
+import com.shiro.classflow.data.network.wbu.WbuNetworkDiagnostics
 import com.xingheyuzhuan.shiguangschedule.ui.components.DatePickerModal
 import com.xingheyuzhuan.shiguangschedule.ui.components.DockSafeBottomPadding
 import com.xingheyuzhuan.shiguangschedule.ui.components.NavigationRailWidth
@@ -57,6 +64,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val courseTableConfig by viewModel.courseTableConfigState.collectAsState()
+    val context = LocalContext.current
 
     val showNonCurrentWeek = viewModel.appSettingsState.collectAsState().value.showNonCurrentWeekCourses
     val showWeekends = courseTableConfig?.showWeekends ?: false
@@ -257,14 +265,31 @@ fun SettingsScreen(
                         icon = androidx.compose.material.icons.Icons.Rounded.EventSeat,
                         title = stringResource(R.string.item_library_seat),
                         subtitle = stringResource(R.string.desc_library_seat),
-                        onClick = { navBridge.navigate(Destination.WebApp(com.xingheyuzhuan.shiguangschedule.data.model.wbu.WebAppId.LIBRARY_SEAT.name)) }
+                        onClick = { navBridge.navigate(Destination.WebApp(com.shiro.classflow.data.model.wbu.WebAppId.LIBRARY_SEAT.name)) }
+                    )
+                    SettingDivider()
+                    // 移动门户：校内办事与各业务系统的聚合入口
+                    // （CAS 免密直达门户首页，门户里点应用会自动续票，不必再登录一次）
+                    SettingTile(
+                        icon = androidx.compose.material.icons.Icons.Rounded.Dashboard,
+                        title = stringResource(R.string.item_mobile_portal),
+                        subtitle = stringResource(R.string.desc_mobile_portal),
+                        onClick = { navBridge.navigate(Destination.WebApp(com.shiro.classflow.data.model.wbu.WebAppId.MOBILE_PORTAL.name)) }
                     )
                     SettingDivider()
                     SettingTile(
                         icon = androidx.compose.material.icons.Icons.Rounded.CreditCard,
                         title = stringResource(R.string.service_campus_card),
                         subtitle = stringResource(R.string.desc_campus_card_app),
-                        onClick = { navBridge.navigate(Destination.WebApp(com.xingheyuzhuan.shiguangschedule.data.model.wbu.WebAppId.CAMPUS_CARD.name)) }
+                        onClick = { navBridge.navigate(Destination.WebApp(com.shiro.classflow.data.model.wbu.WebAppId.CAMPUS_CARD.name)) }
+                    )
+                    SettingDivider()
+                    // 旧平台账单：数据比新平台及时，详情更全（完全原生，不经过 WebView）
+                    SettingTile(
+                        icon = Icons.AutoMirrored.Rounded.ReceiptLong,
+                        title = stringResource(R.string.service_campus_card_bill),
+                        subtitle = stringResource(R.string.desc_campus_card_bill),
+                        onClick = { navBridge.navigate(Destination.CampusCardBill) }
                     )
                     SettingDivider()
                     SettingTile(
@@ -367,6 +392,20 @@ fun SettingsScreen(
                         title = stringResource(R.string.item_qr_scan),
                         subtitle = stringResource(R.string.desc_qr_scan),
                         onClick = { navBridge.navigate(Destination.QrScan) }
+                    )
+                    SettingDivider()
+                    SettingTile(
+                        icon = Icons.Rounded.Info,
+                        title = stringResource(R.string.item_network_diagnostics),
+                        subtitle = stringResource(R.string.desc_network_diagnostics),
+                        onClick = {
+                            // 只复制「host + path + 对端 IP」，不含任何参数 / Cookie
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(
+                                ClipData.newPlainText("classflow-network-diagnostics", WbuNetworkDiagnostics.report())
+                            )
+                            Toast.makeText(context, R.string.toast_diagnostics_copied, Toast.LENGTH_SHORT).show()
+                        }
                     )
                 }
             }

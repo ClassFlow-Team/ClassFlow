@@ -27,7 +27,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.PortalCaptchaData
+import com.shiro.classflow.data.network.wbu.PortalCaptchaData
 
 /** WebVPN 门户 4 位字符验证码。 */
 @Composable

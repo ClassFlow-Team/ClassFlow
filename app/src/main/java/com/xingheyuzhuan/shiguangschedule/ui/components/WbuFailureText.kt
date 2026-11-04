@@ -2,11 +2,12 @@ package com.xingheyuzhuan.shiguangschedule.ui.components
 
 import android.content.Context
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.AccessFailure
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.AccessLayer
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.CredentialKind
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuFailureDetector
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.needsRelogin
+import com.shiro.classflow.data.network.NoNetworkException
+import com.shiro.classflow.data.network.wbu.AccessFailure
+import com.shiro.classflow.data.network.wbu.AccessLayer
+import com.shiro.classflow.data.network.wbu.CredentialKind
+import com.shiro.classflow.data.network.wbu.WbuFailureDetector
+import com.shiro.classflow.data.network.wbu.needsRelogin
 
 /**
  * 把结构化的 [AccessFailure] 渲染成用户看得懂的文案。
@@ -38,12 +39,20 @@ fun accessFailureText(context: Context, failure: AccessFailure): String? = when 
                 ?: webVpnOrGeneralCredentialText(context, failure.layer)
     }
 
-    // 网络不通：区分「不在校园网」与「学校服务器连不上」，两者下一步动作不同
-    is AccessFailure.Unreachable -> when (failure.layer) {
-        AccessLayer.CampusDirect -> context.getString(R.string.fail_not_on_campus)
-        AccessLayer.WebVpnPortal -> context.getString(R.string.fail_webvpn_unreachable)
-        AccessLayer.UnifiedAuth -> context.getString(R.string.fail_unified_auth_unreachable)
-        AccessLayer.Service -> context.getString(R.string.fail_network_unreachable)
+    // 网络不通：先说清「手机自己没网」，再区分「不在校园网」与「学校服务器连不上」——三者下一步动作不同
+    is AccessFailure.Unreachable -> when {
+        // 设备没有任何默认网络：换通道 / 换 WebVPN 都没用，只有连上网才行
+        failure.offline -> context.getString(R.string.fail_no_network)
+        failure.layer == AccessLayer.CampusDirect -> context.getString(R.string.fail_not_on_campus)
+        failure.layer == AccessLayer.WebVpnPortal -> context.getString(R.string.fail_webvpn_unreachable)
+        failure.layer == AccessLayer.UnifiedAuth -> context.getString(R.string.fail_unified_auth_unreachable)
+        else -> context.getString(R.string.fail_network_unreachable)
+    }
+
+    // 被校外的云 WAF 拦下：跟「没登录」「页面不存在」都无关，唯一有用的指引是换通道
+    is AccessFailure.Intercepted -> when (failure.layer) {
+        AccessLayer.WebVpnPortal -> context.getString(R.string.fail_waf_blocked_webvpn)
+        else -> context.getString(R.string.fail_waf_blocked)
     }
 
     // 有响应但内容不对：不把技术细节甩给用户，只给「重试」。
@@ -66,6 +75,19 @@ fun accessFailureText(
 private fun webVpnOrGeneralCredentialText(context: Context, layer: AccessLayer): String =
     if (layer == AccessLayer.WebVpnPortal) context.getString(R.string.fail_webvpn_credential_rejected)
     else context.getString(R.string.fail_credential_rejected)
+
+/**
+ * 异常 → 给用户看的一句话。
+ *
+ * 只翻译「自带技术细节、用户看了也没用」的那一类（典型：`NoNetworkException` 的
+ * `no default network: http://…`），其余一律保留原消息 —— 服务端原话和业务异常
+ * （如 U净 的「设备离线」）比任何兜底文案都有用。
+ *
+ * 用在那些直接把 `e.localizedMessage` 甩到界面上的地方（取水页、网页容器），
+ * 免得「手机没联网」变成一串英文。
+ */
+fun userFacingMessage(context: Context, e: Throwable): String? =
+    if (e is NoNetworkException) context.getString(R.string.fail_no_network) else e.localizedMessage
 
 /**
  * 「需要重新登录」的提示文案：在失败原因后面附一句「长按按钮可打开登录面板」。

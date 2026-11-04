@@ -4,7 +4,7 @@ import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuAuthTransport
+import com.shiro.classflow.data.network.wbu.WbuAuthTransport
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
 import com.xingheyuzhuan.shiguangschedule.data.sync.SyncManager
@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttp
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -35,6 +36,11 @@ class MyApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+
+        // 清单里移除了 androidx.startup.InitializationProvider（避免它拉起全部 Initializer），
+        // OkHttp 的 PlatformInitializer 也就不会运行。OkHttp 5 依赖 applicationContext 从
+        // assets 读取公共后缀列表（Cookie 的 Domain 校验必需），这里按官方要求显式初始化。
+        OkHttp.initialize(this)
 
         // 在应用启动时清理临时分享文件与已安装过期的更新安装包
         clearShareTempFiles()

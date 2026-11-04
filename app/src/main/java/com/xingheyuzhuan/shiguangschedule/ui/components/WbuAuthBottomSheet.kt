@@ -2,15 +2,15 @@ package com.xingheyuzhuan.shiguangschedule.ui.components
 
 import androidx.compose.ui.res.stringResource
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuAuthMode
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuLoginMethod
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuNetworkProbe
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSyncEngine
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.IdsCasClient
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WebVpnClient
-import com.xingheyuzhuan.shiguangschedule.data.model.wbu.CredentialService
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuAuthTransport
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.DynamicCodeSendResult
+import com.shiro.classflow.data.network.wbu.WbuAuthMode
+import com.shiro.classflow.data.network.wbu.WbuLoginMethod
+import com.shiro.classflow.data.network.wbu.WbuNetworkProbe
+import com.shiro.classflow.data.network.wbu.WbuSyncEngine
+import com.shiro.classflow.data.network.wbu.IdsCasClient
+import com.shiro.classflow.data.network.wbu.WebVpnClient
+import com.shiro.classflow.data.model.wbu.CredentialService
+import com.shiro.classflow.data.network.wbu.WbuAuthTransport
+import com.shiro.classflow.data.network.wbu.DynamicCodeSendResult
 import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility

@@ -19,6 +19,15 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <!--
+        网页应用里的定位（签到助手 / 查寝 / 打卡 …）：
+        门户里的业务系统跑在 http:// 上，Chromium 对非安全源**硬拒绝** navigator.geolocation
+        （Only secure origins are allowed，且发生在权限判定之前），只能由容器自己取位置再交给页面，
+        详见 ui/webapp/WebAppGeolocation.kt。
+        两个都要：COARSE 走网络定位（快），FINE 才可能拿到 GPS（准）；只在页面真要定位时才申请。
+    -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.NFC" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
 
@@ -70,7 +79,7 @@
         </service>
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.shiro.classflow.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
@@ -156,6 +165,22 @@
                 <data android:host="${linkHubHost}" />
                 <data android:pathPrefix="/s/" />
             </intent-filter>
+
+            <!-- classflow:// 自定义协议：浏览器 / 外部 App（不需要 autoVerify，也不依赖签名证书） -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="classflow" />
+            </intent-filter>
+
+            <!-- classflow:// NFC NDEF URI 记录（GitHub 自建包/无域名构建的主要入口） -->
+            <intent-filter>
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="classflow" />
+            </intent-filter>
+
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
