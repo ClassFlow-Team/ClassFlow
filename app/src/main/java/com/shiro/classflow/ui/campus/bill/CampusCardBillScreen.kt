@@ -508,7 +508,7 @@ private fun EntryRow(
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = buildString {
-                        append(entry.time)
+                        append(formatLegacyEntryDateTime(entry.occurredAt))
                         if (entry.transName.isNotBlank()) {
                             append(" · ")
                             append(entry.transName)
@@ -985,7 +985,7 @@ private fun CompactEntryRow(entry: LegacyCampusCardEntry) {
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "${entry.date} ${entry.time}",
+                text = formatLegacyEntryDateTime(entry.occurredAt),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
