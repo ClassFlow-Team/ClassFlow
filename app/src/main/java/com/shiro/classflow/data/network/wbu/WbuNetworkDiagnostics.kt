@@ -62,9 +62,10 @@ object WbuNetworkDiagnostics {
         }
     }
 
-    /** 对端 IP 属于哪条路。判据只按私网段，不猜域名 —— 域名解析结果会随地而异。 */
+    /** 对端 IP 属于哪条路。判据只看地址段，不猜域名 —— 域名解析结果会随地而异。 */
     fun describePath(peerIp: String?): String = when {
         peerIp.isNullOrBlank() -> "未知（没连上）"
+        WbuNetworkPolicy.isLikelyFakeIp(peerIp) -> "本地代理接管（fake-IP）"
         isPrivateAddress(peerIp) -> "校内直连（未过云 WAF）"
         else -> "公网（可能经过云 WAF）"
     }

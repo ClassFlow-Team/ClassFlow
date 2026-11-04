@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Key
@@ -240,6 +241,28 @@ fun CredentialManagementScreen(
                         }
                     )
                 }
+                // 「使用学校 DNS 解析校园域名」：始终显示。
+                // 它在直连模式下才生效，但「关不掉一个看不见的东西」比没有开关更糟 ——
+                // 出问题时用户必须能找到它。
+                SettingDivider()
+                SettingTile(
+                    icon = Icons.Rounded.Dns,
+                    title = stringResource(R.string.item_campus_dns),
+                    subtitle = stringResource(R.string.desc_campus_dns),
+                    trailingContent = {
+                        Switch(
+                            checked = uiState.campusDns,
+                            onCheckedChange = { viewModel.setCampusDns(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                uncheckedThumbColor = Color.White.copy(alpha = 0.9f),
+                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                uncheckedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                            )
+                        )
+                    }
+                )
                 SettingDivider()
                 SettingTile(
                     icon = Icons.Rounded.Refresh,

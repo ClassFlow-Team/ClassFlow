@@ -194,7 +194,7 @@ internal class WbuAuthTransport(
             }
         }
 
-        return builder.build()
+        return WbuCampusNetwork.install(builder, context = context, useVpn = useVpn).build()
     }
 
     /** WebVPN 门户登录专用独立客户端：专属于 https://webvpn.wbu.edu.cn，禁止自动重定向，物理隔离连接池。 */
@@ -241,7 +241,8 @@ internal class WbuAuthTransport(
                 false
             }
         }
-        return builder.build()
+        // 门户客户端恒为 WebVPN：绝不能装学校 DNS（webvpn 必须走 fake-IP 才能进隧道）
+        return WbuCampusNetwork.install(builder, context = context, useVpn = true).build()
     }
 
     /** TWFID 校验专用客户端：无 cookieJar，避免混入会话 Cookie；仅用于门户 /por/login_psw.csp 探活。 */
@@ -258,7 +259,8 @@ internal class WbuAuthTransport(
                     .build()
                 chain.proceed(req)
             }
-            .build()
+            // TWFID 探活只打门户域名：恒按 WebVPN 处理，不装学校 DNS
+            .let { WbuCampusNetwork.install(it, context = context, useVpn = true).build() }
     }
 
     // ------------------- 基址工厂 -------------------
@@ -299,6 +301,22 @@ internal class WbuAuthTransport(
     fun webVpnProxyBase(targetHost: String, withSingleSuffix: Boolean = true): String {
         // 门户的编码规则：'-' 先转义成 '--'，再把 '.' 换成 '-'；漏掉转义会让含 '-' 的主机名解析错
         val slug = targetHost.replace("-", "--").replace('.', '-') + if (withSingleSuffix) "-s" else ""
+        return "${webVpnScheme()}://$slug.webvpn.wbu.edu.cn${webVpnPort()}"
+    }
+
+    /**
+     * 通用 WebVPN 代理基址（带目标端口与协议）。
+     *
+     * 门户前端 `getWebAppURL` 的规则（实测）：
+     * 1. `-` → `--`，`.` → `-`；
+     * 2. 非默认端口追加 `-<port>-p`；
+     * 3. 目标为 https 再追加 `-s`；
+     * 4. 最后拼到 `webvpn.wbu.edu.cn` 前。
+     *
+     * 例：`http://yktyd.wbu.edu.cn:81` → `yktyd-wbu-edu-cn-81-p.webvpn.wbu.edu.cn`。
+     */
+    fun webVpnProxyBase(targetHost: String, targetPort: Int, targetHttps: Boolean = false): String {
+        val slug = webVpnTargetSlug(targetHost, targetPort, targetHttps)
         return "${webVpnScheme()}://$slug.webvpn.wbu.edu.cn${webVpnPort()}"
     }
 
@@ -748,6 +766,25 @@ internal class WbuAuthTransport(
         prefs.edit().remove(twfidKey(context)).apply()
     }
 
+    /**
+     * 丢掉某个 CAS 主机上的会话 `JSESSIONID`（保留 CASTGC）。
+     *
+     * 真机（2026-11）：旧一卡通换票时 CAS 会先 302 给出 ST，旧平台随后用
+     * `serviceValidate` 校验。如果请求里带着**过期的** `JSESSIONID`，校验会失败
+     * ——旧平台回 500/502，页面里没有 `ssoticketid`，看起来就像「登录态过期」。
+     * 只保留 CASTGC 让 CAS 重新建会话即可稳定通过。
+     *
+     * 密码登录流程**不要**调用这里：它需要登录页刚下发的那个 JSESSIONID 来提交表单。
+     */
+    fun forgetCasSessionCookie(authBaseUrl: String) {
+        val host = authBaseUrl.toHttpUrlOrNull()?.host ?: return
+        val removed = cookieStore.removeAll { cookie ->
+            cookie.name.equals("JSESSIONID", ignoreCase = true) &&
+                cookie.domain.removePrefix(".").equals(host, ignoreCase = true)
+        }
+        if (removed) persistCookieStore()
+    }
+
     // ====================== 静态偏好访问器（供各业务模块共用） ======================
 
     companion object {
@@ -816,6 +853,10 @@ internal class WbuAuthTransport(
          * 见 [isAutoCampusProbeEnabled]。
          */
         private const val KEY_AUTO_CAMPUS_PROBE = "auto_campus_probe"
+
+        /** 「使用学校 DNS 解析校园域名」开关：默认开启，见 [isCampusDnsEnabled]。 */
+        private const val KEY_CAMPUS_DNS_ENABLED = "campus_dns_enabled"
+
         const val IDS_PERSON_CENTER_SERVICE = "http://ids.wbu.edu.cn/personalInfo/personCenter/index.html"
         const val MAX_CAPTCHA_ATTEMPTS = 5
 
@@ -1000,13 +1041,32 @@ internal class WbuAuthTransport(
          * 语义同样是**只增不减**：关掉 = 回到加这个开关之前的行为（WebVPN 模式下就走 WebVPN），
          * 打开才让需要校园网的流程先快速探一次 —— 人在校园网里就别再绕 WebVPN（又慢又容易掉线）。
          *
-         * 不需要校园网的应用（一卡通 / U净 / 付款码）任何情况下都不做探测，与它无关。
+         * 不需要校园网的应用（U净 / 付款码 / `directOnly` 的网页应用）任何情况下都不做探测，与它无关。
+         * **一卡通账单要做**：旧平台 `yktyd.wbu.edu.cn:81` 只在校内可达。
          */
         fun isAutoCampusProbeEnabled(context: Context): Boolean =
             prefsOf(context).getBoolean(KEY_AUTO_CAMPUS_PROBE, true)
 
         fun setAutoCampusProbeEnabled(context: Context, enabled: Boolean) {
             prefsOf(context).edit().putBoolean(KEY_AUTO_CAMPUS_PROBE, enabled).apply()
+        }
+
+        /**
+         * 「使用学校 DNS 解析校园域名」：默认**开启**。
+         *
+         * 关掉后行为与没有这套机制时完全一致：不探测校内可达性、不发 UDP 53、
+         * 全部交给系统 resolver。这是修复「校园网 + 非校园 VPN」的唯一手段，所以默认开；
+         * 但它介入的是用户的网络栈，必须能一键关掉（见 `CampusDnsResolver` 类注释）。
+         */
+        fun isCampusDnsEnabled(context: Context): Boolean =
+            prefsOf(context).getBoolean(KEY_CAMPUS_DNS_ENABLED, true)
+
+        fun setCampusDnsEnabled(context: Context, enabled: Boolean) {
+            prefsOf(context).edit().putBoolean(KEY_CAMPUS_DNS_ENABLED, enabled).apply()
+            if (!enabled) {
+                // 关掉时顺手清缓存：否则重新打开后可能还沿用关闭前的旧结论
+                WbuNetworkProbe.invalidateReachableCache()
+            }
         }
 
         /**
@@ -1585,4 +1645,23 @@ internal class WbuAuthTransport(
             }
         }
     }
+}
+
+/**
+ * WebVPN 代理子域名（不含 `webvpn.wbu.edu.cn` 后缀与端口）。
+ *
+ * 规则来自门户前端 `getWebAppURL`（实测）：
+ * - `-` → `--`，`.` → `-`；
+ * - 非默认端口（http 80 / https 443）追加 `-<port>-p`；
+ * - 目标为 https 再追加 `-s`。
+ *
+ * 例：`yktyd.wbu.edu.cn:81`（http）→ `yktyd-wbu-edu-cn-81-p`；
+ *     `jwxt.wbu.edu.cn:443`（https）→ `jwxt-wbu-edu-cn-s`。
+ */
+internal fun webVpnTargetSlug(targetHost: String, targetPort: Int, targetHttps: Boolean): String {
+    var slug = targetHost.replace("-", "--").replace('.', '-')
+    val defaultPort = if (targetHttps) 443 else 80
+    if (targetPort != defaultPort) slug += "-$targetPort-p"
+    if (targetHttps) slug += "-s"
+    return slug
 }

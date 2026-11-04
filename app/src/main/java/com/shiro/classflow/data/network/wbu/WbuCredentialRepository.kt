@@ -312,6 +312,16 @@ class WbuCredentialRepository @Inject constructor(
     fun setAutoCampusProbeEnabled(enabled: Boolean) =
         WbuAuthTransport.setAutoCampusProbeEnabled(context, enabled)
 
+    /**
+     * 「使用学校 DNS 解析校园域名」（账号与凭据页，默认开，**始终显示**）：
+     * 直连校园服务时用学校 DNS 解析 `*.wbu.edu.cn`，避免代理的 fake-IP 把域名
+     * 指向一个连不上的地址。关掉后完全交回系统 resolver。
+     */
+    fun isCampusDnsEnabled(): Boolean = WbuAuthTransport.isCampusDnsEnabled(context)
+
+    fun setCampusDnsEnabled(enabled: Boolean) =
+        WbuAuthTransport.setCampusDnsEnabled(context, enabled)
+
     /** 「高级模式」开关（跨页面记住）。 */
     fun isAdvancedMode(): Boolean = WbuAuthTransport.getCredentialAdvancedMode(context)
 
