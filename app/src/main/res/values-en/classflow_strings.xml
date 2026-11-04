@@ -740,6 +740,8 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="item_auto_campus_probe">Auto campus network detection</string>
     <string name="a11y_long_press_login">Long-press to open the login panel</string>
     <string name="desc_auto_campus_probe">With WebVPN on, campus-only features first run a quick check; when on campus they connect directly instead of going through WebVPN</string>
+    <string name="item_campus_dns">Resolve campus domains with the school DNS</string>
+    <string name="desc_campus_dns">When connecting directly, resolve wbu.edu.cn domains with the school DNS so a proxy\'s fake-IP cannot point them at unreachable addresses. Turn off to use the system resolver only</string>
     <string name="item_login">Sign in</string>
     <string name="desc_login_service">Sign in again to refresh this service\'s authorization</string>
     <string name="err_no_valid_credentials">No valid credentials. Please use "Sign-in sync" to log in first.</string>
@@ -1062,6 +1064,7 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="fail_unexpected">The operation did not succeed. The school system returned an unexpected response; please retry later</string>
     <string name="desc_enter_unified_auth_password">No unified-authentication password is saved on this device. Enter it to continue</string>
     <string name="action_use_webvpn_once">Use WebVPN for this try</string>
+    <string name="action_use_direct_once">Use a direct connection for this try</string>
 
     <!-- Campus-card payment code (native page) -->
     <string name="title_campus_pay_code">Payment Code</string>
@@ -1147,4 +1150,42 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="hairdryer_message_shortcut_updated">桌面圖示已更新</string>
     <string name="hairdryer_message_shortcut_already">桌面上已經有這台吹風機的圖示了</string>
     <string name="hairdryer_message_shortcut_failed">加入失敗，請稍後再試</string>
+
+    <!-- Campus card bill (native bill / transactions from the legacy platform) -->
+    <string name="service_campus_card_bill">Campus Card Bill</string>
+    <string name="desc_campus_card_bill">Bills and transactions from the legacy platform, including today\'s activity</string>
+    <string name="title_campus_card_bill">Campus Card Bill</string>
+    <string name="loading_campus_card_bill">Loading your campus card bill…</string>
+    <string name="bill_mode_bill">Bills</string>
+    <string name="bill_mode_flow">Transactions</string>
+    <string name="bill_current_month">This month</string>
+    <string name="bill_month_format">%2$d/%1$d</string>
+    <string name="bill_month_bill">Monthly bill</string>
+    <string name="bill_total_expense">Spent this month</string>
+    <string name="bill_latest_balance">Latest balance</string>
+    <string name="bill_empty">No bills this month</string>
+    <string name="bill_flow_empty">No transactions</string>
+    <string name="bill_cancelled">Cancelled — no bill data loaded</string>
+    <string name="bill_cancelled_refresh">Refresh cancelled — showing the previous data</string>
+    <string name="bill_no_more">No more records</string>
+    <string name="bill_total_count">%1$d records</string>
+    <string name="bill_detail_title">Transaction details</string>
+    <string name="bill_detail_merchant">Merchant</string>
+    <string name="bill_detail_time">Time</string>
+    <string name="bill_detail_type">Type</string>
+    <string name="bill_detail_account">Account</string>
+    <string name="bill_detail_description">Description</string>
+    <string name="bill_detail_serial">Serial number</string>
+    <string name="bill_detail_effect_time">Posted at</string>
+    <string name="bill_detail_balance">Balance after</string>
+    <string name="bill_detail_account_type">Account type</string>
+    <string name="bill_month_summary_title">%1$s bill</string>
+    <string name="bill_month_no_data">No spending this month</string>
+    <string name="bill_year_trend">Yearly trend</string>
+    <string name="bill_year_prev">Previous year</string>
+    <string name="bill_year_next">Next year</string>
+    <string name="bill_year_no_data">No spending in %1$d</string>
+    <string name="bill_error_load">Failed to load the bill. Please try again.</string>
+    <string name="bill_action_relogin">Sign in again</string>
+    <string name="bill_balance_short">Balance ¥%1$s</string>
 </resources>
