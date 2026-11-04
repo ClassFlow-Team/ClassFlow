@@ -122,7 +122,17 @@ enum class AccessAction {
     Relogin,
 
     /** 本次改用 WebVPN 走一遍（单次生效，不改全局开关）。 */
-    UseWebVpnOnce
+    UseWebVpnOnce,
+
+    /**
+     * 本次改回**直连**走一遍（单次生效，不改全局开关）。
+     *
+     * 是 [UseWebVpnOnce] 的对称动作，存在的理由很具体：走 WebVPN 失败时，
+     * 用户可能正是**刚走回校园网**（或校园 VPN 已经通了），此时最该给他的是「试试直连」。
+     * 以前这一格是空的，于是 WebVPN 连不上时界面只剩「重试」—— 用户明明知道换个通道可能就行，
+     * 却没有任何按钮可点。
+     */
+    UseDirectOnce
 }
 
 /** 失败类型 → 建议动作。 */
@@ -133,6 +143,8 @@ fun AccessFailure.suggestedAction(webVpnEnabled: Boolean): AccessAction = when (
             // 手机自己没网：换通道解决不了任何问题，先把网连上再点重试
             offline -> AccessAction.Retry
             layer == AccessLayer.CampusDirect && !webVpnEnabled -> AccessAction.UseWebVpnOnce
+            // 已经在 WebVPN 上还连不上 → 给一条「改回直连」的出路（对称动作）
+            layer == AccessLayer.WebVpnPortal && webVpnEnabled -> AccessAction.UseDirectOnce
             else -> AccessAction.Retry
         }
     is AccessFailure.SessionExpired -> AccessAction.Relogin
