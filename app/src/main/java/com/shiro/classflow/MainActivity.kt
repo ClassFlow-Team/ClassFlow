@@ -986,6 +986,7 @@ fun AppNavigation(
                             Destination.CourseSelection -> CourseSelectionScreen(navBridge = navBridge)
                             Destination.QrScan -> QrScanScreen(navBridge = navBridge)
                             Destination.CampusCardPayCode -> com.shiro.classflow.ui.campus.paycode.PayCodeScreen(navBridge = navBridge)
+                            Destination.CampusCardBill -> com.shiro.classflow.ui.campus.bill.CampusCardBillScreen(navBridge = navBridge)
                             Destination.HairdryerHub -> com.shiro.classflow.ui.campus.hairdryer.HairdryerHubScreen(navBridge = navBridge)
                             Destination.UpdateRepo -> UpdateRepoScreen(navBridge = navBridge)
                             Destination.NotificationSettings -> NotificationSettingsScreen(onBack = navBridge::popBackStack)

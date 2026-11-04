@@ -59,6 +59,9 @@ sealed interface Destination : NavKey {
     /** 一卡通付款码（原生取码页面，无需进入平台 WebApp）。 */
     @Serializable data object CampusCardPayCode : Destination
 
+    /** 一卡通账单（旧平台原生账单 / 流水，数据比新平台更及时）。 */
+    @Serializable data object CampusCardBill : Destination
+
     /**
      * 吹风机页（校园服务 → 吹风机）：判型设置 + 使用记录 + 桌面快捷方式。
      *
