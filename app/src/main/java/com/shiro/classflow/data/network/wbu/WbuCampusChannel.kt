@@ -37,8 +37,11 @@ fun useVpnAfterCampusProbe(onCampus: Boolean): Boolean = !onCampus
  * 现在开了「自动校园网探测」时先做一次**快速探测**（短超时 + 短缓存，见
  * [WbuNetworkProbe.fastRefresh]），在校园网内就直接连、不绕 WebVPN。
  *
- * 不需要校园网的应用（一卡通 / U净 / 付款码 / `directOnly` 的网页应用）不要调用它：
+ * 不需要校园网的应用（U净 / 付款码 / `directOnly` 的网页应用）不要调用它：
  * 它们本来就不该做任何探测。
+ *
+ * **一卡通账单要调用它。** 旧平台 `yktyd.wbu.edu.cn:81` 只在校内可达，属于「需要校园网」的流程；
+ * 以前这里把一卡通和 U净 并列写成「不需要」，与 `CampusCardBillViewModel` 的实际调用相矛盾。
  *
  * @param savedUseVpn 设置里的「WebVPN 模式」；默认现场读一次。
  * @param useVpn 本次实际使用的通道（`true` = WebVPN）。
