@@ -188,9 +188,16 @@ class AccessFailureClassificationTest {
             AccessAction.UseWebVpnOnce,
             AccessFailure.Unreachable(AccessLayer.CampusDirect).suggestedAction(webVpnEnabled = false)
         )
+        // WebVPN 通道连不上 → 给「改用直连」这条对称出路。
+        // 真实场景：人已经走回校园网 / 校园 VPN 刚恢复，此时重试同一条通道没有意义。
+        assertEquals(
+            AccessAction.UseDirectOnce,
+            AccessFailure.Unreachable(AccessLayer.WebVpnPortal).suggestedAction(webVpnEnabled = true)
+        )
+        // 没开 WebVPN 却报 WebVPN 层失败：那是探测/重算后的通道，不给「改用直连」（已经在直连了）
         assertEquals(
             AccessAction.Retry,
-            AccessFailure.Unreachable(AccessLayer.WebVpnPortal).suggestedAction(webVpnEnabled = true)
+            AccessFailure.Unreachable(AccessLayer.WebVpnPortal).suggestedAction(webVpnEnabled = false)
         )
         assertEquals(AccessAction.None, AccessFailure.Cancelled.suggestedAction(false))
     }

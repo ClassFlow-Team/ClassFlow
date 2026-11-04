@@ -56,15 +56,16 @@ suspend fun <T> campusAccess(
     service: CredentialService,
     flowTag: String,
     useWebVpnOnce: Boolean = false,
+    useDirectOnce: Boolean = false,
     block: suspend (useVpn: Boolean) -> T
 ): CampusAccessResult<T> {
     val savedUseVpn = WbuSyncEngine.getSavedUseVpn(context)
     // 需要校园网：开了「自动校园网探测」就先快速探一次 —— 人在校园网里就直连，不绕 WebVPN。
-    // 「本次改用 WebVPN」是用户的显式指定，不再探测。
-    val decision = if (useWebVpnOnce) {
-        CampusChannelDecision(useVpn = true, decidedByProbe = false)
-    } else {
-        resolveCampusChannel(context, savedUseVpn)
+    // 「本次改用 WebVPN」/「本次改回直连」都是用户的显式指定，不再探测。
+    val decision = when {
+        useWebVpnOnce -> CampusChannelDecision(useVpn = true, decidedByProbe = false)
+        useDirectOnce -> CampusChannelDecision(useVpn = false, decidedByProbe = false)
+        else -> resolveCampusChannel(context, savedUseVpn)
     }
     var useVpn = decision.useVpn
 
@@ -401,3 +402,7 @@ suspend fun prepareWbuSyncSession(
 /** 失败原因是否应该给一个「改用 WebVPN」按钮。 */
 fun AccessFailure.shouldOfferWebVpnOnce(useVpn: Boolean): Boolean =
     suggestedAction(webVpnEnabled = useVpn) == AccessAction.UseWebVpnOnce
+
+/** 失败原因是否应该给一个「改回直连」按钮（[shouldOfferWebVpnOnce] 的对称动作）。 */
+fun AccessFailure.shouldOfferDirectOnce(useVpn: Boolean): Boolean =
+    suggestedAction(webVpnEnabled = useVpn) == AccessAction.UseDirectOnce
