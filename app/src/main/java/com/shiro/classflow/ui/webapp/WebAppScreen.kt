@@ -326,6 +326,45 @@ private const val WX_STUB_JS = """
 """
 
 /**
+ * lifeService 页面返回箭头的兜底脚本（幂等，document 级）。
+ *
+ * 背景（真机实测）：2-3 栋洗浴（`/applications/lifeService`）的顶栏返回箭头点了没反应 ——
+ * 页面的返回链路是 `根.back()` → `child.back()` → `$parent.back()`（chunk-b88c7b1e 的
+ * `back(){this.$parent.back()}`），而 `router-view ref="child"` 解析到的正是 lifeService
+ * 组件自己，于是在「根 ↔ 子」之间无限递归，最后抛 `RangeError` 被 Vue 的事件错误处理吞掉，
+ * **永远走不到 `history.go(-1)`**。系统返回键不受影响（WebView 历史确实有上一层）。
+ *
+ * 因此在捕获阶段拦下箭头的点击（`stopPropagation`，页面的递归处理函数不再执行），
+ * 改走 `CFWebAppBridge.pageBack()`：有历史就回退、没历史才退出容器 —— 与系统返回键同义。
+ * 只拦 `.van-nav-bar__left`（平台根组件渲染的顶栏返回），页面里其余按钮一概不碰；
+ * 结果面板里的「返回」按钮（`showResult=false`，关面板）语义不同，也不在此列。
+ */
+private const val LIFE_SERVICE_BACK_SHIM_JS = """
+(function() {
+  if (window.__cfLifeServiceBackShimmed) return;
+  window.__cfLifeServiceBackShimmed = true;
+  document.addEventListener('click', function (ev) {
+    try {
+      var node = ev.target;
+      while (node && node !== document) {
+        if (node.classList && node.classList.contains('van-nav-bar__left')) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (window.CFWebAppBridge && window.CFWebAppBridge.pageBack) {
+            window.CFWebAppBridge.pageBack();
+          }
+          return;
+        }
+        node = node.parentNode;
+      }
+    } catch (e) {
+      console.error('lifeService back shim error:', e);
+    }
+  }, true);
+})();
+"""
+
+/**
  * `window.open` 兜底脚本（门户专用，见 [WebAppDefinition.shimWindowOpen]）。
  *
  * 移动门户（uni-app）打开应用靠 `window.open(url)`。Android WebView 默认
@@ -706,6 +745,7 @@ fun WebAppScreen(
                         onJsAgentScan = { callbackName -> scanRequest = ScanRequest.JsAgent(callbackName) },
                         onAndroidFuncScan = { callbackName -> scanRequest = ScanRequest.AndroidFunc(callbackName) },
                         onDeepLinkAutoStartHandedOff = { deepLinkAutoStarted = true },
+                        onPageBackExit = { navBridge.popBackStack() },
                         onWebViewReady = { webViewInstance = it }
                     )
                 }
@@ -1008,6 +1048,47 @@ private fun isCampusCardPaymentUrl(url: String?): Boolean {
     return path.startsWith("/charge-app") || path.startsWith("/blade-pay")
 }
 
+/** `SynJSNative` 协议里「页面要求关闭自己」的主键（1 栋控水的「‹ 主页」按钮）。 */
+internal const val PAGE_BACK_POP_KEY = "synjones.ecampus.window.pop"
+
+/**
+ * 当前地址是否应注入 lifeService 返回兜底脚本（[LIFE_SERVICE_BACK_SHIM_JS]）。
+ *
+ * 只有 2-3 栋洗浴这一页（`yktfwpt.wbu.edu.cn/applications/lifeService`）的顶栏箭头
+ * 存在递归 bug；平台其它页面（`/plat/…`、`/applications/…` 的其它应用）返回语义正常，
+ * 一概不注入，避免改变它们对 `child.back()` 的定制行为。
+ * 真机深链不带 hash（`/applications/lifeService?_implid=…`），所以只看 host + path，
+ * 不要求任何 query。
+ */
+internal fun isLifeServiceBackShimTarget(url: String?): Boolean {
+    if (url.isNullOrBlank()) return false
+    val httpUrl = url.toHttpUrlOrNull() ?: return false
+    if (!httpUrl.host.equals("yktfwpt.wbu.edu.cn", ignoreCase = true)) return false
+    val path = httpUrl.encodedPath
+    return path == "/applications/lifeService" || path.startsWith("/applications/lifeService/")
+}
+
+/**
+ * 历史里「不算一页」的条目：页面自己的返回控件回退时应跳过。
+ *
+ * 深链进入一卡通各应用都要先落 `berserker-base/redirect` 换票据、再 302 到目标页，
+ * 于是 WebView 历史里多出一条一次性跳转 —— 页面要求返回时若只回退一步，会退到这条
+ * redirect 上又被 302 弹回来，表现成「返回键要按两次」（真机实测：马1 栋深链）。
+ * 因此把 redirect、`about:blank` 与洗浴两个应用自身的页面都视作过渡条目：
+ * 回退时跳到最近一个真实页面（通常是一卡通首页），全是过渡条目才退出容器。
+ */
+internal fun isTransientBackFlowEntry(url: String?): Boolean {
+    if (url.isNullOrBlank() || url == "about:blank") return true
+    val httpUrl = url.toHttpUrlOrNull() ?: return false
+    if (httpUrl.host.equals("yktxyyy.wbu.edu.cn", ignoreCase = true)) return true
+    if (httpUrl.host.equals("yktfwpt.wbu.edu.cn", ignoreCase = true)) {
+        val path = httpUrl.encodedPath
+        if (path.startsWith("/berserker-base/redirect")) return true
+        return path == "/applications/lifeService" || path.startsWith("/applications/lifeService/")
+    }
+    return false
+}
+
 
 /**
  * 判断当前 URL 是否处于应用定义的「主页/首页」路由。
@@ -1293,6 +1374,11 @@ private fun FullScreenWebContent(
     onAndroidFuncScan: (callbackName: String) -> Unit,
     /** 深链的一次性自启已经交给页面（见 [WebAppScreen] 的 [deepLinkAutoStarted] 说明）。 */
     onDeepLinkAutoStartHandedOff: () -> Unit = {},
+    /**
+     * 页面**自己**的返回控件（lifeService 顶栏箭头 / 1 栋控水「主页」按钮）要求返回、
+     * 而 WebView 已无历史时调用 —— 通常等于退出容器。见 [pageBack] 的桥接说明。
+     */
+    onPageBackExit: () -> Unit = {},
     onWebViewReady: (WebView) -> Unit
 ) {
     val context = LocalContext.current
@@ -1416,6 +1502,33 @@ private fun FullScreenWebContent(
                 }
             }
 
+            /**
+             * 页面自己的返回控件要求返回（`CFWebAppBridge.pageBack()` /
+             * `SynJSNative` 的 `synjones.ecampus.window.pop`）。
+             *
+             * 与系统返回键「回退一步」不同：历史里躺着的一次性跳转条目
+             * （`berserker-base/redirect` 票据跳转、`about:blank`、洗浴应用自身页面，
+             * 见 [isTransientBackFlowEntry]）会被逐条跳过，直接落回最近一个真实页面
+             * （通常是一卡通首页）—— 否则退到 redirect 上又被 302 弹回来，
+             * 表现成「返回键要按两次」（真机实测：马1 栋深链）。全是跳转条目
+             * （深链直达）才交给容器退出。
+             */
+            fun pageBack() {
+                val list = copyBackForwardList()
+                var index = list.currentIndex - 1
+                while (index >= 0) {
+                    val candidate = list.getItemAtIndex(index)?.url.orEmpty()
+                    if (!isTransientBackFlowEntry(candidate)) {
+                        Log.i("WebAppScreen", "Page back control: going back to $candidate")
+                        goBackOrForward(index - list.currentIndex)
+                        return
+                    }
+                    index--
+                }
+                Log.i("WebAppScreen", "Page back control: no real page behind, exiting container")
+                onPageBackExit()
+            }
+
             // 原生桥：供注入的 wx 桩、em 桩、JsAgent 以及 AndroidFunc 调用扫码与外跳支付
             if (enableScanBridge) {
                 addJavascriptInterface(
@@ -1455,6 +1568,17 @@ private fun FullScreenWebContent(
                                 false
                             }
                         }
+
+                        /**
+                         * 页面自己的返回控件要求返回。2-3 栋 lifeService 页面的顶栏箭头在 H5 载体下
+                         * 会递归调自身（`back()` → `child.back()` → `$parent.back()` → …，
+                         * `RangeError` 被 Vue 吞掉），注入的返回兜底脚本（[LIFE_SERVICE_BACK_SHIM_JS]）
+                         * 拦下箭头后改为调这里。
+                         */
+                        @JavascriptInterface
+                        fun pageBack() {
+                            mainHandler.post { pageBack() }
+                        }
                     },
                     "CFWebAppBridge"
                 )
@@ -1474,6 +1598,16 @@ private fun FullScreenWebContent(
                                     mainHandler.post {
                                         onAndroidFuncScan(callback)
                                     }
+                                    return JSONObject().apply {
+                                        put("code", 200)
+                                        put("message", "success")
+                                    }.toString()
+                                }
+                                // 「synjones.ecampus.window.pop」：页面要求关闭自己（返回上一层）。
+                                // 1 栋智能控水（yktxyyy:5001）的「‹ 主页」按钮走这里；历史里还有上一层
+                                // 就回退，没有（深链首次直达）才交给容器退出 —— 与系统返回键语义一致。
+                                if (primaryKey == PAGE_BACK_POP_KEY) {
+                                    mainHandler.post { pageBack() }
                                     return JSONObject().apply {
                                         put("code", 200)
                                         put("message", "success")
@@ -1715,6 +1849,10 @@ private fun FullScreenWebContent(
                     if (shimWindowOpen) {
                         view?.evaluateJavascript(WINDOW_OPEN_SHIM_JS, null)
                     }
+                    // 2-3 栋 lifeService：顶栏箭头递归 bug 的返回兜底（幂等，见脚本说明）
+                    if (isLifeServiceBackShimTarget(url)) {
+                        view?.evaluateJavascript(LIFE_SERVICE_BACK_SHIM_JS, null)
+                    }
                     // document 早期注入 wx 桩（幂等），保证 U净 扫码/支付桥可用
                     if (enableScanBridge) {
                         view?.evaluateJavascript(WX_STUB_JS, null)
@@ -1738,6 +1876,10 @@ private fun FullScreenWebContent(
                     applyCampusCardUserAgent(view, url)
                     // 定位接管脚本兜底再装一次（部分机型 onPageStarted 时 JS 上下文尚未就绪）
                     injectGeolocationShim(view)
+                    // lifeService 返回兜底同理再装一次（部分机型 onPageStarted 时 JS 上下文尚未就绪）
+                    if (isLifeServiceBackShimTarget(url)) {
+                        view?.evaluateJavascript(LIFE_SERVICE_BACK_SHIM_JS, null)
+                    }
                     // 本次加载是否把「一次性自启」交给了页面
                     var autoStartHandedOff = false
                     // 门户：window.open 兜底再注入一次（部分机型 onPageStarted 时 JS 上下文尚未就绪），
