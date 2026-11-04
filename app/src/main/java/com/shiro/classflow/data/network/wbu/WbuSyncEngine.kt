@@ -388,20 +388,45 @@ class WbuSyncEngine(
             }
 
             val authBase = if (viaWebVpn) transport.idsBase() else transport.idsPublicBase
+            val proxyBase = transport.idsProxyBaseUrl()
             val service = URLEncoder.encode(WbuAuthTransport.IDS_PERSON_CENTER_SERVICE, "UTF-8")
-            val idsLoginUrl = "$authBase/authserver/login?service=$service"
+
+            suspend fun attempt(base: String): CasPasswordLoginResult =
+                // consumeTicket = false：同源个人中心 service，止于拿到 CASTGC，绝不被 302 带进教务
+                cas.casPasswordLogin(
+                    studentId = studentId,
+                    password = password,
+                    idsLoginUrl = "$base/authserver/login?service=$service",
+                    flowTag = flowTag,
+                    captchaProvider = captchaProvider,
+                    clearAuthCookies = true,
+                    consumeTicket = false
+                )
+
             Log.i("WbuSyncEngine", "$flowTag 仅登录统一认证: base=$authBase viaWebVpn=$viaWebVpn")
 
-            // consumeTicket = false：同源个人中心 service，止于拿到 CASTGC，绝不被 302 带进教务
-            val result = cas.casPasswordLogin(
-                studentId = studentId,
-                password = password,
-                idsLoginUrl = idsLoginUrl,
-                flowTag = flowTag,
-                captchaProvider = captchaProvider,
-                clearAuthCookies = true,
-                consumeTicket = false
-            )
+            // 「WebVPN 模式下 ids 走不走 WebVPN」是用户开关；但直连被校外那道 WAF 拦下
+            // （或链接根本到不了 ids）时应当自动改走隧道，而不是把「无法获取登录参数」直接甩给用户。
+            // 有 TWFID 才有得换；开关本来就指向隧道时 authBase == proxyBase，不会重复尝试。
+            val hasTwfid = transport.currentTwfid().isNotBlank() ||
+                transport.cookieStore.any { it.name == "TWFID" && it.value.isNotBlank() }
+            val canFallbackToTunnel = viaWebVpn && authBase != proxyBase && hasTwfid
+
+            var triedTunnel = false
+            var result = try {
+                attempt(authBase)
+            } catch (e: WafBlockedException) {
+                if (!canFallbackToTunnel) throw e
+                triedTunnel = true
+                Log.i("WbuSyncEngine", "$flowTag ids 直连被 WAF 拦截（host=${e.host}），改用 WebVPN 隧道重试")
+                attempt(proxyBase)
+            }
+            if (!result.success && canFallbackToTunnel && !triedTunnel &&
+                result.failure in setOf(LocalLoginFailure.PROTOCOL, LocalLoginFailure.NETWORK)
+            ) {
+                Log.i("WbuSyncEngine", "$flowTag ids 直连登录失败（${result.message}），改用 WebVPN 隧道重试")
+                result = attempt(proxyBase)
+            }
             if (!result.success) return@withContext fail(casFailure(result, AccessLayer.UnifiedAuth))
 
             val castgcReady = cookieStore.any { it.name == "CASTGC" && !it.value.isBlank() }
