@@ -563,6 +563,8 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="status_overdue_days">%1$d days overdue</string>
     <string name="empty_current_borrows_title">No Active Borrows</string>
     <string name="empty_current_borrows_subtitle">Visit the library to explore and borrow books</string>
+    <string name="library_current_borrows_unavailable_title">Couldn\'t load your active borrows</string>
+    <string name="library_current_borrows_unavailable_subtitle">The library system returned an error for the active-borrows page. This is not a sign-in problem — your borrowing history is still available below. Pull down to retry later</string>
     <string name="empty_borrow_history_title">No Borrowing History</string>
     <string name="empty_borrow_history_subtitle">Your reading journey will be displayed here</string>
     <string name="search_books_placeholder">Search by title, author, or barcode</string>

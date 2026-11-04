@@ -563,6 +563,8 @@
     <string name="status_overdue_days">已超期 %1$d 天</string>
     <string name="empty_current_borrows_title">當前暫無在借圖書</string>
     <string name="empty_current_borrows_subtitle">趁陽光正好，去圖書館借一本好書吧</string>
+    <string name="library_current_borrows_unavailable_title">暫時無法取得在借清單</string>
+    <string name="library_current_borrows_unavailable_subtitle">圖書館系統發生錯誤（當前借閱頁面無法開啟），這與你的登入狀態無關。借閱歷史仍可正常檢視，稍後可在這裡下拉重新整理再試</string>
     <string name="empty_borrow_history_title">暫無借閱歷史記錄</string>
     <string name="empty_borrow_history_subtitle">借閱過的圖書足跡將在此處呈現</string>
     <string name="search_books_placeholder">搜尋書名、作者或條形碼</string>

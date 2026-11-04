@@ -287,7 +287,10 @@ object WbuFailureDetector {
      * 其余异常（解析失败、状态异常等）归为 [AccessFailure.Unexpected]，两者给用户的下一步完全不同。
      */
     fun fromThrowable(e: Throwable, layer: AccessLayer): AccessFailure = when (e) {
-        is WbuSessionExpiredException -> AccessFailure.SessionExpired(e.layer)
+        is WbuSessionExpiredException -> AccessFailure.SessionExpired(e.layer)        // 服务端自己出错（如 OPAC 的 book_lst.php 回 500）：登录态没问题，重登只会再撞一次同样的 500。
+        // 归到 Unexpected —— 动作是「重试」，不会弹登录面板。
+        is WbuServiceErrorException ->
+            AccessFailure.Unexpected(layer, "HTTP ${e.statusCode}")
         // 被校外那道 WAF 拦了：登录态没问题、网络也通，就是这条路不通 —— 换通道，别让人重登。
         // 已经在 WebVPN 隧道里还被拦，说明隧道本身有问题，层保持门户层不变。
         is WafBlockedException ->

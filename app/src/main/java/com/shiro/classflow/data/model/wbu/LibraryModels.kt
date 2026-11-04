@@ -85,5 +85,12 @@ data class RenewResult(
 data class LibraryDashboardData(
     val profile: ReaderProfile = ReaderProfile(),
     val currentBorrows: List<BorrowedBook> = emptyList(),
-    val historyBorrows: List<BorrowHistoryBook> = emptyList()
+    val historyBorrows: List<BorrowHistoryBook> = emptyList(),
+    /**
+     * 「当前借阅」这一页没取到（通常是学校那台 OPAC 的 `book_lst.php` 报 5xx）。
+     *
+     * 契约（与「真的没借书」严格区分）：[currentBorrows] 为空且本字段为 true 时，
+     * 界面**不能**显示「当前暂无在借图书」—— 那会让用户以为是自己没借书，而真相是系统坏了。
+     */
+    val currentBorrowsUnavailable: Boolean = false
 )

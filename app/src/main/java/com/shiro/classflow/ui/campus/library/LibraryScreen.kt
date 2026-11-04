@@ -338,7 +338,17 @@ fun LibraryScreen(
                                 }
                             }
 
-                            if (data.currentBorrows.isEmpty()) {
+                            if (data.currentBorrowsUnavailable) {
+                                // 取不到 ≠ 没借书：学校那台 OPAC 的 book_lst.php 会回 5xx。
+                                // 这里必须说清「系统出错了」，绝不能显示「当前暂无在借图书」。
+                                item {
+                                    EmptyLibraryNotice(
+                                        icon = Icons.Default.Warning,
+                                        title = stringResource(R.string.library_current_borrows_unavailable_title),
+                                        subtitle = stringResource(R.string.library_current_borrows_unavailable_subtitle)
+                                    )
+                                }
+                            } else if (data.currentBorrows.isEmpty()) {
                                 item {
                                     EmptyLibraryNotice(
                                         icon = Icons.Default.CheckCircle,

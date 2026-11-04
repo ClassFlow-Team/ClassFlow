@@ -76,6 +76,13 @@ suspend fun <T> campusAccess(
     } catch (e: Exception) {
         // 网络类失败按「本次实际走的通道」归类：直连失败才提示「不在校园网」并给「改用 WebVPN」
         val layer = if (useVpn) AccessLayer.WebVpnPortal else AccessLayer.CampusDirect
+        // 诊断：把真实异常类型打出来。「不在校园网」这句文案底下藏着的原因可能完全不是网络 ——
+        // 证书链不完整、WAF 拦截、服务端 5xx 都会走到这里，只看文案没法区分。
+        android.util.Log.w(
+            "WbuCampusAccess",
+            "服务 $service 访问失败（useVpn=$useVpn，flow=$flowTag）：${e.javaClass.name}: ${e.message}",
+            e
+        )
         CampusAccessResult.Failed(WbuFailureDetector.fromThrowable(e, layer), useVpn)
     }
 

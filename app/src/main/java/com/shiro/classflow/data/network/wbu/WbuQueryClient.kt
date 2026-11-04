@@ -62,6 +62,63 @@ class WbuSessionExpiredException(
 ) : Exception(null, cause)
 
 /**
+ * 服务端自己出错了（典型：图书馆 `book_lst.php` 回 HTTP 500）。
+ *
+ * 与 [WbuSessionExpiredException] **必须分开**：两者都表现为「页面上拿不到数据」，但下一步动作完全相反 ——
+ * 会话失效要重新登录，服务端 5xx 重新登录一百次也没用（而且每登一次都会再弹一次登录面板）。
+ *
+ * 过去 `requireOpacPage()` 把所有非 200 一律当成会话失效，于是「当前借阅」这一页 500 时，
+ * 用户看到的是「登录状态已过期」→ 输密码 → 还是 500 → 再弹面板，陷入死循环，
+ * 而真正的故障（学校那台 OPAC 的空表模板报错）被完全掩盖。
+ */
+class WbuServiceErrorException(
+    /** HTTP 状态码；0 表示响应正常但内容不符合预期。 */
+    val statusCode: Int,
+    cause: Throwable? = null
+) : Exception(null, cause)
+
+/** 图书馆 OPAC 的一次响应该怎么归类。纯函数，便于单测钉住「500 不等于没登录」。 */
+enum class OpacResponseKind {
+    /** 正常业务页。 */
+    OK,
+
+    /** 被接管 / 重定向到登录页：真的没登录（或门禁失效）。 */
+    SESSION_EXPIRED,
+
+    /** 服务端自己出错（4xx / 5xx）：**不是**登录问题。 */
+    SERVICE_ERROR
+}
+
+/**
+ * 判定一个 OPAC 响应属于哪一类。
+ *
+ * @param code HTTP 状态码
+ * @param location `Location` 头（有值说明是一次重定向）
+ * @param finalHost 请求最终落地的 host（跟随重定向后）
+ */
+internal fun classifyOpacResponse(code: Int, location: String?, finalHost: String?): OpacResponseKind {
+    // 网关接管优先判：Sangfor 会把请求接到门户页，此时状态码可能是 200，但内容不是业务页
+    if (WbuFailureDetector.isGatewayHost(finalHost) || WbuFailureDetector.isGatewayUrl(location)) {
+        return OpacResponseKind.SESSION_EXPIRED
+    }
+    // 4xx / 5xx 是服务端自己的问题。先于「有没有 Location」判断：
+    // 有些反代出错时会同时带上 500 和一个 Location，那种情况仍然是服务端故障。
+    if (code >= 400) return OpacResponseKind.SERVICE_ERROR
+    if (code !in 200..399) return OpacResponseKind.SERVICE_ERROR
+
+    // 3xx：只有指向登录页才算会话失效。其它 3xx（OkHttp 已开启自动跟随，能漏到这里说明
+    // 跟随失败或响应畸形）归入「服务端返回异常」，绝不能当成登录问题去弹登录框。
+    if (code in 300..399) {
+        val target = location.orEmpty()
+        if (target.isBlank()) return OpacResponseKind.OK
+        val lower = target.lowercase()
+        val isLogin = lower.contains("login") || lower.contains("/por/")
+        return if (isLogin) OpacResponseKind.SESSION_EXPIRED else OpacResponseKind.SERVICE_ERROR
+    }
+    return OpacResponseKind.OK
+}
+
+/**
  * 武汉商学院教务查询服务客户端（成绩查询、空教室查询、单教室课表探测）
  */
 class WbuQueryClient(
@@ -992,16 +1049,30 @@ class WbuQueryClient(
      */
 
     /**
-     * 校验图书馆响应确实来自 OPAC 读者页面：非 200、存在重定向、或最终落在 WebVPN 门户上，
-     * 都视为会话已失效并抛出 [WbuSessionExpiredException]，交由上层引导重新登录。
+     * 校验图书馆响应确实来自 OPAC 读者页面。
+     *
+     * 三种结果分开处理（判据见 [classifyOpacResponse]）：
+     * - 正常业务页 → 放行；
+     * - 被重定向 / 接管到登录页 → [WbuSessionExpiredException]（交给上层引导重新登录）；
+     * - 4xx / 5xx → [WbuServiceErrorException]（**不**弹登录框，只提示「学校系统出错，稍后重试」）。
+     *
+     * 最后这条是「一进图书馆就弹登录、登录后还弹」的直接成因：`book_lst.php`（当前借阅）
+     * 服务端会稳定回 500，旧逻辑把它当成登录失效 → 静默重登 → 再 500 → 再弹面板。
      */
     private fun Response.requireOpacPage() {
-        val location = header("Location")
-        if (code != 200 || !location.isNullOrBlank()) {
-            throw WbuSessionExpiredException(AccessLayer.Service)
-        }
-        if (WbuFailureDetector.isGatewayHost(request.url.host)) {
-            throw WbuSessionExpiredException(AccessLayer.WebVpnPortal)
+        when (classifyOpacResponse(code, header("Location"), request.url.host)) {
+            OpacResponseKind.OK -> Unit
+            OpacResponseKind.SESSION_EXPIRED -> {
+                // 落在网关 host 上说明是 WebVPN 门禁（TWFID）掉了，与「服务自己的会话过期」分开报，
+                // 上层据此决定是重登门户还是重登统一认证。
+                val layer = if (WbuFailureDetector.isGatewayHost(request.url.host)) {
+                    AccessLayer.WebVpnPortal
+                } else {
+                    AccessLayer.Service
+                }
+                throw WbuSessionExpiredException(layer)
+            }
+            OpacResponseKind.SERVICE_ERROR -> throw WbuServiceErrorException(code)
         }
     }
 
@@ -1019,11 +1090,13 @@ class WbuQueryClient(
                 .get()
                 .build()
             val manualClient = client.newBuilder().followRedirects(false).build()
+            // 只在确认为正常业务页时复用旧会话；其它情况（重定向 / 4xx / 5xx / 网络异常）
+            // 一律走「换一张新票」—— 换票对真正过期的会话是唯一的修法，
+            // 对偶发的 5xx 也只是多一次请求，不会把用户顶进登录面板。
             val valid = runCatching {
                 manualClient.newCall(testReq).execute().use { resp ->
-                    resp.code == 200 &&
-                        resp.header("Location").orEmpty().isBlank() &&
-                        !WbuFailureDetector.isGatewayHost(resp.request.url.host)
+                    classifyOpacResponse(resp.code, resp.header("Location"), resp.request.url.host) ==
+                        OpacResponseKind.OK
                 }
             }.getOrDefault(false)
 
@@ -1141,9 +1214,12 @@ class WbuQueryClient(
 
     /**
      * 查询读者个人信息与借阅概况
+     *
+     * @param ensureSession 是否先确保一次 OPAC 会话。批量聚合（[queryLibraryDashboard]）传 false ——
+     *   它已经在外面统一确保过一次，每个子查询再各查一遍纯属重复请求。
      */
-    suspend fun queryReaderProfile(): ReaderProfile = withContext(Dispatchers.IO) {
-        ensureOpacSession()
+    suspend fun queryReaderProfile(ensureSession: Boolean = true): ReaderProfile = withContext(Dispatchers.IO) {
+        if (ensureSession) ensureOpacSession()
 
         // 1. 请求 /reader/redr_info.php
         val infoReq = Request.Builder()
@@ -1199,9 +1275,11 @@ class WbuQueryClient(
 
     /**
      * 查询当前在借图书列表
+     *
+     * @param ensureSession 见 [queryReaderProfile]。
      */
-    suspend fun queryCurrentBorrows(): List<BorrowedBook> = withContext(Dispatchers.IO) {
-        ensureOpacSession()
+    suspend fun queryCurrentBorrows(ensureSession: Boolean = true): List<BorrowedBook> = withContext(Dispatchers.IO) {
+        if (ensureSession) ensureOpacSession()
 
         val req = Request.Builder()
             .url("$opacBaseUrl/reader/book_lst.php")
@@ -1294,9 +1372,15 @@ class WbuQueryClient(
 
     /**
      * 查询历史借阅记录（默认全部拉取）
+     *
+     * @param ensureSession 见 [queryReaderProfile]。
      */
-    suspend fun queryBorrowHistory(all: Boolean = true, page: Int? = null): List<BorrowHistoryBook> = withContext(Dispatchers.IO) {
-        ensureOpacSession()
+    suspend fun queryBorrowHistory(
+        all: Boolean = true,
+        page: Int? = null,
+        ensureSession: Boolean = true
+    ): List<BorrowHistoryBook> = withContext(Dispatchers.IO) {
+        if (ensureSession) ensureOpacSession()
 
         val url = when {
             all -> "$opacBaseUrl/reader/book_hist.php?para_string=all"
@@ -1461,6 +1545,14 @@ class WbuQueryClient(
 
     /**
      * 聚合查询图书馆仪表盘全部数据（读者概况 + 当前在借 + 借阅历史）
+     *
+     * 三个子查询**共用这一次**会话检查（[ensureSession] = false），不再各查一遍 —— 过去一个页面
+     * 会白白多打 3 次 `redr_info.php`，会话失效时还会三次并发换票、互相把对方的 `PHPSESSID` 顶掉。
+     *
+     * 降级策略：**「当前借阅」单独失败不影响整页**。学校那台 OPAC 的 `book_lst.php` 目前会稳定回
+     * 500（同会话下其它读者页全是 200），而档案与借阅历史都是好的 —— 为了一页拿不到就把整页判失败、
+     * 再把用户顶进登录面板，是错的。失败时置 [LibraryDashboardData.currentBorrowsUnavailable]，
+     * 由 UI 在该 Tab 里单独提示。
      */
     suspend fun queryLibraryDashboard(): LibraryDashboardData = withContext(Dispatchers.IO) {
         // 先统一确保一次 OPAC 会话：
@@ -1469,23 +1561,28 @@ class WbuQueryClient(
         // ② 也避免三个并发查询各换一张 CAS 票据。
         ensureOpacSession()
 
-        // 每个子任务各自兜住结果，最后按顺序抛出第一个真实失败
         kotlinx.coroutines.supervisorScope {
-            val profileDeferred = async { runCatching { queryReaderProfile() } }
-            val currentDeferred = async { runCatching { queryCurrentBorrows() } }
-            val historyDeferred = async { runCatching { queryBorrowHistory(all = true) } }
+            val profileDeferred = async { runCatching { queryReaderProfile(ensureSession = false) } }
+            val currentDeferred = async { runCatching { queryCurrentBorrows(ensureSession = false) } }
+            val historyDeferred = async { runCatching { queryBorrowHistory(all = true, ensureSession = false) } }
 
             val profileResult = profileDeferred.await()
             val currentResult = currentDeferred.await()
             val historyResult = historyDeferred.await()
 
+            // 档案与历史拿不到才算整页失败（多半是真的登录失效）
             profileResult.exceptionOrNull()?.let { throw it }
-            currentResult.exceptionOrNull()?.let { throw it }
             historyResult.exceptionOrNull()?.let { throw it }
+
+            val currentFailure = currentResult.exceptionOrNull()
+            // 只有当「当前借阅」的失败本身就是会话失效时才向上抛 —— 那时整页都没意义，
+            // 该让用户重新登录；而服务端 5xx / 网络抖动只需要这一块降级。
+            if (currentFailure is WbuSessionExpiredException) throw currentFailure
 
             LibraryDashboardData(
                 profile = profileResult.getOrThrow(),
-                currentBorrows = currentResult.getOrThrow(),
+                currentBorrows = currentResult.getOrDefault(emptyList()),
+                currentBorrowsUnavailable = currentFailure != null,
                 historyBorrows = historyResult.getOrThrow()
             )
         }

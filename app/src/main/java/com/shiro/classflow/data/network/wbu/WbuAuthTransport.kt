@@ -166,6 +166,15 @@ internal class WbuAuthTransport(
                 chain.proceed(req)
             }
 
+        // 证书链补全（**所有通道都要装**，不只是 WebVPN）。
+        //
+        // 实测：`opac.wbu.edu.cn` 的 TLS 握手只下发叶子证书 `*.wbu.edu.cn`，签发者
+        // `WoTrus OV SSL CA` 的中间证书没一起发。Chrome 会按叶子证书里的 AIA 地址自己下载补链，
+        // OkHttp 不会 —— 于是出现「浏览器能打开图书馆、App 报连不上」。
+        // 补链后仍由系统 TrustManager 重新校验，信任判定一个字都没放宽。
+        val baseTrustManager = defaultTrustManager
+        val chainTrustManager = WbuChainCompletingTrustManager(baseTrustManager)
+
         // WebVPN：证书是合法的 *.wbu.edu.cn 通配（链可校验），但只覆盖一层子域，
         // 两级代理子域（如 ids-wbu-edu-cn.webvpn.wbu.edu.cn）主机名不匹配，故按证书身份
         // （SAN/CN 命中 wbu.edu.cn 域名族）而非连接主机名放行。
@@ -192,6 +201,12 @@ internal class WbuAuthTransport(
                 }
                 false
             }
+        } else {
+            // 直连通道本来用系统默认校验，现在只加一层「补中间证书」——不装的话，
+            // 服务器漏发中间证书就会直接握手失败，被上层误报成「不在校园网」。
+            val sslContext = SSLContext.getInstance("TLS")
+            sslContext.init(null, arrayOf<TrustManager>(chainTrustManager), SecureRandom())
+            builder.sslSocketFactory(sslContext.socketFactory, chainTrustManager)
         }
 
         return WbuCampusNetwork.install(builder, context = context, useVpn = useVpn).build()
@@ -424,20 +439,35 @@ internal class WbuAuthTransport(
             checkServerTrustedInternal(chain, authType, null)
 
         private fun checkServerTrustedInternal(chain: Array<X509Certificate>, authType: String, host: String?) {
-            try {
-                defaultTrustManager.checkServerTrusted(chain, authType)
-            } catch (e: CertificateException) {
-                val thumb = chain.firstOrNull()?.let { certThumbprint(it) } ?: "<unknown>"
-                if (allowedCertThumbprints.contains(thumb)) return
-                val hostPart = host?.takeIf { it.isNotBlank() }?.let { "（主机 $it）" } ?: ""
-                val detail = (e.message ?: "证书校验失败") + hostPart
-                val allow = runBlocking { sslIssueHandler?.invoke(detail) ?: false }
-                if (allow) {
-                    allowedCertThumbprints.add(thumb)
-                    return
-                }
-                throw e
+            // 先走「系统校验 + AIA 补中间证书」：有些代理子域同样漏发中间证书，
+            // 少了这一步会把「链不完整」误判成「证书可疑」而去弹窗吓用户。
+            runCatching { chainTrustedWithAia(chain, authType) }
+                .onSuccess { return }
+                .onFailure { systemError -> trustedOrAsk(chain, authType, host, systemError) }
+        }
+
+        private fun chainTrustedWithAia(chain: Array<X509Certificate>, authType: String) {
+            WbuChainCompletingTrustManager(defaultTrustManager).checkServerTrusted(chain, authType)
+        }
+
+        private fun trustedOrAsk(
+            chain: Array<X509Certificate>,
+            authType: String,
+            host: String?,
+            systemError: Throwable?
+        ) {
+            val e = systemError as? CertificateException
+                ?: CertificateException(systemError?.message ?: "证书校验失败")
+            val thumb = chain.firstOrNull()?.let { certThumbprint(it) } ?: "<unknown>"
+            if (allowedCertThumbprints.contains(thumb)) return
+            val hostPart = host?.takeIf { it.isNotBlank() }?.let { "（主机 $it）" } ?: ""
+            val detail = (e.message ?: "证书校验失败") + hostPart
+            val allow = runBlocking { sslIssueHandler?.invoke(detail) ?: false }
+            if (allow) {
+                allowedCertThumbprints.add(thumb)
+                return
             }
+            throw e
         }
 
         override fun checkClientTrusted(
