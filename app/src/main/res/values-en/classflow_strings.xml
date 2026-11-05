@@ -744,6 +744,22 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="desc_auto_campus_probe">With WebVPN on, campus-only features first run a quick check; when on campus they connect directly instead of going through WebVPN</string>
     <string name="item_campus_dns">Resolve campus domains with the school DNS</string>
     <string name="desc_campus_dns">When connecting directly, resolve wbu.edu.cn domains with the school DNS so a proxy\'s fake-IP cannot point them at unreachable addresses. Turn off to use the system resolver only</string>
+
+    <!-- Mayinghe schedule time correction (jiaowu returns 12:20 for period 4; real dismissal is 12:00) -->
+    <string name="item_myh_time_fix">Mayinghe schedule time correction</string>
+    <string name="myh_time_fix_mode_ask">Ask on every import</string>
+    <string name="myh_time_fix_mode_ask_desc">After importing, ask once if period 4 still ends at 12:20</string>
+    <string name="myh_time_fix_mode_always">Always correct automatically</string>
+    <string name="myh_time_fix_mode_always_desc">Do not ask; change 12:20 to 12:00 on import</string>
+    <string name="myh_time_fix_mode_never">Leave as is</string>
+    <string name="myh_time_fix_mode_never_desc">Keep the jiaowu time; edit it yourself in Time slots if needed</string>
+    <string name="title_myh_time_fix">Correct period %1$d end time</string>
+    <string name="msg_myh_time_fix">Jiaowu lists period %1$d at Mayinghe as ending at %2$s, but it actually ends at %3$s. Correct it to the real schedule?</string>
+    <string name="desc_myh_time_fix_reason">Only this period\'s end time changes; other periods and your own edits stay untouched. You can change this later in Settings → Account &amp; credentials → More settings</string>
+    <string name="label_do_not_ask_again">Don\'t ask again (remember this choice)</string>
+    <string name="action_fix_to_real_time">Change to %1$s</string>
+    <string name="action_keep_school_time">Keep jiaowu time</string>
+    <string name="toast_myh_time_fixed">End time corrected to %1$s</string>
     <string name="item_login">Sign in</string>
     <string name="desc_login_service">Sign in again to refresh this service\'s authorization</string>
     <string name="err_no_valid_credentials">No valid credentials. Please use "Sign-in sync" to log in first.</string>

@@ -744,6 +744,22 @@
     <string name="desc_auto_campus_probe">開啟 WebVPN 時，需要校園網路的功能會先用快速探測判斷是否位於校園網路內；在校園網路內就直接連線，不繞 WebVPN</string>
     <string name="item_campus_dns">使用學校 DNS 解析校園網域名稱</string>
     <string name="desc_campus_dns">直連校園服務時用學校 DNS 解析 wbu.edu.cn 網域名稱，避免代理的 fake-IP 把網域名稱指向連不上的位址。關閉後完全交給系統解析</string>
+
+    <!-- 馬影河作息修正（教務給的第 4 節下課 12:20 → 實際 12:00） -->
+    <string name="item_myh_time_fix">馬影河作息修正</string>
+    <string name="myh_time_fix_mode_ask">每次匯入都詢問</string>
+    <string name="myh_time_fix_mode_ask_desc">匯入課表後，發現第 4 節 12:20 下課就問你一次</string>
+    <string name="myh_time_fix_mode_always">總是自動修正</string>
+    <string name="myh_time_fix_mode_always_desc">不再詢問，匯入時直接把 12:20 改成 12:00</string>
+    <string name="myh_time_fix_mode_never">不處理</string>
+    <string name="myh_time_fix_mode_never_desc">保留教務系統給的時間，需要時自行到作息時間裡改</string>
+    <string name="title_myh_time_fix">更正第 %1$d 節下課時間</string>
+    <string name="msg_myh_time_fix">教務系統給馬影河校區第 %1$d 節的作息是 %2$s 下課，實際作息是 %3$s。要按實際作息更正嗎？</string>
+    <string name="desc_myh_time_fix_reason">只改這一節的下課時間，其它節次與你的自訂調整都不動。以後可以在「設定 → 帳號與憑據 → 更多設定」裡改這個行為</string>
+    <string name="label_do_not_ask_again">不再提示（依這次的選擇記住）</string>
+    <string name="action_fix_to_real_time">改為 %1$s</string>
+    <string name="action_keep_school_time">保留教務時間</string>
+    <string name="toast_myh_time_fixed">已把下課時間更正為 %1$s</string>
     <string name="item_login">登入</string>
     <string name="desc_login_service">重新登入以更新該服務的授權狀態</string>
     <string name="err_no_valid_credentials">無有效憑據，請先用「登入同步」完成登入</string>

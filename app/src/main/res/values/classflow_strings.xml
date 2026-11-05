@@ -741,6 +741,22 @@
     <string name="desc_auto_campus_probe">开启 WebVPN 时，需要校园网的功能先用快速探测判断是否在校园网内；在校园网内直接连接，不绕 WebVPN</string>
     <string name="item_campus_dns">使用学校 DNS 解析校园域名</string>
     <string name="desc_campus_dns">直连校园服务时用学校 DNS 解析 wbu.edu.cn 域名，避免代理的 fake-IP 把域名指向连不上的地址。关闭后完全交给系统解析</string>
+
+    <!-- 马影河作息修正（教务给的第 4 节下课 12:20 → 实际 12:00） -->
+    <string name="item_myh_time_fix">马影河作息修正</string>
+    <string name="myh_time_fix_mode_ask">每次导入都询问</string>
+    <string name="myh_time_fix_mode_ask_desc">导入课表后，发现第 4 节 12:20 下课就问你一次</string>
+    <string name="myh_time_fix_mode_always">总是自动修正</string>
+    <string name="myh_time_fix_mode_always_desc">不再询问，导入时直接把 12:20 改成 12:00</string>
+    <string name="myh_time_fix_mode_never">不处理</string>
+    <string name="myh_time_fix_mode_never_desc">保留教务系统给的时间，需要时自己到作息时间里改</string>
+    <string name="title_myh_time_fix">更正第 %1$d 节下课时间</string>
+    <string name="msg_myh_time_fix">教务系统给马影河校区第 %1$d 节的作息是 %2$s 下课，实际作息是 %3$s。要按实际作息更正吗？</string>
+    <string name="desc_myh_time_fix_reason">只改这一节的下课时间，其它节次和你的自定义调整都不动。以后可以在「设置 → 账号与凭据 → 更多设置」里改这个行为</string>
+    <string name="label_do_not_ask_again">不再提示（按这次的选择记住）</string>
+    <string name="action_fix_to_real_time">改为 %1$s</string>
+    <string name="action_keep_school_time">保留教务时间</string>
+    <string name="toast_myh_time_fixed">已把下课时间更正为 %1$s</string>
     <string name="item_login">登录</string>
     <string name="desc_login_service">重新登录以更新该服务的授权状态</string>
     <string name="err_no_valid_credentials">无有效凭据，请先用「登录同步」完成登录</string>

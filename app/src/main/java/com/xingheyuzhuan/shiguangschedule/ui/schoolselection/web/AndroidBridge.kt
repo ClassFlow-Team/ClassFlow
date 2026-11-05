@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Handler
 import com.xingheyuzhuan.shiguangschedule.R
 import com.shiro.classflow.data.network.wbu.WbuSyncEngine
+import com.shiro.classflow.data.network.wbu.WbuAuthTransport
 import com.xingheyuzhuan.shiguangschedule.data.repository.normalizeImportedTimeSlots
 import android.os.Looper
 import android.util.Log
@@ -310,6 +311,8 @@ class AndroidBridge(
                     tableId = tableId
                 )
 
+                // 先登记再写库（WebView 路径拿不到校区代码，判定退回时间签名）
+                WbuAuthTransport.markMyhTimeAuditPending(context, tableId, null)
                 timeSlotRepository.replaceAllForCourseTable(tableId, normalizedTimeSlots)
 
                 Toast.makeText(context, context.getString(R.string.toast_preset_slots_import_success), Toast.LENGTH_LONG).show()

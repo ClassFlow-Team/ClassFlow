@@ -7,6 +7,7 @@ import com.xingheyuzhuan.shiguangschedule.data.api.webdav.WebDavConfig
 import com.xingheyuzhuan.shiguangschedule.data.repository.WebDavStoredInfo
 import com.shiro.classflow.data.model.wbu.CredentialService
 import com.shiro.classflow.data.network.wbu.CredentialVerifier
+import com.shiro.classflow.data.network.wbu.MyhTimeFixMode
 import com.shiro.classflow.data.network.wbu.SessionState
 import com.shiro.classflow.data.network.wbu.WbuAuthTransport
 import com.shiro.classflow.data.network.wbu.WbuCredentialRepository
@@ -68,6 +69,12 @@ data class CredentialUiState(
      * 直连校园服务时用学校 DNS 解析 `*.wbu.edu.cn`，避开代理 fake-IP 给出的不可达地址。
      */
     val campusDns: Boolean = true,
+
+    /**
+     * 马影河作息修正策略（默认 [MyhTimeFixMode.ASK]）：
+     * 导入后要不要把第 4 节的 12:20 下课时间按真实作息改成 12:00。
+     */
+    val myhTimeFixMode: MyhTimeFixMode = MyhTimeFixMode.ASK,
     val webDavConfigured: Boolean = false,
     val useVpn: Boolean = false,
     val idsViaWebVpn: Boolean = false,
@@ -226,6 +233,12 @@ class CredentialManagementViewModel @Inject constructor(
     fun setCampusDns(enabled: Boolean) {
         wbuRepository.setCampusDnsEnabled(enabled)
         WbuNetworkProbe.invalidateReachableCache()
+        refreshTrigger.update { it + 1 }
+    }
+
+    /** 马影河作息修正三档（每次询问 / 总是自动修正 / 不处理）。 */
+    fun setMyhTimeFixMode(mode: MyhTimeFixMode) {
+        wbuRepository.setMyhTimeFixMode(mode)
         refreshTrigger.update { it + 1 }
     }
 
@@ -492,6 +505,7 @@ class CredentialManagementViewModel @Inject constructor(
             skipCampusCheck = wbuRepository.isSkipCampusCheck(),
             autoCampusProbe = wbuRepository.isAutoCampusProbeEnabled(),
             campusDns = wbuRepository.isCampusDnsEnabled(),
+            myhTimeFixMode = wbuRepository.getMyhTimeFixMode(),
             selectSemesterOnImport = wbuRepository.isSelectSemesterOnImport(),
             keepTeacherId = wbuRepository.isKeepTeacherId(),
             keepBuilding = wbuRepository.isKeepBuilding(),

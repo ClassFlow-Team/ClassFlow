@@ -322,6 +322,15 @@ class WbuCredentialRepository @Inject constructor(
     fun setCampusDnsEnabled(enabled: Boolean) =
         WbuAuthTransport.setCampusDnsEnabled(context, enabled)
 
+    /**
+     * 马影河作息修正策略（三档，默认「每次询问」）：
+     * 导入后是否把第 4 节的 12:20 下课时间按真实作息改成 12:00。
+     */
+    fun getMyhTimeFixMode(): MyhTimeFixMode = WbuAuthTransport.getMyhTimeFixMode(context)
+
+    fun setMyhTimeFixMode(mode: MyhTimeFixMode) =
+        WbuAuthTransport.setMyhTimeFixMode(context, mode)
+
     /** 「高级模式」开关（跨页面记住）。 */
     fun isAdvancedMode(): Boolean = WbuAuthTransport.getCredentialAdvancedMode(context)
 

@@ -51,6 +51,7 @@ import com.shiro.classflow.ui.campus.components.WbuAuthTipsScenario
 import com.shiro.classflow.ui.campus.components.WbuCampusAuthSheet
 import com.xingheyuzhuan.shiguangschedule.ui.components.VpnSmsCodeDialog
 import com.xingheyuzhuan.shiguangschedule.ui.components.VpnPasswordPromptDialog
+import com.xingheyuzhuan.shiguangschedule.ui.components.WbuScheduleTimeFixDialog
 import com.xingheyuzhuan.shiguangschedule.ui.components.DockSafeBottomPadding
 import com.xingheyuzhuan.shiguangschedule.ui.components.NavigationRailWidth
 import com.xingheyuzhuan.shiguangschedule.ui.components.isWideScreen
@@ -59,6 +60,7 @@ import com.shiro.classflow.data.network.wbu.VpnFullLoginStatus
 import com.shiro.classflow.data.network.wbu.WbuAuthMode
 import com.shiro.classflow.data.model.wbu.CredentialService
 import com.shiro.classflow.data.network.wbu.WbuAuthTransport
+import com.shiro.classflow.data.network.wbu.MyhTimeSlotCorrection
 import com.shiro.classflow.data.network.wbu.WbuSyncEngine
 import com.shiro.classflow.data.network.wbu.needsRelogin
 import com.shiro.classflow.data.network.wbu.PortalCaptchaData
@@ -154,6 +156,10 @@ fun WeeklyScheduleScreen(
         }
     }
 
+    // 马影河作息修正：消费导入 / 升级时留下的「待审计」标记，整个 App 只在这里判断一次。
+    // 依赖 timeSlots：导入落幕（作息写库）后列表会更新，这次 LaunchedEffect 才会被重新拉起；
+    // 标记在校验开始前就清掉，所以无论用户选什么，都不会再问第二遍。
+
     val pagerState = rememberPagerState(
         initialPage = INFINITE_PAGER_CENTER,
         pageCount = { Int.MAX_VALUE }
@@ -234,8 +240,49 @@ fun WeeklyScheduleScreen(
     var newSemesterPromptXnxq by remember { mutableStateOf<String?>(null) }
     var newSemesterPromptEngine by remember { mutableStateOf<WbuSyncEngine?>(null) }
 
+    // 马影河作息修正（导入后 / 老版本升级首启各一次）
+    var myhTimeFix by remember { mutableStateOf<MyhTimeSlotCorrection.Fix?>(null) }
+    var myhTimeFixTableId by remember { mutableStateOf<String?>(null) }
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+    // 马影河作息修正：消费导入 / 升级时留下的「待审计」标记，整个 App 只在这里判断一次。
+    // 依赖 timeSlots：导入落幕（作息写库）后列表会更新，这次 LaunchedEffect 才会被重新拉起；
+    // 标记在校验开始前就清掉，所以无论用户选什么，都不会再问第二遍。
+    // 同步 / 登录面板还开着时先不动手（把弹窗盖在导入流程上很吓人），等它们收起来再看。
+    LaunchedEffect(uiState.tableId, uiState.timeSlots, isWbuSyncing, showWbuAuthDialog) {
+        val tableId = uiState.tableId ?: return@LaunchedEffect
+        if (isWbuSyncing || showWbuAuthDialog) return@LaunchedEffect
+        // 作息还没从库里读出来时**绝不能**消费标记：那一刻看到的是空列表，
+        // 判断结果恒为「无事可做」，标记却被清掉，这次询问就永久丢了。
+        if (uiState.timeSlots.isEmpty()) return@LaunchedEffect
+        val pending = WbuAuthTransport.pendingMyhTimeAudits(appContext)
+        if (!pending.containsKey(tableId)) return@LaunchedEffect
+        val campusId = pending[tableId]
+        WbuAuthTransport.clearMyhTimeAuditPending(appContext, tableId)
+        // 作息已写进库，用库里这份判断，避免再拿导入返回值判一次
+        val slots = viewModel.getTimeSlotsOnce(tableId)
+        val fix = MyhTimeSlotCorrection.detect(slots, campusId)
+        when (val decision = MyhTimeSlotCorrection.decide(WbuSyncEngine.getMyhTimeFixMode(appContext), fix)) {
+            is MyhTimeSlotCorrection.Decision.None -> Unit
+            is MyhTimeSlotCorrection.Decision.SilentFix -> {
+                val corrected = MyhTimeSlotCorrection.apply(slots, decision.fix, tableId)
+                if (corrected != null && viewModel.applyCorrectedTimeSlots(tableId, corrected)) {
+                    // 提示独立成一个协程：showSnackbar 会挂起到提示消失，别把这次 LaunchedEffect 卡住
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(
+                            appContext.getString(R.string.toast_myh_time_fixed, decision.fix.toEnd)
+                        )
+                    }
+                }
+            }
+            is MyhTimeSlotCorrection.Decision.Ask -> {
+                myhTimeFix = decision.fix
+                myhTimeFixTableId = tableId
+            }
+        }
+    }
 
     val composedStyle by remember(uiState.style) {
         derivedStateOf { with(ScheduleGridStyleComposed) { uiState.style.toComposedStyle() } }
@@ -1678,6 +1725,42 @@ fun WeeklyScheduleScreen(
                     }
                 ) {
                     Text(stringResource(R.string.action_later))
+                }
+            }
+        )
+    }
+
+    // 4. 马影河作息修正（导入后 / 老版本升级首启）
+    myhTimeFix?.let { fix ->
+        val tableId = myhTimeFixTableId
+        WbuScheduleTimeFixDialog(
+            fix = fix,
+            onDismiss = {
+                myhTimeFix = null
+                myhTimeFixTableId = null
+            },
+            onConfirm = { apply, noMorePrompts ->
+                myhTimeFix = null
+                myhTimeFixTableId = null
+                if (tableId == null) return@WbuScheduleTimeFixDialog
+                if (noMorePrompts) {
+                    val mode = MyhTimeSlotCorrection.modeAfterPrompt(
+                        noMorePrompts = true,
+                        applied = apply,
+                        current = WbuSyncEngine.getMyhTimeFixMode(appContext)
+                    )
+                    WbuSyncEngine.setMyhTimeFixMode(appContext, mode)
+                }
+                if (apply) {
+                    coroutineScope.launch {
+                        val slots = viewModel.getTimeSlotsOnce(tableId)
+                        val corrected = MyhTimeSlotCorrection.apply(slots, fix, tableId) ?: return@launch
+                        if (viewModel.applyCorrectedTimeSlots(tableId, corrected)) {
+                            snackbarHostState.showSnackbar(
+                                appContext.getString(R.string.toast_myh_time_fixed, fix.toEnd)
+                            )
+                        }
+                    }
                 }
             }
         )

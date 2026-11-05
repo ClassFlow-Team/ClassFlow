@@ -887,6 +887,15 @@ internal class WbuAuthTransport(
         /** 「使用学校 DNS 解析校园域名」开关：默认开启，见 [isCampusDnsEnabled]。 */
         private const val KEY_CAMPUS_DNS_ENABLED = "campus_dns_enabled"
 
+        /** 马影河作息修正的三档策略（ASK / ALWAYS_FIX / NEVER_FIX），见 [getMyhTimeFixMode]。 */
+        private const val KEY_MYH_TIME_FIX_MODE = "myh_time_fix_mode"
+
+        /**
+         * 待审计的课表 ID 集合（StringSet）：导入流程写完备忘录，课表页消费一次就清掉。
+         * 见 [markMyhTimeAuditPending] / [consumeMyhTimeAuditPending]。
+         */
+        private const val KEY_MYH_TIME_AUDIT_PENDING = "myh_time_audit_pending"
+
         const val IDS_PERSON_CENTER_SERVICE = "http://ids.wbu.edu.cn/personalInfo/personCenter/index.html"
         const val MAX_CAPTCHA_ATTEMPTS = 5
 
@@ -1098,6 +1107,71 @@ internal class WbuAuthTransport(
                 WbuNetworkProbe.invalidateReachableCache()
             }
         }
+
+        /**
+         * 马影河作息修正策略，默认 [MyhTimeFixMode.ASK]（每次导入都询问）。
+         *
+         * 三档语义见 [MyhTimeSlotCorrection.modeAfterPrompt]：用户在对话框里勾了「不再提示」，
+         * 档位就跟着他这次的选择走（改了 → 自动修正；没改 → 不再处理）。
+         */
+        fun getMyhTimeFixMode(context: Context): MyhTimeFixMode =
+            MyhTimeFixMode.fromStorage(prefsOf(context).getString(KEY_MYH_TIME_FIX_MODE, null))
+
+        fun setMyhTimeFixMode(context: Context, mode: MyhTimeFixMode) {
+            prefsOf(context).edit().putString(KEY_MYH_TIME_FIX_MODE, mode.storageValue).apply()
+        }
+
+        /**
+         * 记一笔「这张课表导入过作息，待审计」。
+         *
+         * 刻意**不直接**在导入管线里弹窗：四条导入路径（登录面板导入 / 单击导入 / 课表页同步 /
+         * 新学期导入 / WebView 导入）各有各的 UI 宿主，把弹窗塞进每一条会写出四份并发逻辑；
+         * 统一由课表页消费一次，既只有一份代码，也天然保证「一次导入只问一次」。
+         */
+        /**
+         * 记一笔「这张课表导入过作息，待审计」。
+         *
+         * 刻意**不直接**在导入管线里弹窗：四条导入路径（登录面板导入 / 单击导入 / 课表页同步 /
+         * 新学期导入 / WebView 导入）各有各的 UI 宿主，把弹窗塞进每一条会写出四份并发逻辑；
+         * 统一由课表页消费一次，既只有一份代码，也天然保证「一次导入只问一次」。
+         *
+         * @param campusId 本次导入解析出的校区代码（`xqdm`），用来避免把后官湖也当成马影河；
+         *   拿不到（WebView 旧脚本 / 老数据）就传 null，判定退回时间签名。
+         */
+        fun markMyhTimeAuditPending(context: Context, tableId: String, campusId: String? = null) {
+            if (tableId.isBlank()) return
+            val prefs = prefsOf(context)
+            // 先清掉同一张课表的旧条目，避免同一课表攒下多条不同校区
+            val current = prefs.getStringSet(KEY_MYH_TIME_AUDIT_PENDING, null).orEmpty()
+                .filterNot { myhAuditEntryTableId(it) == tableId }
+            val entry = "$tableId|${campusId.orEmpty()}"
+            prefs.edit()
+                .putStringSet(KEY_MYH_TIME_AUDIT_PENDING, (current + entry).toMutableSet())
+                .apply()
+        }
+
+        /** 待审计条目：tableId → campusId（campusId 可能为空）。 */
+        fun pendingMyhTimeAudits(context: Context): Map<String, String?> =
+            prefsOf(context).getStringSet(KEY_MYH_TIME_AUDIT_PENDING, null).orEmpty()
+                .associate { myhAuditEntryTableId(it) to myhAuditEntryCampusId(it) }
+
+        /** 清掉某张课表的待审计标记（一次性消费，绝不重复提示）。 */
+        fun clearMyhTimeAuditPending(context: Context, tableId: String) {
+            val prefs = prefsOf(context)
+            val current = prefs.getStringSet(KEY_MYH_TIME_AUDIT_PENDING, null).orEmpty()
+            val next = current.filterNot { myhAuditEntryTableId(it) == tableId }
+            if (next.size == current.size) return
+            prefs.edit().apply {
+                if (next.isEmpty()) remove(KEY_MYH_TIME_AUDIT_PENDING)
+                else putStringSet(KEY_MYH_TIME_AUDIT_PENDING, next.toMutableSet())
+            }.apply()
+        }
+
+        private fun myhAuditEntryTableId(entry: String): String =
+            entry.substringBefore('|', entry)
+
+        private fun myhAuditEntryCampusId(entry: String): String? =
+            entry.substringAfter('|', "").takeIf { it.isNotBlank() }
 
         /**
          * 一次性迁移：旧版扁平 key → 「服务类型 × 账号」分桶 key。

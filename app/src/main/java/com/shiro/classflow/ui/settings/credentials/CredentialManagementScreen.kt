@@ -1,13 +1,16 @@
 package com.shiro.classflow.ui.settings.credentials
 
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -24,6 +27,7 @@ import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.automirrored.rounded.Login
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VerifiedUser
@@ -36,6 +40,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -50,6 +55,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -64,6 +70,7 @@ import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
 import com.shiro.classflow.data.model.wbu.CredentialService
 import com.shiro.classflow.data.network.wbu.SessionState
+import com.shiro.classflow.data.network.wbu.MyhTimeFixMode
 import com.shiro.classflow.data.network.wbu.WbuAuthMode
 import com.shiro.classflow.ui.campus.components.WbuAuthTipsScenario
 import com.shiro.classflow.ui.campus.components.WbuCampusAuthSheet
@@ -119,6 +126,7 @@ fun CredentialManagementScreen(
     var confirm by remember { mutableStateOf<Pair<CredentialService, ClearTarget>?>(null) }
     var loginService by remember { mutableStateOf<CredentialService?>(null) }
     var moreExpanded by remember { mutableStateOf(false) }
+    var showMyhTimeFixPicker by remember { mutableStateOf(false) }
 
     val titleText = stringResource(R.string.title_credential_management)
 
@@ -241,28 +249,8 @@ fun CredentialManagementScreen(
                         }
                     )
                 }
-                // 「使用学校 DNS 解析校园域名」：始终显示。
-                // 它在直连模式下才生效，但「关不掉一个看不见的东西」比没有开关更糟 ——
-                // 出问题时用户必须能找到它。
-                SettingDivider()
-                SettingTile(
-                    icon = Icons.Rounded.Dns,
-                    title = stringResource(R.string.item_campus_dns),
-                    subtitle = stringResource(R.string.desc_campus_dns),
-                    trailingContent = {
-                        Switch(
-                            checked = uiState.campusDns,
-                            onCheckedChange = { viewModel.setCampusDns(it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
-                                uncheckedThumbColor = Color.White.copy(alpha = 0.9f),
-                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                uncheckedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
-                            )
-                        )
-                    }
-                )
+                // 「使用学校 DNS 解析校园域名」已移到页面底部的「更多设置」折叠区：
+                // 它是网络排障类开关，不是日常要看的校验项，堆在主卡片里会把「验证 / 登录」挤下去。
                 SettingDivider()
                 SettingTile(
                     icon = Icons.Rounded.Refresh,
@@ -309,6 +297,24 @@ fun CredentialManagementScreen(
                     onClick = { moreExpanded = !moreExpanded }
                 )
                 if (moreExpanded) {
+                    SettingDivider()
+                    // 网络排障类开关：放在折叠区里，出问题时仍然找得到（不是隐藏起来）
+                    ToggleRow(
+                        label = stringResource(R.string.item_campus_dns),
+                        checked = uiState.campusDns,
+                        onCheckedChange = { viewModel.setCampusDns(it) },
+                        icon = Icons.Rounded.Dns,
+                        subtitle = stringResource(R.string.desc_campus_dns)
+                    )
+                    SettingDivider()
+                    // 马影河作息修正：三档，点击弹选择器
+                    SettingTile(
+                        icon = Icons.Rounded.Schedule,
+                        title = stringResource(R.string.item_myh_time_fix),
+                        subtitle = stringResource(uiState.myhTimeFixMode.labelRes),
+                        trailingContent = null,
+                        onClick = { showMyhTimeFixPicker = true }
+                    )
                     SettingDivider()
                     ToggleRow(
                         label = stringResource(R.string.pref_ids_via_webvpn),
@@ -484,6 +490,17 @@ fun CredentialManagementScreen(
             onConfirm = { value ->
                 viewModel.setSessionCredential(service, name, value)
                 credEdit = null
+            }
+        )
+    }
+
+    if (showMyhTimeFixPicker) {
+        MyhTimeFixModePickerDialog(
+            current = uiState.myhTimeFixMode,
+            onDismiss = { showMyhTimeFixPicker = false },
+            onSelect = { mode ->
+                viewModel.setMyhTimeFixMode(mode)
+                showMyhTimeFixPicker = false
             }
         )
     }
@@ -713,12 +730,14 @@ private fun ServiceCard(
 private fun ToggleRow(
     label: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    icon: ImageVector = Icons.Rounded.Tune,
+    subtitle: String? = null
 ) {
     SettingTile(
-        icon = Icons.Rounded.Tune,
+        icon = icon,
         title = label,
-        subtitle = null,
+        subtitle = subtitle,
         trailingContent = {
             Switch(
                 checked = checked,
@@ -790,6 +809,69 @@ private fun TextInputDialog(
         }
     )
 }
+
+@Composable
+private fun MyhTimeFixModePickerDialog(
+    current: MyhTimeFixMode,
+    onDismiss: () -> Unit,
+    onSelect: (MyhTimeFixMode) -> Unit
+) {
+    var selected by remember(current) { mutableStateOf(current) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.item_myh_time_fix)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                MyhTimeFixMode.entries.forEach { mode ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selected = mode }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = selected == mode, onClick = { selected = mode })
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = stringResource(mode.labelRes),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = stringResource(mode.descRes),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSelect(selected) }) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        }
+    )
+}
+
+/** 三档在设置页 / 询问框里的显示文案。 */
+private val MyhTimeFixMode.labelRes: Int
+    get() = when (this) {
+        MyhTimeFixMode.ASK -> R.string.myh_time_fix_mode_ask
+        MyhTimeFixMode.ALWAYS_FIX -> R.string.myh_time_fix_mode_always
+        MyhTimeFixMode.NEVER_FIX -> R.string.myh_time_fix_mode_never
+    }
+
+private val MyhTimeFixMode.descRes: Int
+    get() = when (this) {
+        MyhTimeFixMode.ASK -> R.string.myh_time_fix_mode_ask_desc
+        MyhTimeFixMode.ALWAYS_FIX -> R.string.myh_time_fix_mode_always_desc
+        MyhTimeFixMode.NEVER_FIX -> R.string.myh_time_fix_mode_never_desc
+    }
 
 @Composable
 private fun sessionStateText(isVerifying: Boolean, state: SessionState?): String = when {

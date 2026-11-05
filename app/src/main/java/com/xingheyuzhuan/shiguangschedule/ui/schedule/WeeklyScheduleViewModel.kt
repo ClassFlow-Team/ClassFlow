@@ -2,6 +2,8 @@ package com.xingheyuzhuan.shiguangschedule.ui.schedule
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.content.Context
+import com.shiro.classflow.data.network.wbu.WbuAuthTransport
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.db.main.Course
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTable
@@ -67,7 +69,8 @@ class WeeklyScheduleViewModel @Inject constructor(
     private val appSettingsRepository: AppSettingsRepository,
     private val courseTableRepository: CourseTableRepository,
     private val timeSlotRepository: TimeSlotRepository,
-    private val styleSettingsRepository: StyleSettingsRepository
+    private val styleSettingsRepository: StyleSettingsRepository,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WeeklyScheduleUiState())
@@ -774,9 +777,27 @@ class WeeklyScheduleViewModel @Inject constructor(
                 tableId = tableId
             )
             if (normalizedSlots.isNotEmpty()) {
+                // 先登记再写库：写库会触发 timeSlots 流，课表页那一刻就该看到标记（否则可能错过一次询问）
+                WbuAuthTransport.markMyhTimeAuditPending(context, tableId, config.campusId)
                 timeSlotRepository.replaceAllForCourseTable(tableId, normalizedSlots)
             }
         }
+    }
+
+    /** 读某张课表当前的作息（一次性，不进 UI State）。 */
+    suspend fun getTimeSlotsOnce(tableId: String): List<TimeSlot> =
+        timeSlotRepository.getTimeSlotsByCourseTableId(tableId).firstOrNull().orEmpty()
+
+    /**
+     * 把修正后的作息写回课表。
+     *
+     * 只动第 4 节的下课时间（见 [com.shiro.classflow.data.network.wbu.MyhTimeSlotCorrection]），
+     * 其它节次与字段一律沿用库里现有的值 —— 用户自己调过的开始时间、别名都不会被冲掉。
+     */
+    suspend fun applyCorrectedTimeSlots(tableId: String, corrected: List<TimeSlot>): Boolean {
+        if (corrected.isEmpty()) return false
+        timeSlotRepository.replaceAllForCourseTable(tableId, corrected)
+        return true
     }
 }
 

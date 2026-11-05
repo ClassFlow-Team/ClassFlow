@@ -132,11 +132,15 @@ enum class QrConfirmOutcome {
 
 /**
  * 学期配置：从 /admin/api/getZclistByXnxq 派生。
+ *
+ * @param campusId 解析这份作息时用的校区代码（`xqid` / `xqdm`）。
+ *   马影河与后官湖的空教室大节模板相同，作息修正必须靠它区分；拿不到时为 null。
  */
 data class WbuSemesterConfig(
     val semesterStartDate: String?,
     val semesterTotalWeeks: Int,
-    val timeSlots: List<TimeSlot>? = null
+    val timeSlots: List<TimeSlot>? = null,
+    val campusId: String? = null
 )
 
 /**
@@ -1496,7 +1500,8 @@ class WbuSyncEngine(
                 WbuSemesterConfig(
                     semesterStartDate = sorted.first().second.take(10),
                     semesterTotalWeeks = sorted.maxOf { it.first },
-                    timeSlots = timeSlots
+                    timeSlots = timeSlots,
+                    campusId = campusXqdm?.takeIf { it.isNotBlank() }
                 )
             }.getOrNull()
         }
@@ -1934,6 +1939,20 @@ class WbuSyncEngine(
         fun setKeepBuilding(context: Context, enabled: Boolean) = WbuAuthTransport.setKeepBuilding(context, enabled)
         fun getSelectSemesterOnImport(context: Context): Boolean = WbuAuthTransport.getSelectSemesterOnImport(context)
         fun setSelectSemesterOnImport(context: Context, enabled: Boolean) = WbuAuthTransport.setSelectSemesterOnImport(context, enabled)
+
+        /** 马影河作息修正策略（三档），见 [MyhTimeSlotCorrection]。 */
+        fun getMyhTimeFixMode(context: Context): MyhTimeFixMode = WbuAuthTransport.getMyhTimeFixMode(context)
+        fun setMyhTimeFixMode(context: Context, mode: MyhTimeFixMode) = WbuAuthTransport.setMyhTimeFixMode(context, mode)
+
+        /** 记一笔待审计的课表（导入管线写完作息后调用）。 */
+        fun markMyhTimeAuditPending(context: Context, tableId: String, campusId: String?) =
+            WbuAuthTransport.markMyhTimeAuditPending(context, tableId, campusId)
+
+        fun pendingMyhTimeAudits(context: Context): Map<String, String?> =
+            WbuAuthTransport.pendingMyhTimeAudits(context)
+
+        fun clearMyhTimeAuditPending(context: Context, tableId: String) =
+            WbuAuthTransport.clearMyhTimeAuditPending(context, tableId)
 
         /** 去除教师名末尾工号。 */
         fun cleanTeacherId(teacher: String): String {
