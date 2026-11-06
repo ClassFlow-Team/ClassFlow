@@ -191,6 +191,12 @@
             android:enabled="true"
             android:exported="false" />
 
+        <!-- 洗衣完成提醒的精确闹钟落点（只在用户开启提醒后才会被排上） -->
+        <receiver
+            android:name=".service.WasherAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
         <receiver
             android:name=".widget.tiny.TinyNativeProvider"
             android:label="@string/widget_name_tiny"

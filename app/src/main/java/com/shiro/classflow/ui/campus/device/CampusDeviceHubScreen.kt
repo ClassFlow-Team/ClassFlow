@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
@@ -60,6 +61,7 @@ import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
 import com.shiro.classflow.data.model.wbu.CampusDeviceEntry
 import com.shiro.classflow.data.model.wbu.CampusDeviceKind
+import com.xingheyuzhuan.shiguangschedule.ui.settings.notification.hasNotificationPermission
 import com.shiro.classflow.data.network.wbu.CampusShowerLink
 import com.shiro.classflow.data.network.wbu.ShowerManualCode
 import com.shiro.classflow.data.network.wbu.WbuAuthTransport
@@ -93,6 +95,31 @@ fun CampusDeviceHubScreen(
     }
 
     val state by viewModel.uiState.collectAsState()
+
+    // 洗衣机独有：进行中订单 / 洗衣账单 / 提醒设置
+    // VM 无条件创建（Compose 调用顺序必须稳定），但只有 kind == WASHER 时才启动和渲染
+    val washerViewModel: WasherProgressViewModel = hiltViewModel()
+    val washerState = washerViewModel.uiState.collectAsState().value
+    LaunchedEffect(kind) {
+        if (kind == CampusDeviceKind.WASHER) washerViewModel.start()
+    }
+    // 开启提醒时若还没给通知权限，就地申请（Android 13+）
+    val notificationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) {
+            Toast.makeText(context, R.string.washer_settings_need_notification, Toast.LENGTH_LONG).show()
+        }
+    }
+    // 离开页面时按当前快照重排闹钟：用户关掉 App 也能收到「洗好了」
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { washerViewModel.onScreenLeaving() }
+    }
+    LaunchedEffect(Unit) {
+        washerViewModel.messages.collect { resId ->
+            Toast.makeText(context, resId, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     // 「自动补缴饮水欠费」：只对饮水机有意义，读写同一份 wbu_sync_auth 偏好
     val contextForPrefs = LocalContext.current
@@ -139,7 +166,22 @@ fun CampusDeviceHubScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
-                )
+                ),
+                actions = {
+                    // 洗衣提醒设置只在洗衣机页出现：其它两类设备没有「洗完提醒」这回事
+                    if (kind == CampusDeviceKind.WASHER) {
+                        IconButton(
+                            onClick = {
+                                washerViewModel.toggleSettings()
+                            }
+                        ) {
+                            Icon(
+                                Icons.Filled.Settings,
+                                contentDescription = stringResource(R.string.washer_settings_title)
+                            )
+                        }
+                    }
+                }
             )
         }
     ) { innerPadding ->
@@ -150,6 +192,55 @@ fun CampusDeviceHubScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // ───────── 洗衣机主页：进行中进度 + 洗衣账单 + 提醒设置 ─────────
+            if (kind == CampusDeviceKind.WASHER) {
+                item {
+                    WasherProgressCard(
+                        snapshot = washerState.snapshot,
+                        loading = washerState.loading,
+                        refreshing = washerState.refreshing,
+                        onRefresh = { washerViewModel.refresh() },
+                        onScan = { navBridge.navigate(Destination.QrScan) },
+                    )
+                }
+                if (!washerState.reminderEnabled) {
+                    item {
+                        WasherReminderNudge(
+                            onClick = { washerViewModel.toggleSettings(open = true) }
+                        )
+                    }
+                }
+                if (washerState.settingsOpen) {
+                    item {
+                        WasherReminderSettingsCard(
+                            reminderEnabled = washerState.reminderEnabled,
+                            backgroundPolling = washerState.backgroundPolling,
+                            onReminderChange = { enabled ->
+                                if (enabled && !hasNotificationPermission(context)) {
+                                    notificationPermissionLauncher.launch(
+                                        android.Manifest.permission.POST_NOTIFICATIONS
+                                    )
+                                }
+                                washerViewModel.setReminderEnabled(enabled)
+                            },
+                            onPollingChange = washerViewModel::setBackgroundPollingEnabled,
+                            onCheckNow = washerViewModel::checkNow,
+                        )
+                    }
+                }
+                // 洗衣账单始终显示：即便这次没查到记录，也要让用户知道「这里能看历史消费」，
+                // 而不是把整块藏起来显得功能不存在
+                item {
+                    WasherBillSection(
+                        orders = washerState.history,
+                        loading = washerState.historyLoading,
+                        errorRes = washerState.historyErrorRes,
+                        hasMore = washerState.historyHasMore,
+                        onLoadMore = { washerViewModel.loadHistory() },
+                    )
+                }
+            }
+
             item {
                 Row(
                     modifier = Modifier

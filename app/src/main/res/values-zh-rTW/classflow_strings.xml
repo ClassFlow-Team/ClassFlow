@@ -1304,4 +1304,54 @@
     <string name="device_message_system_changed">已改類型</string>
     <string name="shower_water_go_recharge">去儲值</string>
     <string name="shower_water_stop_unconfirmed">已請求結束，但伺服端還沒確認停止計費。請稍後再試，或改用網頁開啟查看帳單</string>
+
+    <!-- 洗衣進度 / 帳單 / 提醒 -->
+    <string name="washer_progress_section">進行中</string>
+    <string name="washer_progress_refresh">重新整理</string>
+    <string name="washer_progress_loading">正在查詢洗衣進度…</string>
+    <string name="washer_progress_empty">目前沒有進行中的洗衣訂單。掃一台洗衣機開始使用，這裡會顯示進度與剩餘時間。</string>
+    <string name="washer_progress_remaining">剩餘 %1$s</string>
+    <string name="washer_progress_finishing">即將完成，請留意取衣</string>
+    <string name="washer_progress_hint_running">完成後會依你的提醒設定通知你</string>
+    <string name="washer_progress_hint_waiting">訂單已付款，回到洗衣機旁按「啟動洗衣」即可開始</string>
+    <string name="washer_progress_done">已洗完，可以取衣了</string>
+    <string name="washer_progress_paid">實付 ¥%1$s</string>
+    <string name="washer_progress_error_refresh">查詢洗衣進度失敗，請稍後再試</string>
+
+    <string name="washer_status_running">洗滌中</string>
+    <string name="washer_status_done">已完成</string>
+    <string name="washer_status_error">異常結束</string>
+    <string name="washer_status_reserved">待付款</string>
+    <string name="washer_status_paid">待啟動</string>
+    <string name="washer_status_unknown">狀態未知</string>
+
+    <string name="washer_bill_section">洗衣帳單</string>
+    <string name="washer_bill_summary">%1$d 筆 · 共 ¥%2$s</string>
+    <string name="washer_bill_loading">正在讀取洗衣帳單…</string>
+    <string name="washer_bill_empty">還沒有洗衣紀錄</string>
+    <string name="washer_bill_error">洗衣帳單讀取失敗，請稍後再試</string>
+    <string name="washer_bill_load_more">載入更多</string>
+    <string name="washer_bill_loading_more">載入中…</string>
+
+    <string name="washer_settings_title">洗衣提醒設定</string>
+    <string name="washer_settings_reminder_title">洗衣完成提醒</string>
+    <string name="washer_settings_reminder_desc">洗完時通知我，預設關閉</string>
+    <string name="washer_settings_polling_title">背景自動查詢</string>
+    <string name="washer_settings_polling_desc">關閉後只在開啟 App 時查詢進度，更省電</string>
+    <string name="washer_settings_check_now">立即檢查一次</string>
+    <string name="washer_settings_check_ok">已更新洗衣進度</string>
+    <string name="washer_settings_check_idle">目前沒有進行中的洗衣訂單</string>
+    <string name="washer_settings_reminder_enabled_toast">已開啟洗衣完成提醒</string>
+    <string name="washer_settings_reminder_disabled_toast">已關閉洗衣完成提醒</string>
+    <string name="washer_settings_nudge">想洗完就收到提醒？可以在這裡開啟</string>
+    <string name="washer_settings_nudge_action">去開啟</string>
+    <string name="washer_settings_need_notification">通知權限未開啟，洗完時無法提醒你。可在系統設定裡允許本應用傳送通知</string>
+
+    <string name="washer_notification_channel_name">洗衣完成提醒</string>
+    <string name="washer_notification_channel_desc">衣服洗好後提醒你及時取衣</string>
+    <string name="washer_notification_done_title">衣服洗好了</string>
+    <string name="washer_notification_done_body">%1$s 已完成，記得及時取衣</string>
+    <string name="washer_notification_error_title">洗衣未正常完成</string>
+    <string name="washer_notification_error_body">%1$s：%2$s</string>
+    <string name="washer_notification_unknown_machine">洗衣機</string>
 </resources>

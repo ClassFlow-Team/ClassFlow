@@ -22,6 +22,8 @@ private val Context.apiConfigDataStore: DataStore<Preferences> by preferencesDat
 private val Context.hairdryerHubDataStore: DataStore<Preferences> by preferencesDataStore(name = "hairdryer_hub")
 // 校园设备管理（饮水机 / 洗衣机 / 洗浴）使用记录：独立文件，天然不参与 WebDAV 同步（只存本机）
 private val Context.campusDeviceHubDataStore: DataStore<Preferences> by preferencesDataStore(name = "campus_device_hub")
+// 洗衣进度与提醒（进行中订单快照 / 提醒开关）：独立文件，退出登录时可以单独清掉
+private val Context.washerOrderDataStore: DataStore<Preferences> by preferencesDataStore(name = "washer_order")
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -79,5 +81,17 @@ object DataStoreModule {
     @Named("CampusDeviceHub")
     fun provideCampusDeviceHubDataStore(@ApplicationContext context: Context): DataStore<Preferences> {
         return context.campusDeviceHubDataStore
+    }
+
+    /**
+     * 洗衣进度 / 提醒的本地存储（进行中订单快照 + 两个开关）。
+     *
+     * 与设备使用记录分文件：订单是临时状态，用户退出登录或清缓存时应该能单独丢弃。
+     */
+    @Provides
+    @Singleton
+    @Named("WasherOrder")
+    fun provideWasherOrderDataStore(@ApplicationContext context: Context): DataStore<Preferences> {
+        return context.washerOrderDataStore
     }
 }

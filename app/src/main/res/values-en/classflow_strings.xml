@@ -1304,4 +1304,54 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="device_message_system_changed">Type changed</string>
     <string name="shower_water_go_recharge">Top up</string>
     <string name="shower_water_stop_unconfirmed">The stop request was sent, but the server has not confirmed that billing stopped. Try again shortly, or open the web page to check the bill.</string>
+
+    <!-- Washer progress / bill / reminders -->
+    <string name="washer_progress_section">In progress</string>
+    <string name="washer_progress_refresh">Refresh</string>
+    <string name="washer_progress_loading">Checking your wash progress…</string>
+    <string name="washer_progress_empty">No washer order is running right now. Scan a washer to start, and the progress and remaining time will show up here.</string>
+    <string name="washer_progress_remaining">%1$s left</string>
+    <string name="washer_progress_finishing">Almost done — get ready to collect your laundry</string>
+    <string name="washer_progress_hint_running">You will be notified when it finishes, based on your reminder settings</string>
+    <string name="washer_progress_hint_waiting">Order paid. Press "Start wash" on the machine to begin</string>
+    <string name="washer_progress_done">Finished — you can collect your laundry</string>
+    <string name="washer_progress_paid">Paid ¥%1$s</string>
+    <string name="washer_progress_error_refresh">Could not load wash progress. Please try again.</string>
+
+    <string name="washer_status_running">Washing</string>
+    <string name="washer_status_done">Completed</string>
+    <string name="washer_status_error">Ended abnormally</string>
+    <string name="washer_status_reserved">Awaiting payment</string>
+    <string name="washer_status_paid">Awaiting start</string>
+    <string name="washer_status_unknown">Unknown status</string>
+
+    <string name="washer_bill_section">Wash history</string>
+    <string name="washer_bill_summary">%1$d orders · ¥%2$s total</string>
+    <string name="washer_bill_loading">Loading wash history…</string>
+    <string name="washer_bill_empty">No wash records yet</string>
+    <string name="washer_bill_error">Could not load wash history. Please try again.</string>
+    <string name="washer_bill_load_more">Load more</string>
+    <string name="washer_bill_loading_more">Loading…</string>
+
+    <string name="washer_settings_title">Washer reminders</string>
+    <string name="washer_settings_reminder_title">Notify me when the wash finishes</string>
+    <string name="washer_settings_reminder_desc">Off by default</string>
+    <string name="washer_settings_polling_title">Check in the background</string>
+    <string name="washer_settings_polling_desc">Turn off to only check progress while the app is open — saves battery</string>
+    <string name="washer_settings_check_now">Check now</string>
+    <string name="washer_settings_check_ok">Wash progress updated</string>
+    <string name="washer_settings_check_idle">No washer order is running right now</string>
+    <string name="washer_settings_reminder_enabled_toast">Washer reminders turned on</string>
+    <string name="washer_settings_reminder_disabled_toast">Washer reminders turned off</string>
+    <string name="washer_settings_nudge">Want a reminder when the wash finishes? Turn it on here.</string>
+    <string name="washer_settings_nudge_action">Turn on</string>
+    <string name="washer_settings_need_notification">Notifications are blocked, so the wash-finished reminder cannot be delivered. Allow notifications for this app in system settings.</string>
+
+    <string name="washer_notification_channel_name">Wash finished</string>
+    <string name="washer_notification_channel_desc">Reminds you to collect your laundry when the wash finishes</string>
+    <string name="washer_notification_done_title">Your laundry is ready</string>
+    <string name="washer_notification_done_body">%1$s has finished — remember to collect your laundry</string>
+    <string name="washer_notification_error_title">The wash did not finish normally</string>
+    <string name="washer_notification_error_body">%1$s: %2$s</string>
+    <string name="washer_notification_unknown_machine">Washer</string>
 </resources>

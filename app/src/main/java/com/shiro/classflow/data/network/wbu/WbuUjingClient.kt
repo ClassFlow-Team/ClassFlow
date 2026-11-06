@@ -2,6 +2,7 @@ package com.shiro.classflow.data.network.wbu
 
 import android.content.Context
 import android.util.Log
+import com.shiro.classflow.data.model.wbu.WasherOrderSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -344,6 +345,15 @@ class WbuUjingClient(
     }
 
     /**
+     * 直接复用一份已有的 U净 token（后台轮询 / 页面刷新共用同一份会话）。
+     *
+     * 与 [connect] 的区别：不跑换票链路，只把 token 装上。过期由 401 重试兜底。
+     */
+    fun adoptSession(token: String) {
+        ujingToken = token
+    }
+
+    /**
      * 绑定扫码贴纸对应的取水点（服务主体）。
      */
     suspend fun bindWaterPoint(cd: String): WaterServiceSubject = withContext(Dispatchers.IO) {
@@ -680,6 +690,72 @@ class WbuUjingClient(
                 )
             }
         }.getOrNull()
+    }
+
+    /**
+     * 进行中的洗衣机订单（`GET orders/running`，washer-h5「我的订单」的进行中页签）。
+     *
+     * 没有进行中订单时服务端回空数组，不抛异常。
+     */
+    suspend fun fetchRunningWasherOrders(): List<WasherOrderSummary> = withContext(Dispatchers.IO) {
+        getOrderList("$UJING_API/$UJING_CLIENT_PATH/orders/running")
+    }
+
+    /**
+     * 已完成的洗衣机订单（`GET orders/history?page=&size=`）。
+     *
+     * 洗衣账单的数据源。分页从 **1** 开始（与 washer-h5 一致），不是 0。
+     */
+    suspend fun fetchWasherOrderHistory(
+        page: Int = 1,
+        size: Int = 20,
+    ): List<WasherOrderSummary> = withContext(Dispatchers.IO) {
+        getOrderList("$UJING_API/$UJING_CLIENT_PATH/orders/history?page=$page&size=$size")
+    }
+
+    /**
+     * 洗衣机订单详情（`GET orders/{orderId}/detail?orderId=`）。
+     *
+     * 进度页的权威数据源：列表接口不带 `remainTime` / `workTime`，详情才有。
+     * 订单不存在 / 不是自己的单时返 null（服务端 code 非 0）。
+     */
+    suspend fun fetchWasherOrderDetail(orderId: Long): WasherOrderSummary? = withContext(Dispatchers.IO) {
+        runCatching {
+            val req = Request.Builder()
+                .url("$UJING_API/$UJING_CLIENT_PATH/orders/$orderId/detail?orderId=$orderId")
+                .get()
+                .apply { ujHeaders("BO").forEach { (k, v) -> header(k, v) } }
+                .build()
+            httpClient.newCall(req).execute().use { resp ->
+                if (resp.code == 401 || resp.code == 403) {
+                    throw UjingApiException(resp.code, "U净 登录态已失效")
+                }
+                val bodyStr = resp.body?.string().orEmpty()
+                val json = JSONObject(bodyStr)
+                if (json.optInt("code") != 0) return@use null
+                WasherOrderParser.parseOrderDetail(bodyStr)
+            }
+        }.getOrNull()
+    }
+
+    /** 订单列表接口的公共部分：鉴权头 + 解析 + 401/403 抛业务异常。 */
+    private fun getOrderList(url: String): List<WasherOrderSummary> {
+        val req = Request.Builder()
+            .url(url)
+            .get()
+            .apply { ujHeaders("BO").forEach { (k, v) -> header(k, v) } }
+            .build()
+        httpClient.newCall(req).execute().use { resp ->
+            if (resp.code == 401 || resp.code == 403) {
+                throw UjingApiException(resp.code, "U净 登录态已失效")
+            }
+            val bodyStr = resp.body?.string().orEmpty()
+            val code = runCatching { JSONObject(bodyStr).optInt("code", -1) }.getOrDefault(-1)
+            if (code != 0) {
+                throw UjingApiException(code, "洗衣订单查询失败 (code=$code)")
+            }
+            return WasherOrderParser.parseOrderList(bodyStr)
+        }
     }
 
     /**

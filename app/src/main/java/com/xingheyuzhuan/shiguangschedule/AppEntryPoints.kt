@@ -2,6 +2,8 @@ package com.xingheyuzhuan.shiguangschedule
 
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseTableRepository
+import com.xingheyuzhuan.shiguangschedule.data.repository.WasherOrderRepository
+import com.xingheyuzhuan.shiguangschedule.service.WasherWatcher
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
@@ -14,4 +16,6 @@ import dagger.hilt.components.SingletonComponent
 interface AppEntryPoint {
     fun appSettingsRepository(): AppSettingsRepository
     fun courseTableRepository(): CourseTableRepository
+    fun washerOrderRepository(): WasherOrderRepository
+    fun washerWatcher(): WasherWatcher
 }

@@ -1,6 +1,7 @@
 package com.xingheyuzhuan.shiguangschedule
 
 import android.app.Application
+import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
@@ -10,6 +11,7 @@ import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
 import com.xingheyuzhuan.shiguangschedule.data.sync.SyncManager
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateChecker
+import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -59,6 +61,18 @@ class MyApplication : Application(), Configuration.Provider {
 
         // 创建并启动同步管理器（由 Hilt 注入后直接使用）
         syncManager.startAllSynchronizers()
+
+        // 洗衣提醒：进程重启后把周期轮询按当前设置补回来（开机 / 被系统杀掉都会走到这里）。
+        // 精确闹钟由 AlarmManager 自己保活，不需要重建；这里只保证「开关还是开的」时轮询不丢。
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                val watcher = EntryPointAccessors.fromApplication(
+                    this@MyApplication,
+                    AppEntryPoint::class.java
+                ).washerWatcher()
+                watcher.syncBackgroundSchedule()
+            }.onFailure { Log.w("MyApplication", "恢复洗衣提醒调度失败", it) }
+        }
 
         // 在应用启动时初始化离线仓库
         CoroutineScope(Dispatchers.IO).launch {

@@ -198,6 +198,9 @@ class MainActivity : AppCompatActivity() {
         /** 桌面快捷方式「付款码」入口 action（见 res/xml/shortcuts.xml）。 */
         const val ACTION_PAY_CODE = "com.xingheyuzhuan.shiguangschedule.action.PAY_CODE"
 
+        /** 洗衣完成通知的点击入口：直接落洗衣机页（进度 + 账单都在那）。 */
+        const val ACTION_WASHER_PROGRESS = "com.xingheyuzhuan.shiguangschedule.action.WASHER_PROGRESS"
+
         /**
          * 桌面快捷方式「某台吹风机」入口 action（每台机器一条动态快捷方式，见 `HairdryerShortcuts`）。
          *
@@ -452,6 +455,14 @@ class MainActivity : AppCompatActivity() {
         // 桌面快捷方式「付款码」：直接进原生取码页，跳过一卡通平台首页
         if (intent.action == ACTION_PAY_CODE) {
             pendingDeepLink.value = Destination.CampusCardPayCode
+            return
+        }
+
+        // 洗衣完成通知：落到洗衣机页（进度 + 账单都在那一页）
+        if (intent.action == ACTION_WASHER_PROGRESS) {
+            pendingDeepLink.value = Destination.CampusDeviceHub(
+                com.shiro.classflow.data.model.wbu.CampusDeviceKind.WASHER.name
+            )
             return
         }
 
