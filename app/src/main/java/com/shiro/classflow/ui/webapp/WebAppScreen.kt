@@ -328,6 +328,237 @@ private const val WX_STUB_JS = """
 """
 
 /**
+ * 缴费页（`/charge-app/`）的令牌兜底脚本（幂等，document 级）。
+ *
+ * 背景（真机 + 服务端直连实测）：点「立即缴费」报的 **「服务大厅未授权(1)」** 就是
+ * `blade-pay/pay` 返回的 `401 {"code":4030}`，触发条件只有一个 —— 请求头
+ * `synjones-auth` 后面**没有有效令牌**（空值、缺失、双重前缀、被篡改，四种情况都复现成 4030）。
+ * 而 App 自己保存的 access_token 是有效的（同一个 token 直连该接口能通过鉴权）。
+ *
+ * 令牌为什么会丢：`charge-app` 的 `getToken()` 从地址栏读 `token` / `synjones-auth`
+ * 塞进 Vuex 后，**立刻 `history.replaceState` 把 query 抹掉**，令牌从此只存在内存里。
+ * 之后任何一个接口返回 401，页面的响应拦截器会 `LogoutAction` 把 store 清空，
+ * 而请求拦截器仍然机械地拼 `"bearer " + store.token` —— 拼出来就是 `bearer `，
+ * 于是缴费请求被 4030 拒掉。更糟的是 `ge()` 的 `.catch` 只 `console.error`，
+ * 不调失败回调，所以按钮 loading 永远停不下来、也不弹提示，看起来像「卡住」。
+ *
+ * 因此这里做两件事，都是**只在页面自己没给出有效令牌时**才介入：
+ * 1. 把地址栏里的令牌（以及 Kotlin 侧传入的 `platformToken`）落到 `sessionStorage`，
+ *    页面抹 query 之后还能捞回来；
+ * 2. 接管 `XMLHttpRequest` 的 `setRequestHeader` / `send`：页面设的 `synjones-auth`
+ *    先扣下，值有效就原样发出（绝不叠加，避免变成 `bearer A, bearer B`），
+ *    空值或缺失才补上我们手里的令牌。
+ *
+ * `Authorization: Basic …` 由页面拦截器自己加，这里不碰。
+ */
+private const val CHARGE_APP_PAY_TOKEN_JS_TEMPLATE = """
+(function () {
+  if (window.__cfPayTokenHook) return;
+  window.__cfPayTokenHook = true;
+
+  var HOST = 'yktfwpt.wbu.edu.cn';
+  var KEY = 'cf_pay_token';
+  var BAKED = __CF_PAY_TOKEN_LITERAL__;
+
+  function norm(v) {
+    if (v === null || v === undefined) return '';
+    var s = String(v);
+    try { s = decodeURIComponent(s); } catch (e) {}
+    // 循环剥前缀：页面 store 里万一存的是带 "bearer " 的值，拦截器会再拼一层，
+    // 变成 "bearer bearer …"（服务端同样回 4030）。这里剥到只剩裸令牌为止。
+    for (var i = 0; i < 4; i++) {
+      var next = s.replace(/^\s*bearer\s+/i, '').trim();
+      if (next === s) break;
+      s = next;
+    }
+    s = s.trim();
+    // 页面 store 被清空后，请求拦截器会机械地拼出 "bearer null" / "bearer undefined"；
+    // 这种值非空但同样会被服务端判成 4030，必须当成「没有令牌」。
+    if (/^(bearer|null|undefined|NaN)$/i.test(s)) return '';
+    return s;
+  }
+
+  function queryValue(name) {
+    try {
+      var q = window.location.search || '';
+      if (!q && window.location.hash && window.location.hash.indexOf('?') > -1) {
+        q = window.location.hash.substring(window.location.hash.indexOf('?'));
+      }
+      if (!q) return '';
+      var parts = q.replace(/^\?/, '').split('&');
+      for (var i = 0; i < parts.length; i++) {
+        var eq = parts[i].indexOf('=');
+        if (eq < 0) continue;
+        if (parts[i].substring(0, eq) === name) return parts[i].substring(eq + 1);
+      }
+    } catch (e) {}
+    return '';
+  }
+
+  function stored() {
+    try { return sessionStorage.getItem(KEY) || ''; } catch (e) { return ''; }
+  }
+
+  function remember(v) {
+    var t = norm(v);
+    if (!t) return '';
+    window.__cfPayToken = t;
+    // 只存我们自己的键，**不动页面自己的 sessionStorage 键**（`access_token_pay`）。
+    // 页面 `Logout` mutation 里有 `sessionStorage.clear()`，那是它主动登出；
+    // 我们若把令牌写回去，会让登出永远不生效（还可能形成 401 → 登出 → 复活 → 401 的死循环）。
+    // 令牌只在真正要发缴费请求时由 send()/fetch 现取现用，够用了。
+    try { sessionStorage.setItem(KEY, t); } catch (e) {}
+    return t;
+  }
+
+  function capture() {
+    var t = norm(queryValue('token')) || norm(queryValue('synjones-auth'));
+    if (t) return remember(t);
+    return '';
+  }
+
+  function currentToken() {
+    var t = norm(window.__cfPayToken) || norm(stored()) || capture() || norm(BAKED);
+    if (t) remember(t);
+    return t;
+  }
+
+  function isPayUrl(url) {
+    if (!url) return false;
+    var u = String(url);
+    return u.indexOf('/blade-pay/') > -1 || u.indexOf('/blade-auth/') > -1;
+  }
+
+  function sameHost(url) {
+    if (!url) return false;
+    var u = String(url);
+    if (u.indexOf('//') < 0) return true;
+    return u.indexOf(HOST) > -1;
+  }
+
+  capture();
+
+  // 供 Kotlin 侧在每次 SPA 路由变化时调用：页面抹 query 的时机不确定，
+  // 每次回调都试着从地址栏再捞一次（捞到就是最新的，捞不到就保持已有值）。
+  window.__cfPayCapture = function () {
+    var t = capture();
+    if (t) remember(t);
+    return t;
+  };
+  window.__cfPayCurrent = currentToken;
+
+  var rawSetHeader = XMLHttpRequest.prototype.setRequestHeader;
+  var rawOpen = XMLHttpRequest.prototype.open;
+  var rawSend = XMLHttpRequest.prototype.send;
+
+  XMLHttpRequest.prototype.open = function (method, url) {
+    try { this.__cfUrl = url; this.__cfAuthValue = null; } catch (e) {}
+    return rawOpen.apply(this, arguments);
+  };
+
+  // **关键：不能在这里把页面设的头放行后再补一次。**
+  // 浏览器会把同名头合并成 `bearer <A>, bearer <B>`（实测长度 1242 = 两份 620 字符），
+  // 服务端判 4030「服务大厅未授权(1)」—— 这正是 2026-11-06 真机上「明明带了 token 却报未授权」的根因。
+  //
+  // 所以策略是：页面设的 synjones-auth **当场规范化并扣下**，绝不原样发出；
+  // 由 send() 统一补发唯一的一份。非缴费接口也照常发（否则账单接口会全挂）。
+  XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+    try {
+      if (String(name).toLowerCase() === 'synjones-auth') {
+        this.__cfAuthValue = value;
+        // 缴费接口：先扣下，send() 里统一发一份规范化后的值
+        if (isPayUrl(this.__cfUrl) && sameHost(this.__cfUrl)) return;
+        // 其它接口：把页面的值规范化后原样发出（保持只有一个值）
+        var own = norm(value);
+        if (own) return rawSetHeader.call(this, 'synjones-auth', 'bearer ' + own);
+        return; // 页面给的是空值/null，就不带这个头，交给服务端按未登录处理
+      }
+    } catch (e) {}
+    return rawSetHeader.apply(this, arguments);
+  };
+
+  XMLHttpRequest.prototype.send = function () {
+    try {
+      var pay = isPayUrl(this.__cfUrl) && sameHost(this.__cfUrl);
+      if (pay) {
+        // 页面值有效就用它的令牌，否则用我们手里的兜底。
+        // 无论哪种情况这里**只设一次**，因此不会出现双值。
+        var pageToken = norm(this.__cfAuthValue);
+        var finalToken = pageToken || currentToken();
+        if (finalToken) rawSetHeader.call(this, 'synjones-auth', 'bearer ' + finalToken);
+      }
+    } catch (e) {}
+    return rawSend.apply(this, arguments);
+  };
+
+  if (window.fetch && window.Headers) {
+    var rawFetch = window.fetch;
+    window.fetch = function (input, init) {
+      try {
+        var url = typeof input === 'string' ? input : (input && input.url);
+        init = init || {};
+        var headers = new Headers(init.headers || (input && input.headers) || undefined);
+        var own = norm(headers.get('synjones-auth'));
+        if (isPayUrl(url) && sameHost(url)) {
+          // 缴费：规范化成单值（页面值有效就用，否则兜底）
+          var finalToken = own || currentToken();
+          if (finalToken) headers.set('synjones-auth', 'bearer ' + finalToken);
+          else headers.delete('synjones-auth');
+          init.headers = headers;
+        } else if (headers.has('synjones-auth')) {
+          // 其它接口：也统一成单值，去掉可能存在的多重前缀
+          if (own) headers.set('synjones-auth', 'bearer ' + own);
+          else headers.delete('synjones-auth');
+          init.headers = headers;
+        }
+      } catch (e) {}
+      return rawFetch.apply(this, arguments);
+    };
+  }})();
+"""
+
+/**
+ * 生成缴费页令牌兜底脚本，把 Kotlin 侧拿到的平台令牌烘进去。
+ *
+ * 页面 `getToken()` 会在应用启动早期就把地址栏 query 抹掉，`onPageFinished` 再注入时
+ * 往往已经读不到 URL 里的令牌；`platformToken` 是容器自己换到的有效 access_token，
+ * 因此作为最后一道兜底（见 [CHARGE_APP_PAY_TOKEN_JS_TEMPLATE]）。
+ *
+ * 转义走 [quoteJsStringLiteral] 而不是 `JSONObject.quote`：后者在 JVM 单元测试里
+ * 是 not-mocked 的桩（抛 RuntimeException），会让这套回归测试没法跑。
+ */
+internal fun buildChargeAppPayTokenJs(platformToken: String?): String =
+    CHARGE_APP_PAY_TOKEN_JS_TEMPLATE.replace(
+        "__CF_PAY_TOKEN_LITERAL__",
+        quoteJsStringLiteral(platformToken.orEmpty())
+    )
+
+/**
+ * 把字符串转成可直接嵌进 JS 的双引号字面量。
+ *
+ * 只处理会破坏字面量的字符（反斜杠、双引号、换行、回车、制表符、行分隔符），
+ * 其余原样保留 —— 令牌是 Base64URL 字符集，本身不含这些。
+ */
+internal fun quoteJsStringLiteral(raw: String): String {
+    val sb = StringBuilder(raw.length + 2)
+    sb.append('"')
+    for (ch in raw) {
+        when (ch) {
+            '\\' -> sb.append("\\\\")
+            '"' -> sb.append("\\\"")
+            '\n' -> sb.append("\\n")
+            '\r' -> sb.append("\\r")
+            '\t' -> sb.append("\\t")
+            '\u2028' -> sb.append("\\u2028")
+            '\u2029' -> sb.append("\\u2029")
+            else -> sb.append(ch)
+        }
+    }
+    sb.append('"')
+    return sb.toString()
+}
+
+/**
  * lifeService 页面返回箭头的兜底脚本（幂等，document 级）。
  *
  * 背景（真机实测）：2-3 栋洗浴（`/applications/lifeService`）的顶栏返回箭头点了没反应 ——
@@ -1066,6 +1297,19 @@ private fun isCampusCardPaymentUrl(url: String?): Boolean {
     return path.startsWith("/charge-app") || path.startsWith("/blade-pay")
 }
 
+/**
+ * 是否是一卡通缴费 SPA（`/charge-app/`）。
+ *
+ * 与 [isCampusCardPaymentUrl] 分开：那个还包含 `/blade-pay` 这个**接口**前缀，
+ * 而令牌兜底脚本只该装到页面上（接口请求由页面自己发）。
+ */
+internal fun isCampusCardChargeAppUrl(url: String?): Boolean {
+    if (url.isNullOrBlank()) return false
+    val httpUrl = url.toHttpUrlOrNull() ?: return false
+    if (!httpUrl.host.equals("yktfwpt.wbu.edu.cn", ignoreCase = true)) return false
+    return httpUrl.encodedPath.startsWith("/charge-app")
+}
+
 /** `SynJSNative` 协议里「页面要求关闭自己」的主键（1 栋控水的「‹ 主页」按钮）。 */
 internal const val PAGE_BACK_POP_KEY = "synjones.ecampus.window.pop"
 
@@ -1681,6 +1925,20 @@ private fun FullScreenWebContent(
                  * shouldOverrideUrlLoading 里调用——该回调中修改 userAgentString 后返回 false
                  * 会让当前这次跳转被 WebView 直接取消（表现为点应用图标没反应）。
                  */
+                /**
+                 * 根据主框架 URL 在「SynATP 移动 UA」与「桌面/H5 UA」之间切换。
+                 *
+                 * 一卡通缴费页 (/charge-app/) 必须使用 H5 UA：支付网关会按 UA 判定官方移动端模块，
+                 * Android UA 会返回 4030「安卓模块未授权(12)」。其余页面保留移动 UA 以免影响原生扫码
+                 * （平台首页靠 `SynATP E-Mobile` 解锁 `em.scanQRCode`，绝不能把桌面 UA 带过去）。
+                 *
+                 * 注意：只能在 onPageStarted / onPageFinished 中调用，绝不能在
+                 * shouldOverrideUrlLoading 里调用——该回调中修改 userAgentString 后返回 false
+                 * 会让当前这次跳转被 WebView 直接取消（表现为点应用图标没反应）。
+                 * 更不能在 doUpdateVisitedHistory 里调用：缴费页 SPA 的 `replaceState`
+                 * （抹掉地址栏令牌那一步）也会回调那里，此刻改 UA 会打断正在进行的缴费请求
+                 * （见 [CHARGE_APP_PAY_TOKEN_JS_TEMPLATE] 的根因说明）。
+                 */
                 private fun applyCampusCardUserAgent(view: WebView?, url: String?) {
                     if (!enableScanBridge || url.isNullOrBlank()) return
                     val useDesktop = isCampusCardPaymentUrl(url)
@@ -1689,6 +1947,24 @@ private fun FullScreenWebContent(
                         Log.i("WebAppScreen", "Switch UA for $url -> ${if (useDesktop) "desktop" else "mobile"}")
                         view?.settings?.userAgentString = desired
                     }
+                }
+
+                /**
+                 * 给缴费页补装令牌兜底脚本（幂等）。
+                 *
+                 * 只在 `/charge-app/` 上装：其它页面（`/plat/`、`/campus-card/`）的令牌链路
+                 * 本来正常，不该被我们改写请求头。脚本内部还会再判一次「只在 `/blade-pay/`、
+                 * `/blade-auth/` 且页面自己没给出有效令牌时」才补。
+                 */
+                private fun injectChargeAppPayToken(view: WebView?, url: String?) {
+                    if (!enableScanBridge || !isCampusCardChargeAppUrl(url)) return
+                    view?.evaluateJavascript(buildChargeAppPayTokenJs(platformToken), null)
+                    // 脚本本身是幂等的（装过一次就不再装），所以每次回调再显式触发一次
+                    // 「从地址栏捞令牌」：页面抹 query 的时机不确定，捞到就更新，捞不到保持原值。
+                    view?.evaluateJavascript(
+                        "(function(){try{if(window.__cfPayCapture)window.__cfPayCapture();}catch(e){}})();",
+                        null
+                    )
                 }
 
                 /**
@@ -1908,6 +2184,8 @@ private fun FullScreenWebContent(
                     // 页面刚上手就换成修好的地址（修好的地址不会再触发，不会成环）
                     if (repairUrlIfNeeded(view, url)) return
                     applyCampusCardUserAgent(view, url)
+                    // 缴费页令牌兜底尽早装上：页面 getToken() 在启动早期就会抹掉地址栏 query
+                    injectChargeAppPayToken(view, url)
                     // 定位接管脚本尽早装上（幂等）：页面在 load 阶段就定位的也别漏
                     injectGeolocationShim(view)
                     // 门户：把 window.open 改成当前窗口跳转（幂等），否则点应用可能毫无反应
@@ -1945,7 +2223,9 @@ private fun FullScreenWebContent(
                         reloadingAfterError = false
                     }
                     applyCampusCardUserAgent(view, url)
-                    // 定位接管脚本兜底再装一次（部分机型 onPageStarted 时 JS 上下文尚未就绪）
+                    // 缴费页令牌兜底再装一次（部分机型 onPageStarted 时 JS 上下文尚未就绪；
+                    // 页面也可能在这一轮里已经抹掉了地址栏令牌）
+                    injectChargeAppPayToken(view, url)
                     injectGeolocationShim(view)
                     // lifeService 返回兜底同理再装一次（部分机型 onPageStarted 时 JS 上下文尚未就绪）
                     if (isLifeServiceBackShimTarget(url)) {
@@ -1993,8 +2273,12 @@ private fun FullScreenWebContent(
 
                 override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
                     super.doUpdateVisitedHistory(view, url, isReload)
-                    // SPA 内部 pushState/replaceState 也会回调这里，确保缴费页始终使用 H5 UA
-                    applyCampusCardUserAgent(view, url)
+                    // SPA 内部 pushState/replaceState 会回调这里。这里**不改 UA**：
+                    // 页面抹掉地址栏令牌用的正是 replaceState，此刻改 userAgentString 会打断
+                    // 正在进行的缴费请求（详见 applyCampusCardUserAgent 的说明）。
+                    // 反过来，这里是最该补注入的时机：页面刚要把 query 里的令牌抹掉，
+                    // 让兜底脚本抢在它前面把令牌落到 sessionStorage。
+                    injectChargeAppPayToken(view, url)
                 }
 
                 override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
