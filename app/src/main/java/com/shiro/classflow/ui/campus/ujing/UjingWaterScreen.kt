@@ -48,6 +48,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -150,7 +151,9 @@ fun UjingWaterScreen(
                     is UjingWaterUiStage.Finished -> {
                         FinishedView(
                             stage = stage,
+                            settleNotice = uiState.settleNotice,
                             onRepeat = { viewModel.restart(cd) },
+                            onSettle = viewModel::settleCurrentOrder,
                             onDone = {
                                 UjingWaterViewModel.clearSession()
                                 navBridge.popBackStack()
@@ -167,8 +170,11 @@ fun UjingWaterScreen(
                             message = stage.message,
                             canRetry = stage.canRetry,
                             offerWebVpnOnce = stage.offerWebVpnOnce,
+                            unpaidBlocksOrder = stage.unpaidBlocksOrder,
+                            settleNotice = uiState.settleNotice,
                             onRetry = viewModel::retry,
                             onRetryWithWebVpnOnce = viewModel::retryWithWebVpnOnce,
+                            onSettleAndRetry = viewModel::settleThenRetry,
                             onExit = {
                                 UjingWaterViewModel.clearSession()
                                 navBridge.popBackStack()
@@ -320,13 +326,16 @@ private fun ActiveDispensingView(
 @Composable
 private fun FinishedView(
     stage: UjingWaterUiStage.Finished,
+    settleNotice: WaterUnpaidNotice?,
     onRepeat: () -> Unit,
+    onSettle: () -> Unit,
     onDone: () -> Unit,
     onContinueScan: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -362,6 +371,10 @@ private fun FinishedView(
                 InfoRow(label = stringResource(R.string.ujing_water_pay_type), value = stage.detail.payTypeName ?: stringResource(R.string.label_campus_card_quick_pay))
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        UnpaidNoticeCard(notice = settleNotice, onSettle = onSettle)
 
         Spacer(modifier = Modifier.height(32.dp))
 
@@ -411,7 +424,10 @@ private fun ErrorView(
     onRetry: () -> Unit,
     onExit: () -> Unit,
     offerWebVpnOnce: Boolean = false,
-    onRetryWithWebVpnOnce: () -> Unit = {}
+    onRetryWithWebVpnOnce: () -> Unit = {},
+    unpaidBlocksOrder: Boolean = false,
+    settleNotice: WaterUnpaidNotice? = null,
+    onSettleAndRetry: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -441,6 +457,17 @@ private fun ErrorView(
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(24.dp))
+
+        // 欠费挡着下单：重试没用，先把账结清
+        if (unpaidBlocksOrder) {
+            UnpaidNoticeCard(notice = settleNotice, onSettle = onSettleAndRetry)
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = onSettleAndRetry, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.action_settle_and_retry))
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onExit) {
                 Text(stringResource(R.string.action_exit))
@@ -458,6 +485,112 @@ private fun ErrorView(
                 Text(stringResource(R.string.action_use_webvpn_once))
             }
         }
+    }
+}
+
+/**
+ * 欠费单的状态卡片：**已自动补缴** / **没动账，原因是什么**。
+ *
+ * 刻意做成一张安静的小卡片而不是红色错误：水已经取到了（或者马上就能取），
+ * 这里说的是钱的事，不该把整页变成「失败」。
+ */
+@Composable
+private fun UnpaidNoticeCard(
+    notice: WaterUnpaidNotice?,
+    onSettle: () -> Unit
+) {
+    if (notice == null) return
+    val isSettled = notice is WaterUnpaidNotice.Settled
+    val amount = when (notice) {
+        is WaterUnpaidNotice.Settled -> notice.amount
+        is WaterUnpaidNotice.Unsettled -> notice.amount
+    }
+    val orderNo = when (notice) {
+        is WaterUnpaidNotice.Settled -> notice.orderNo
+        is WaterUnpaidNotice.Unsettled -> notice.orderNo
+    }
+
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSettled) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+            } else {
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+            }
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = stringResource(R.string.ujing_water_unpaid_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            InfoRow(
+                label = stringResource(R.string.ujing_water_unpaid_amount),
+                value = "¥ ${String.format("%.2f", amount)}"
+            )
+            orderNo?.let {
+                InfoRow(label = stringResource(R.string.ujing_water_order_no), value = it)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            when (notice) {
+                is WaterUnpaidNotice.Settled -> {
+                    Text(
+                        text = stringResource(R.string.ujing_water_auto_settled, String.format("%.2f", notice.amount)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                is WaterUnpaidNotice.Unsettled -> {
+                    Text(
+                        text = unsettledReasonText(notice),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    // 只有「服务端拒绝 / 请求失败」值得让用户再点一次；
+                    // 关着开关、非一卡通、缺订单号这三种，再点也是同样结果。
+                    if (notice.reason == WaterUnpaidReason.SERVER_REJECTED ||
+                        notice.reason == WaterUnpaidReason.REQUEST_FAILED
+                    ) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(onClick = onSettle) {
+                            Text(stringResource(R.string.action_settle_now))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 没结成的那句人话（服务端原话优先）。 */
+@Composable
+private fun unsettledReasonText(notice: WaterUnpaidNotice.Unsettled): String {
+    val appContext = LocalContext.current
+    return when (notice.reason) {
+        WaterUnpaidReason.AUTO_SETTLE_DISABLED ->
+            stringResource(R.string.ujing_water_unpaid_auto_disabled)
+
+        WaterUnpaidReason.NOT_SMART_CARD ->
+            stringResource(
+                R.string.ujing_water_unpaid_not_smart_card,
+                notice.serverMessage ?: appContext.getString(R.string.label_campus_card_quick_pay)
+            )
+
+        WaterUnpaidReason.NO_ORDER_NO ->
+            stringResource(R.string.ujing_water_unpaid_no_order_no)
+
+        WaterUnpaidReason.SERVER_REJECTED, WaterUnpaidReason.REQUEST_FAILED ->
+            stringResource(
+                R.string.ujing_water_settle_failed,
+                notice.serverMessage ?: appContext.getString(R.string.err_unpaid_water_order)
+            )
     }
 }
 

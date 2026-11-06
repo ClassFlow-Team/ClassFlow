@@ -14,9 +14,12 @@ import com.shiro.classflow.data.network.wbu.WbuAuthTransport
 import com.shiro.classflow.data.network.wbu.WbuCampusCardClient
 import com.shiro.classflow.data.network.wbu.WbuFailureDetector
 import com.shiro.classflow.data.network.wbu.WbuSessionExpiredException
+import com.shiro.classflow.data.network.wbu.UjingPayFlag
 import com.shiro.classflow.data.network.wbu.WbuUjingClient
 import com.shiro.classflow.data.network.wbu.directChannelTrouble
+import com.shiro.classflow.data.network.wbu.isOutstanding
 import com.shiro.classflow.data.network.wbu.needsRelogin
+import com.shiro.classflow.data.network.wbu.pickOutstandingOrder
 import com.shiro.classflow.data.model.wbu.CampusDeviceEntry
 import com.shiro.classflow.data.model.wbu.CampusDeviceKind
 import com.xingheyuzhuan.shiguangschedule.data.repository.CampusDeviceHubRepository
@@ -59,14 +62,64 @@ sealed interface UjingWaterUiStage {
          * 只在「直连这条通道走不通」时出现：被校外 WAF 拦（[com.shiro.classflow.data.network.wbu.WafBlockedException]）
          * 或一个响应都没拿到。会话过期不给 —— 那种情况该重新登录，换通道只会再撞一次。
          */
-        val offerWebVpnOnce: Boolean = false
+        val offerWebVpnOnce: Boolean = false,
+        /**
+         * 这次失败是不是「有未支付订单挡着」（服务端 `1532`）。
+         *
+         * 是的话页面多给一个「先结清再试」的按钮 —— 重试本身没用，账不结清永远下不了单。
+         */
+        val unpaidBlocksOrder: Boolean = false
     ) : UjingWaterUiStage
+}
+
+/**
+ * 欠费单的处理结果（取水页展示用）。
+ *
+ * 与「取水」本身解耦：水可能已经取完了，只是钱没结清 —— 那种情况不该掉进 [UjingWaterUiStage.Error]。
+ */
+sealed interface WaterUnpaidNotice {
+    /** 已经替用户自动补缴成功。 */
+    data class Settled(val amount: Double, val orderNo: String?) : WaterUnpaidNotice
+
+    /** 查到了欠费，但没动账（开关关着 / 不是一卡通直扣 / 服务端拒绝 / 网络不通）。 */
+    data class Unsettled(
+        val amount: Double,
+        val orderNo: String?,
+        val reason: WaterUnpaidReason,
+        /** 服务端原话（有的话），比我们自己的兜底文案更有用。 */
+        val serverMessage: String? = null
+    ) : WaterUnpaidNotice
+}
+
+/** 为什么没替用户把这笔账结掉。 */
+enum class WaterUnpaidReason {
+    /** 「自动补缴饮水欠费」开关关着。 */
+    AUTO_SETTLE_DISABLED,
+
+    /** 这单不是一卡通直扣（微信 / 支付宝 / 云闪付 / 电子账户），我们起不来对应的钱包。 */
+    NOT_SMART_CARD,
+
+    /** 订单没有 `orderNo`，没法结。 */
+    NO_ORDER_NO,
+
+    /** 服务端拒绝了补缴。 */
+    SERVER_REJECTED,
+
+    /** 请求本身没成功（网络 / 会话）。 */
+    REQUEST_FAILED,
 }
 
 data class UjingWaterUiState(
     val stage: UjingWaterUiStage = UjingWaterUiStage.Splash,
     val cd: String = "",
-    val needLogin: Boolean = false
+    val needLogin: Boolean = false,
+    /**
+     * 最近一次「欠费单」的处理结果（自动补缴成功 / 没动账的原因）。
+     *
+     * 与 [stage] 平行而不是塞进某个阶段：这件事可能在**取水前**发生（拦住了下单），
+     * 也可能在**取水后**发生（水取完了钱没扣到），两者都要在页面上说得清楚。
+     */
+    val settleNotice: WaterUnpaidNotice? = null
 )
 
 @HiltViewModel
@@ -132,6 +185,228 @@ class UjingWaterViewModel @Inject constructor(
     private var autoTunnelTried: Boolean = false
 
     /**
+     * 本次页面生命周期里已经尝试过补缴的订单（按 `orderNo` 去重）。
+     *
+     * 只自动试一次：补缴失败多半是「这单就不该由我们扣」（余额不足 / 卡状态异常 /
+     * 不是一卡通），反复重试既不会成功，还会在服务端留下连串失败记录。
+     */
+    private val attemptedSettles = mutableSetOf<String>()
+
+    /**
+     * 订单已经到终态、但这一单本身还欠着钱时，把它结掉。
+     *
+     * 与 [settleOutstandingOrder] 的区别：这里**认的是手上这一单**（不看列表），
+     * 因为它是刚取完水的订单，优先结它天经地义，不必去猜账号下哪一单最该先付。
+     *
+     * @return 结清后重新拉到的详情（供完成页显示真实扣费）；没动账或失败返回 null，
+     *   调用方沿用原详情 —— 水已经取完了，不能因为付不了款把页面变成错误页。
+     */
+    private suspend fun settleOrderIfUnpaid(
+        detail: WbuUjingClient.WaterOrderDetail,
+        force: Boolean = false,
+    ): WbuUjingClient.WaterOrderDetail? {
+        if (!UjingPayFlag.from(detail.payFlag).isOutstanding(detail.payPrice)) return null
+
+        val app = getApplication<Application>()
+        if (!force && !WbuAuthTransport.isAutoSettleWaterUnpaidEnabled(app)) {
+            _uiState.update {
+                it.copy(
+                    settleNotice = WaterUnpaidNotice.Unsettled(
+                        amount = detail.payPrice,
+                        orderNo = detail.orderNo,
+                        reason = WaterUnpaidReason.AUTO_SETTLE_DISABLED,
+                    )
+                )
+            }
+            return null
+        }
+
+        if (detail.waterForceSmartCard != 1) {
+            _uiState.update {
+                it.copy(
+                    settleNotice = WaterUnpaidNotice.Unsettled(
+                        amount = detail.payPrice,
+                        orderNo = detail.orderNo,
+                        reason = WaterUnpaidReason.NOT_SMART_CARD,
+                        serverMessage = detail.payModeName,
+                    )
+                )
+            }
+            return null
+        }
+
+        val orderNo = detail.orderNo
+        if (orderNo.isNullOrBlank()) return null
+        if (!attemptedSettles.add(orderNo) && !force) return null
+
+        return try {
+            ujingClient.settleWaterOrder(orderNo)
+            Log.i(TAG, "终态订单 $orderNo 已补缴（¥${detail.payPrice}）")
+            _uiState.update {
+                it.copy(
+                    settleNotice = WaterUnpaidNotice.Settled(
+                        amount = detail.payPrice,
+                        orderNo = orderNo,
+                    )
+                )
+            }
+            // 重新拉一次：完成页要显示真实的扣费金额与「已支付」
+            runCatching { ujingClient.fetchOrderDetail(detail.orderId) }.getOrNull()
+        } catch (e: WbuUjingClient.UjingApiException) {
+            Log.w(TAG, "终态订单补缴被拒: $orderNo / ${e.code} ${e.message}")
+            _uiState.update {
+                it.copy(
+                    settleNotice = WaterUnpaidNotice.Unsettled(
+                        amount = detail.payPrice,
+                        orderNo = orderNo,
+                        reason = WaterUnpaidReason.SERVER_REJECTED,
+                        serverMessage = e.message,
+                    )
+                )
+            }
+            null
+        } catch (e: Exception) {
+            Log.w(TAG, "终态订单补缴失败: $orderNo", e)
+            _uiState.update {
+                it.copy(
+                    settleNotice = WaterUnpaidNotice.Unsettled(
+                        amount = detail.payPrice,
+                        orderNo = orderNo,
+                        reason = WaterUnpaidReason.REQUEST_FAILED,
+                        serverMessage = e.message,
+                    )
+                )
+            }
+            null
+        }
+    }
+
+    /**
+     * 把账号名下**最近一笔欠费**结掉（如果它是一卡通直扣、且开关开着）。
+     *
+     * 为什么是账号级、不按设备：U净 一个账号同时只允许一个出水点，欠着一单就会挡住
+     * 下一次下单 —— 用户站在 3 号楼的机器前，也该把昨天在南 B 欠的那一单结掉。
+     *
+     * 全程**不抛异常、不阻塞取水**：查不到列表、网络不通、服务端拒绝，都只是记一条
+     * [WaterUnpaidNotice]，把决定权留给用户。返回是否真的结清了一单。
+     *
+     * @param force 忽略「本次已尝试过」的去重（用户点「先结清再试」时用）。
+     */
+    private suspend fun settleOutstandingOrder(force: Boolean = false): Boolean {
+        val app = getApplication<Application>()
+        if (!force && !WbuAuthTransport.isAutoSettleWaterUnpaidEnabled(app)) return false
+
+        val outstanding = try {
+            val orders = ujingClient.listWaterOrders(skip = 0, limit = 20)
+            pickOutstandingOrder(
+                orders = orders,
+                payFlag = { it.payFlag },
+                payPrice = { it.payPrice },
+            )
+        } catch (e: Exception) {
+            // 查不到就当没有：这一步是锦上添花，不能因为它让取水失败
+            Log.w(TAG, "查询欠费订单失败，跳过自动补缴", e)
+            return false
+        } ?: return false
+
+        val orderKey = outstanding.orderNo ?: outstanding.orderId.toString()
+        if (!attemptedSettles.add(orderKey) && !force) {
+            Log.d(TAG, "欠费单 $orderKey 本次已尝试过补缴，跳过")
+            return false
+        }
+
+        // 列表项没有 waterForceSmartCard，得再查一次详情才知道能不能一卡通直扣
+        val detail = try {
+            ujingClient.fetchOrderDetail(outstanding.orderId)
+        } catch (e: Exception) {
+            Log.w(TAG, "查询欠费单详情失败: $orderKey", e)
+            _uiState.update {
+                it.copy(
+                    settleNotice = WaterUnpaidNotice.Unsettled(
+                        amount = outstanding.payPrice,
+                        orderNo = outstanding.orderNo,
+                        reason = WaterUnpaidReason.REQUEST_FAILED,
+                        serverMessage = e.message,
+                    )
+                )
+            }
+            return false
+        }
+
+        // 详情可能显示它其实已经结清了（列表有延迟）：那就什么都不做
+        if (!UjingPayFlag.from(detail.payFlag).isOutstanding(detail.payPrice)) return false
+
+        if (detail.waterForceSmartCard != 1) {
+            Log.i(TAG, "欠费单 $orderKey 不是一卡通直扣（waterForceSmartCard=${detail.waterForceSmartCard}），不自动补缴")
+            _uiState.update {
+                it.copy(
+                    settleNotice = WaterUnpaidNotice.Unsettled(
+                        amount = detail.payPrice,
+                        orderNo = detail.orderNo,
+                        reason = WaterUnpaidReason.NOT_SMART_CARD,
+                        serverMessage = detail.payModeName,
+                    )
+                )
+            }
+            return false
+        }
+
+        val orderNo = detail.orderNo
+        if (orderNo.isNullOrBlank()) {
+            _uiState.update {
+                it.copy(
+                    settleNotice = WaterUnpaidNotice.Unsettled(
+                        amount = detail.payPrice,
+                        orderNo = null,
+                        reason = WaterUnpaidReason.NO_ORDER_NO,
+                    )
+                )
+            }
+            return false
+        }
+
+        return try {
+            ujingClient.settleWaterOrder(orderNo)
+            Log.i(TAG, "已自动补缴欠费单 $orderNo（¥${detail.payPrice}）")
+            _uiState.update {
+                it.copy(
+                    settleNotice = WaterUnpaidNotice.Settled(
+                        amount = detail.payPrice,
+                        orderNo = orderNo,
+                    )
+                )
+            }
+            true
+        } catch (e: WbuUjingClient.UjingApiException) {
+            Log.w(TAG, "补缴被服务端拒绝: $orderNo / ${e.code} ${e.message}")
+            _uiState.update {
+                it.copy(
+                    settleNotice = WaterUnpaidNotice.Unsettled(
+                        amount = detail.payPrice,
+                        orderNo = orderNo,
+                        reason = WaterUnpaidReason.SERVER_REJECTED,
+                        serverMessage = e.message,
+                    )
+                )
+            }
+            false
+        } catch (e: Exception) {
+            Log.w(TAG, "补缴请求失败: $orderNo", e)
+            _uiState.update {
+                it.copy(
+                    settleNotice = WaterUnpaidNotice.Unsettled(
+                        amount = detail.payPrice,
+                        orderNo = orderNo,
+                        reason = WaterUnpaidReason.REQUEST_FAILED,
+                        serverMessage = e.message,
+                    )
+                )
+            }
+            false
+        }
+    }
+
+    /**
      * 启动饮水机扫码出水全流程。
      */
     fun start(cd: String) {
@@ -161,7 +436,9 @@ class UjingWaterViewModel @Inject constructor(
         hasStarted = true
         autoTunnelTried = false
         currentCd = trimmed
-        _uiState.update { it.copy(cd = currentCd, stage = UjingWaterUiStage.Splash, needLogin = false) }
+        _uiState.update {
+            it.copy(cd = currentCd, stage = UjingWaterUiStage.Splash, needLogin = false, settleNotice = null)
+        }
 
         viewModelScope.launch {
             // 开场过场动画保持 800ms
@@ -178,7 +455,10 @@ class UjingWaterViewModel @Inject constructor(
         stopStatusWatch()
         hasStarted = false
         autoTunnelTried = false
-        _uiState.update { it.copy(stage = UjingWaterUiStage.Splash, needLogin = false) }
+        attemptedSettles.clear()
+        _uiState.update {
+            it.copy(stage = UjingWaterUiStage.Splash, needLogin = false, settleNotice = null)
+        }
         start(cd)
     }
 
@@ -218,14 +498,28 @@ class UjingWaterViewModel @Inject constructor(
                 _uiState.update { it.copy(stage = UjingWaterUiStage.Loading(getApplication<Application>().getString(R.string.status_binding_water_point))) }
                 val subject = ujingClient.bindWaterPoint(cd)
 
-                // 4. 下单出水
+                // 4. 先清掉账号名下的欠费单，否则下一步下单会被服务端直接拒掉（1532）
+                _uiState.update { it.copy(stage = UjingWaterUiStage.Loading(getApplication<Application>().getString(R.string.status_checking_unpaid_water))) }
+                settleOutstandingOrder()
+
+                // 5. 下单出水
                 _uiState.update { it.copy(stage = UjingWaterUiStage.Loading(getApplication<Application>().getString(R.string.status_dispensing_water))) }
-                val order = ujingClient.dispenseWater(cd)
+                val order = try {
+                    ujingClient.dispenseWater(cd)
+                } catch (e: WbuUjingClient.UjingApiException) {
+                    // 服务端说「有未结账订单」：刚才那次可能没查到（列表延迟 / 刚产生），
+                    // 这里强制再结一次，成了就重试下单一次 —— 只一次，不循环。
+                    if (e.code != WbuUjingClient.CODE_UNPAID_ORDER) throw e
+                    Log.i(TAG, "下单被欠费挡住（1532），强制补缴后重试一次")
+                    _uiState.update { it.copy(stage = UjingWaterUiStage.Loading(getApplication<Application>().getString(R.string.status_settling_unpaid_water))) }
+                    if (!settleOutstandingOrder(force = true)) throw e
+                    ujingClient.dispenseWater(cd)
+                }
 
                 // 真正用上了：记进校园设备管理（下单成功才算，失败尝试不留痕）
                 recordDeviceUse(subject)
 
-                // 5. 进入出水进行中状态并开启监听
+                // 6. 进入出水进行中状态并开启监听
                 val activeStage = UjingWaterUiStage.Active(
                     subject = subject,
                     orderResult = order,
@@ -248,6 +542,24 @@ class UjingWaterViewModel @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "Water flow error", e)
                 val app = getApplication<Application>()
+
+                // 「有未支付订单」不是网络问题，重试一百次也还是同一句话：
+                // 单独成一类，页面给的是「先结清再试」而不是「重试」。
+                val unpaidBlocks = (e as? WbuUjingClient.UjingApiException)
+                    ?.code == WbuUjingClient.CODE_UNPAID_ORDER
+                if (unpaidBlocks) {
+                    _uiState.update {
+                        it.copy(
+                            stage = UjingWaterUiStage.Error(
+                                message = e.message ?: app.getString(R.string.err_unpaid_water_order),
+                                canRetry = false,
+                                unpaidBlocksOrder = true,
+                            )
+                        )
+                    }
+                    return@launch
+                }
+
                 // 只有「确定是通道问题」的异常才升级成结构化失败：U净 自己的业务异常
                 // （设备离线、订单被占…）多数也是 IOException，不能一并当成「网络不通」，
                 // 否则会让用户去连 WiFi / 开 WebVPN，而他其实什么都不用做。
@@ -338,7 +650,10 @@ class UjingWaterViewModel @Inject constructor(
 
                     if (detail.isTerminal) {
                         Log.i(TAG, "Order reached terminal status via poll: ${detail.orderStatusName}")
-                        markOrderFinished(subject, detail)
+                        // 水取完了但钱没扣到（62 结账异常 / 65 支付失败结束，或终态却还挂着欠费）：
+                        // 先把账结掉再显示完成页，否则用户下次下单会被 1532 挡住却不知道为什么。
+                        val settleResult = settleOrderIfUnpaid(detail)
+                        markOrderFinished(subject, settleResult ?: detail)
                         break
                     }
                 } catch (e: Exception) {
@@ -378,7 +693,9 @@ class UjingWaterViewModel @Inject constructor(
                 updateWithDetail(detail, subject)
                 if (detail.isTerminal) {
                     Log.i(TAG, "Order reached terminal status via MQTT/fetch: ${detail.orderStatusName}")
-                    markOrderFinished(subject, detail)
+                    // 与轮询那条路同口径：终态若还欠费，先结掉再进完成页
+                    val settleResult = settleOrderIfUnpaid(detail)
+                    markOrderFinished(subject, settleResult ?: detail)
                 }
             } else {
                 // 如果一时拉不到详情，根据 status 简易更新
@@ -534,6 +851,60 @@ class UjingWaterViewModel @Inject constructor(
             clearSession()
             hasStarted = true
             executeFlow(currentCd)
+        }
+    }
+
+    /**
+     * 「先结清欠费再试」（错误页上那个按钮）。
+     *
+     * 与 [retry] 的区别：它**强制**再结一次（忽略「本次已尝试过」的去重），
+     * 因为用户点它就是在说「我确实想付这笔钱」。开关关着时也照办 ——
+     * 用户主动点的是「结清」，不是「帮我自动结清」。
+     */
+    fun settleThenRetry() {
+        if (currentCd.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update {
+                it.copy(stage = UjingWaterUiStage.Loading(getApplication<Application>().getString(R.string.status_settling_unpaid_water)))
+            }
+            val settled = settleOutstandingOrder(force = true)
+            if (settled) {
+                retry()
+            } else {
+                // 没结成：留在错误页，但把「为什么没结成」说清楚（settleNotice 已写好）
+                _uiState.update {
+                    it.copy(
+                        stage = UjingWaterUiStage.Error(
+                            message = getApplication<Application>().getString(R.string.err_unpaid_water_order),
+                            canRetry = true,
+                            unpaidBlocksOrder = true,
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * 「重新支付」（完成页上那个按钮）。
+     *
+     * 水已经取完了，这里只补钱：成功就把完成页的详情换成结清后的（金额 / 已支付），
+     * 失败就更新 [UjingWaterUiState.settleNotice] 让页面改口。
+     */
+    fun settleCurrentOrder() {
+        val stage = _uiState.value.stage as? UjingWaterUiStage.Finished ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            // 用户主动点「重新支付」：忽略去重与开关，直接再试一次
+            val updated = settleOrderIfUnpaid(stage.detail, force = true)
+            if (updated != null) {
+                _uiState.update {
+                    if (it.stage is UjingWaterUiStage.Finished) {
+                        it.copy(stage = UjingWaterUiStage.Finished(stage.subject, updated))
+                    } else {
+                        it
+                    }
+                }
+            }
         }
     }
 

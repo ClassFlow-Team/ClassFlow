@@ -841,6 +841,22 @@
     <string name="ujing_water_finished_title">取水已完成</string>
     <string name="ujing_water_repeat">再接一杯</string>
 
+    <!-- 飲水欠費單：自動補繳 -->
+    <string name="status_checking_unpaid_water">正在檢查是否有未結清的飲水訂單…</string>
+    <string name="status_settling_unpaid_water">正在結清未支付的飲水訂單…</string>
+    <string name="ujing_water_unpaid_title">有一筆飲水訂單未支付</string>
+    <string name="ujing_water_auto_settled">已自動補繳 ¥%1$s</string>
+    <string name="ujing_water_settle_failed">補繳失敗：%1$s</string>
+    <string name="ujing_water_unpaid_not_smart_card">這筆訂單不是一卡通直扣（%1$s），需要你自己去付</string>
+    <string name="ujing_water_unpaid_auto_disabled">已關閉自動補繳，這筆訂單還沒有結清</string>
+    <string name="ujing_water_unpaid_no_order_no">這筆訂單缺少訂單號，無法補繳</string>
+    <string name="ujing_water_unpaid_amount">待付金額</string>
+    <string name="err_unpaid_water_order">你有一筆飲水訂單還沒結清，結清後才能繼續取水</string>
+    <string name="action_settle_and_retry">先結清再試</string>
+    <string name="action_settle_now">立即補繳</string>
+    <string name="item_auto_settle_water_unpaid">自動補繳飲水欠費</string>
+    <string name="desc_auto_settle_water_unpaid">下單前若發現一卡通直扣的未支付訂單，自動結清；其他支付方式只提示</string>
+
     <!-- 馬影河 2-3 棟淋浴（生活服務用水）：原生頁面 -->
     <string name="title_shower_water">淋浴用水</string>
     <string name="shower_water_checking">正在讀取用水狀態…</string>

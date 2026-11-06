@@ -887,6 +887,13 @@ internal class WbuAuthTransport(
         /** 「使用学校 DNS 解析校园域名」开关：默认开启，见 [isCampusDnsEnabled]。 */
         private const val KEY_CAMPUS_DNS_ENABLED = "campus_dns_enabled"
 
+        /**
+         * 「自动补缴饮水欠费」（校园服务 → 饮水机，默认**开**）。
+         *
+         * 见 [isAutoSettleWaterUnpaidEnabled]。关掉后取水页只提示欠费、不动账。
+         */
+        private const val KEY_AUTO_SETTLE_WATER_UNPAID = "auto_settle_water_unpaid"
+
         /** 马影河作息修正的三档策略（ASK / ALWAYS_FIX / NEVER_FIX），见 [getMyhTimeFixMode]。 */
         private const val KEY_MYH_TIME_FIX_MODE = "myh_time_fix_mode"
 
@@ -1085,9 +1092,24 @@ internal class WbuAuthTransport(
          */
         fun isAutoCampusProbeEnabled(context: Context): Boolean =
             prefsOf(context).getBoolean(KEY_AUTO_CAMPUS_PROBE, true)
-
         fun setAutoCampusProbeEnabled(context: Context, enabled: Boolean) {
             prefsOf(context).edit().putBoolean(KEY_AUTO_CAMPUS_PROBE, enabled).apply()
+        }
+
+        /**
+         * 「自动补缴饮水欠费」，默认**开**。
+         *
+         * U净 一卡通直扣的设备（`waterForceSmartCard == 1`）欠费时，下一次下单会被服务端
+         * 直接拒掉（`1532`）。打开后取水页在进页面 / 被拒时自动把这笔账结掉，用户不必
+         * 自己去翻订单列表。只对一卡通直扣的单生效，云闪付 / 微信 / 支付宝一律不代扣。
+         *
+         * 关掉 = 只提示不动账（回到加这个开关之前的行为）。
+         */
+        fun isAutoSettleWaterUnpaidEnabled(context: Context): Boolean =
+            prefsOf(context).getBoolean(KEY_AUTO_SETTLE_WATER_UNPAID, true)
+
+        fun setAutoSettleWaterUnpaidEnabled(context: Context, enabled: Boolean) {
+            prefsOf(context).edit().putBoolean(KEY_AUTO_SETTLE_WATER_UNPAID, enabled).apply()
         }
 
         /**

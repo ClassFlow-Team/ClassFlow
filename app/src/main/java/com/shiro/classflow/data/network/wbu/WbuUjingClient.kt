@@ -23,6 +23,7 @@ import java.net.URLEncoder
  * 3. 平台 OAuth authorize (带 synjones-auth) -> 取得 code；
  * 4. authV2 -> 换得 U净 专属 token；
  * 5. 饮水机：changeWithScan -> currentInfo -> createWaterOrder (orderType=11) -> waterOrderDetail。
+ *    欠费单：waterOrderList -> waterOrderDetail -> genPayArgs（一卡通直扣）。
  * 6. 洗衣机：scanWasherCode。
  */
 class WbuUjingClient(
@@ -68,6 +69,19 @@ class WbuUjingClient(
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
         val TERMINAL_STATUS = setOf(50, 51, 54, 62, 63, 64, 65)
+
+        /** 设备正在使用中 / 结账中：唯一值得原地重试的业务码。 */
+        const val CODE_DEVICE_BUSY = 2040231
+
+        /**
+         * 「您有支付宝订单未结账，请先结账！」。
+         *
+         * U净 `water-h5` 对 `createWaterOrder` 的这个码有专门分支（只弹这句提示），
+         * 说明**服务端会因为一笔欠费直接拒绝下一次下单** —— 这正是「喝水时突然
+         * 下不了单」的常见成因，所以上层要认得出它并先去把账结清。
+         */
+        const val CODE_UNPAID_ORDER = 1532
+
 
         fun orderStatusName(status: Int): String = when (status) {
             0 -> "已创建"
@@ -122,7 +136,37 @@ class WbuUjingClient(
         val hotWaterMl: Int,
         val warmWaterMl: Int,
         val payPrice: Double,
-        val isTerminal: Boolean
+        val isTerminal: Boolean,
+        /** 付款状态（0 未支付 / 1 已支付 / 3 支付中 / 4 支付失败…），见 [UjingPayFlag]。 */
+        val payFlag: Int? = null,
+        /** 支付渠道码（1 余额 / 2 微信 / 3 支付宝代扣 / 7、8、9 云闪付 / 10 一卡通…）。 */
+        val payMode: Int? = null,
+        val payModeName: String? = null,
+        /** 订单总额（分）。与 [payPrice]（元、实际扣款）不是一回事。 */
+        val totalPriceCents: Long = 0L,
+        /** 1 = 这单扣一卡通（`waterForceSmartCard`），也是「能不能自动补缴」的判据。 */
+        val waterForceSmartCard: Int? = null,
+        val deviceId: String? = null
+    )
+
+    /**
+     * 订单列表项（`water/waterOrderList`）。
+     *
+     * 只有列表页用得上的字段：金额与付款状态决定「待支付」，`no` 是机号，
+     * `storeName` 是店铺。**没有** `waterForceSmartCard` —— 那要再查一次
+     * [fetchOrderDetail] 才知道，自动补缴因此是「列表 → 详情」两步。
+     */
+    data class WaterOrderBrief(
+        val orderId: Long,
+        val orderNo: String?,
+        val storeName: String?,
+        val deviceNo: String?,
+        val createdAt: String?,
+        /** 实付金额（元）。 */
+        val payPrice: Double,
+        val payFlag: Int?,
+        val payMode: Int?,
+        val payModeName: String?
     )
 
     /**
@@ -399,12 +443,13 @@ class WbuUjingClient(
             val err = outcome.exceptionOrNull() as? UjingApiException
             val code = err?.code ?: 0
             lastMsg = err?.message ?: "未知错误"
-            if (code != 2040231) {
-                // 非设备忙状态直接抛错退出
-                throw IOException(lastMsg)
+            if (code != CODE_DEVICE_BUSY) {
+                // 非设备忙状态直接抛错退出。带业务码抛出（不是裸 IOException）：
+                // 上层要靠 code 认出「有未结账订单」这类**可处理**的失败，而不是一律当网络错。
+                throw err ?: IOException(lastMsg)
             }
 
-            Log.i(TAG, "Device $cd busy (2040231), retry ${attempt + 1}/$retries in ${gapMillis}ms")
+            Log.i(TAG, "Device $cd busy ($CODE_DEVICE_BUSY), retry ${attempt + 1}/$retries in ${gapMillis}ms")
             delay(gapMillis)
         }
 
@@ -442,8 +487,111 @@ class WbuUjingClient(
                 hotWaterMl = data.optInt("hotWaterML", 0),
                 warmWaterMl = data.optInt("warmWaterML", 0),
                 payPrice = data.optDouble("payPrice", 0.0),
-                isTerminal = terminal
+                isTerminal = terminal,
+                // 注意用 has() 区分「字段缺失」与「值为 0」：0 是「未支付」，缺失是「不知道」。
+                payFlag = if (data.has("payFlag")) data.optInt("payFlag") else null,
+                payMode = if (data.has("payMode")) data.optInt("payMode") else null,
+                payModeName = data.optString("payModeName").takeIf { it.isNotBlank() },
+                totalPriceCents = data.optLong("totalPrice", 0L),
+                waterForceSmartCard = if (data.has("waterForceSmartCard")) {
+                    data.optInt("waterForceSmartCard")
+                } else {
+                    null
+                },
+                deviceId = data.optString("deviceId").takeIf { it.isNotBlank() }
             )
+        }
+    }
+
+    /**
+     * 订单列表（`water/waterOrderList`，`{skip, limit}`）。
+     *
+     * 响应形态实测是 **`data` 直接为数组**（官方页面 `(await api({skip,limit})).map(...)`），
+     * 但为免服务端换皮，`data.list` / `data.records` 也一并兜住 —— 拿不到数组就当空列表，
+     * 调用方（自动补缴）本来就把「查不到」当无事发生。
+     */
+    suspend fun listWaterOrders(skip: Int = 0, limit: Int = 20): List<WaterOrderBrief> = withContext(Dispatchers.IO) {
+        val body = JSONObject().apply {
+            put("skip", skip)
+            put("limit", limit)
+        }
+        val req = Request.Builder()
+            .url("$UJING_API/$UJING_CLIENT_PATH/water/waterOrderList")
+            .post(body.toString().toRequestBody(JSON_MEDIA))
+            .apply { ujHeaders("COA").forEach { (k, v) -> header(k, v) } }
+            .build()
+
+        httpClient.newCall(req).execute().use { resp ->
+            val bodyStr = resp.body?.string().orEmpty()
+            val json = JSONObject(bodyStr)
+            if (json.optInt("code") != 0) {
+                val msg = json.optString("message").ifBlank { "查询订单列表失败 (code=${json.optInt("code")})" }
+                throw UjingApiException(json.optInt("code"), msg)
+            }
+            val array = json.optJSONArray("data")
+                ?: json.optJSONObject("data")?.optJSONArray("list")
+                ?: json.optJSONObject("data")?.optJSONArray("records")
+                ?: return@use emptyList()
+
+            buildList {
+                for (i in 0 until array.length()) {
+                    val item = array.optJSONObject(i) ?: continue
+                    add(
+                        WaterOrderBrief(
+                            orderId = item.optLong("id", item.optLong("orderId", 0L)),
+                            orderNo = item.optString("orderNo").takeIf { it.isNotBlank() },
+                            storeName = item.optString("storeName").takeIf { it.isNotBlank() },
+                            deviceNo = item.optString("no").takeIf { it.isNotBlank() }
+                                ?: item.optString("deviceNo").takeIf { it.isNotBlank() },
+                            createdAt = item.optString("createAt").takeIf { it.isNotBlank() },
+                            payPrice = item.optDouble("payPrice", 0.0),
+                            payFlag = if (item.has("payFlag")) item.optInt("payFlag") else null,
+                            payMode = if (item.has("payMode")) item.optInt("payMode") else null,
+                            payModeName = item.optString("payModeName").takeIf { it.isNotBlank() }
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * 结清一笔欠费订单（`water/genPayArgs`）。
+     *
+     * **只走一卡通直扣**（`channel = campusOneCardPay`）：U净 官方未支付页对
+     * `waterForceSmartCard == 1` 的订单就是这么做的，请求一发出钱就扣了，
+     * 页面拿到响应直接宣布「支付成功」，没有任何 SDK 回调或二次确认。
+     *
+     * 云闪付（`unionPay` 分支）与微信/支付宝**刻意不提供**：前者要 `upsdk`、
+     * 后者要各自的钱包，自建容器里起不来，硬调只会让用户以为付了。
+     *
+     * 业务码非 0 抛 [UjingApiException]，把服务端原话交给调用方展示。
+     */
+    suspend fun settleWaterOrder(
+        orderNo: String,
+        chooseSign: Int = 1,
+        type: String = "payOrder",
+    ): Unit = withContext(Dispatchers.IO) {
+        val body = JSONObject().apply {
+            put("channel", "campusOneCardPay")
+            put("orderNo", orderNo)
+            put("chooseSign", chooseSign)
+            put("type", type)
+        }
+        val req = Request.Builder()
+            .url("$UJING_API/$UJING_CLIENT_PATH/water/genPayArgs")
+            .post(body.toString().toRequestBody(JSON_MEDIA))
+            .apply { ujHeaders("COA").forEach { (k, v) -> header(k, v) } }
+            .build()
+
+        httpClient.newCall(req).execute().use { resp ->
+            val bodyStr = resp.body?.string().orEmpty()
+            val json = JSONObject(bodyStr)
+            val code = json.optInt("code")
+            if (code != 0) {
+                val msg = json.optString("message").ifBlank { "补缴失败 (code=$code)" }
+                throw UjingApiException(code, msg)
+            }
         }
     }
 

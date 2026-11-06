@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -32,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -59,6 +62,7 @@ import com.shiro.classflow.data.model.wbu.CampusDeviceEntry
 import com.shiro.classflow.data.model.wbu.CampusDeviceKind
 import com.shiro.classflow.data.network.wbu.CampusShowerLink
 import com.shiro.classflow.data.network.wbu.ShowerManualCode
+import com.shiro.classflow.data.network.wbu.WbuAuthTransport
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -89,6 +93,12 @@ fun CampusDeviceHubScreen(
     }
 
     val state by viewModel.uiState.collectAsState()
+
+    // 「自动补缴饮水欠费」：只对饮水机有意义，读写同一份 wbu_sync_auth 偏好
+    val contextForPrefs = LocalContext.current
+    var autoSettleUnpaid by remember {
+        mutableStateOf(WbuAuthTransport.isAutoSettleWaterUnpaidEnabled(contextForPrefs))
+    }
     val manualState by viewModel.manualShower.collectAsState()
     var expandedKey by remember { mutableStateOf<String?>(null) }
     var renameTarget by remember { mutableStateOf<CampusDeviceEntry?>(null) }
@@ -152,6 +162,19 @@ fun CampusDeviceHubScreen(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // 饮水机独有：欠费会直接挡住下一次取水，所以开关放在最上面，先看见再说记录
+            if (kind == CampusDeviceKind.WATER) {
+                item {
+                    AutoSettleUnpaidCard(
+                        checked = autoSettleUnpaid,
+                        onCheckedChange = { enabled ->
+                            autoSettleUnpaid = enabled
+                            WbuAuthTransport.setAutoSettleWaterUnpaidEnabled(contextForPrefs, enabled)
+                        }
                     )
                 }
             }
@@ -294,8 +317,56 @@ fun CampusDeviceHubScreen(
     }
 }
 
-/** 记录里的「直接使用」：按类型落回各自的直达目的地。 */
-private fun CampusDeviceEntry.launchDestination(): Destination = when (kind) {
+/**
+ * 「自动补缴饮水欠费」开关卡片。
+ *
+ * 为什么放在饮水机页而不是设置里的某个总开关：欠费挡的是**取水**这件事本身，
+ * 用户是在这里才想得起来「上次是不是没付钱」。
+ */
+@Composable
+private fun AutoSettleUnpaidCard(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Payments,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.item_auto_settle_water_unpaid),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = stringResource(R.string.desc_auto_settle_water_unpaid),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
+        }
+    }
+}
+
+/** 记录里的「直接使用」：按类型落回各自的直达目的地。 */private fun CampusDeviceEntry.launchDestination(): Destination = when (kind) {
     CampusDeviceKind.WATER -> Destination.UjingWater(cd = key)
 
     CampusDeviceKind.WASHER -> Destination.WebApp(
