@@ -199,7 +199,7 @@ class WbuShowerWaterClient(
         billing: Billing
     ): DeviceCheck = withContext(Dispatchers.IO) {
         val data = post(PATH_DEVICES_TYPE, token, bodyOf(billing = billing, deviceId = deviceId))
-            ?: throw IOException("设备校验未返回数据")
+            ?: throw WbuServiceErrorException(0)
         DeviceCheck(
             devicesType = data.optInt("devicesType"),
             devicesName = data.optString("devicesName").takeIf { it.isNotBlank() },
@@ -210,7 +210,7 @@ class WbuShowerWaterClient(
     /** 查询当前未结束的用水（0 = 没有）。 */
     suspend fun getUsage(token: String, billing: Billing): Usage = withContext(Dispatchers.IO) {
         val data = post(PATH_DEVICES_STATUS, token, bodyOf(billing = billing))
-            ?: throw IOException("用水状态未返回数据")
+            ?: throw WbuServiceErrorException(0)
         Usage(
             status = data.optInt("status"),
             message = data.optString("message").takeIf { it.isNotBlank() },
@@ -232,7 +232,7 @@ class WbuShowerWaterClient(
             PATH_CONSUMPTION,
             token,
             bodyOf("port" to port?.takeIf { it.isNotBlank() }, billing = billing, deviceId = deviceId)
-        ) ?: throw IOException("开始用水未返回数据")
+        ) ?: throw WbuServiceErrorException(0)
         StartResult(
             deviceNo = data.optString("deviceNo").takeIf { it.isNotBlank() },
             status = if (data.has("status")) data.optInt("status") else null,
@@ -278,8 +278,11 @@ class WbuShowerWaterClient(
                 Log.i(TAG, "shower api $path unauthorized (${resp.code})")
                 throw WbuSessionExpiredException(AccessLayer.Service)
             }
+            // 网关 / 维护页回 HTML（502、登录门户、WAF 页…）时这里解析不出 JSON。过去抛的是
+            // IOException，被上层判成「网络连接失败，请检查网络」—— 网络其实是通的，是学校那边
+            // 回的东西不对。归成「服务端内容异常」（Unexpected），只提示稍后重试，不误导用户查网络。
             val json = runCatching { JSONObject(text) }.getOrNull()
-                ?: throw IOException("接口返回不是 JSON：$path")
+                ?: throw WbuServiceErrorException(resp.code)
             val code = json.optInt("code", resp.code)
             if (resp.code != 200 || code != 200) {
                 val msg = json.optString("msg").ifBlank { json.optString("message") }

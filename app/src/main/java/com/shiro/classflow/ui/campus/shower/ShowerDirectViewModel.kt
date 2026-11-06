@@ -1,6 +1,7 @@
 package com.shiro.classflow.ui.campus.shower
 
 import android.content.Context
+import android.util.Log
 import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -60,6 +61,10 @@ class ShowerDirectViewModel @Inject constructor(
     private val resolver: CampusShowerEntryResolver,
     private val deviceHubRepository: CampusDeviceHubRepository,
 ) : ViewModel() {
+
+    private companion object {
+        const val TAG = "ShowerDirectViewModel"
+    }
 
     private val _state = MutableStateFlow<ShowerDirectUiState>(ShowerDirectUiState.Resolving)
     val state: StateFlow<ShowerDirectUiState> = _state.asStateFlow()
@@ -136,19 +141,30 @@ class ShowerDirectViewModel @Inject constructor(
                         _openWebApp.tryEmit(result)
                     }
 
-                    CampusShowerEntryResolver.Result.InvalidDevice ->
+                    CampusShowerEntryResolver.Result.InvalidDevice -> {
+                        Log.w(TAG, "shower direct failed: invalid device system=$system code=$code")
                         _state.value = ShowerDirectUiState.Failed(R.string.link_hub_error_shower_invalid)
+                    }
 
-                    CampusShowerEntryResolver.Result.NeedLogin ->
+                    CampusShowerEntryResolver.Result.NeedLogin -> {
+                        Log.w(TAG, "shower direct failed: need login system=$system")
                         _state.value = ShowerDirectUiState.Failed(
                             R.string.err_need_unified_auth_session,
                             retryable = true,
                             // 没存密码 / 开关关着时以前只能干瞪眼，现在至少给一个登录入口
                             needsLogin = true
                         )
+                    }
 
-                    is CampusShowerEntryResolver.Result.Unavailable ->
-                        _state.value = ShowerDirectUiState.Failed(R.string.link_hub_error_network, retryable = true)
+                    is CampusShowerEntryResolver.Result.Unavailable -> {
+                        // 这里是「解析这一步没走通」（票据 / 水控令牌 / 网络），不是分享页的问题 ——
+                        // 文案与日志都要说清楚，否则用户只会看到一句莫名的「无法获取该分享内容」
+                        Log.w(TAG, "shower direct unavailable: system=$system code=$code detail=${result.message}")
+                        _state.value = ShowerDirectUiState.Failed(
+                            R.string.link_hub_error_shower_unavailable,
+                            retryable = true
+                        )
+                    }
                 }
                 return@launch
             }
@@ -164,18 +180,22 @@ class ShowerDirectViewModel @Inject constructor(
      */
     private fun recordDeviceUse(ready: CampusShowerEntryResolver.Result.Ready) {
         if (ready.nativeShower != null) return
+        // 手输 / 判型时命中的系统与设备号以解析器回填为准（可能与入参写法不同，如机号去前导零）
+        val resolvedSystem = ready.resolvedSystem ?: system
+        val resolvedCode = ready.resolvedCode ?: code
+        val resolvedPort = port ?: ready.resolvedPort
         viewModelScope.launch {
             runCatching {
                 deviceHubRepository.record(
                     CampusDeviceEntry(
                         kind = CampusDeviceKind.SHOWER,
-                        key = CampusDeviceHubRepository.showerKey(system, code, port),
+                        key = CampusDeviceHubRepository.showerKey(resolvedSystem, resolvedCode, resolvedPort),
                         raw = ready.initialUrl,
-                        system = system,
-                        port = port,
+                        system = resolvedSystem,
+                        port = resolvedPort,
                         // 1 栋正证时服务端给的所属区域名（如「马影河宿舍1栋」）；2-3 栋为 null
                         storeName = ready.storeName,
-                        deviceNo = code,
+                        deviceNo = resolvedCode,
                     )
                 )
             }

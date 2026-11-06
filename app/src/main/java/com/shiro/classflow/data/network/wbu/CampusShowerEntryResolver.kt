@@ -6,6 +6,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.net.URLEncoder
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /**
@@ -35,7 +37,19 @@ class CampusShowerEntryResolver @Inject constructor(
             val initialUrl: String,
             val pendingAutoScan: String?,
             val nativeShower: NativeShower? = null,
-            val storeName: String? = null
+            val storeName: String? = null,
+            /**
+             * 这次**真正命中**的系统（`y` / `l`）。
+             *
+             * 手动输入时入参只有「用户敲的原文 + 他勾的楼栋」，归一后的设备号（去前导零）只有
+             * 解析器知道；使用记录（key / 标题）必须按这个字段写，不能再用入参。扫码 / `/s/` 深链等
+             * 确定侧入口可以为 null（调用方本来就知道系统与设备号）。
+             */
+            val resolvedSystem: String? = null,
+            /** 真正命中的设备号（1 栋为归一后的机号，2-3 栋为服务端认可的 imei）。同上，写记录用。 */
+            val resolvedCode: String? = null,
+            /** 真正命中的端口（仅 2-3 栋；`17010737/2` 这类输入会在这里被补上）。 */
+            val resolvedPort: String? = null
         ) : Result
 
         /** 服务端明确判定设备机号无效。 */
@@ -58,30 +72,176 @@ class CampusShowerEntryResolver @Inject constructor(
             val cardClient = WbuCampusCardClient(context, useVpn = false)
             val yktClient = WbuYktXyyyClient(context, cardClient)
             when (val check = yktClient.checkPosNo(posno)) {
-                is WbuYktXyyyClient.CheckResult.Valid -> {
-                    val token = cardClient.ensureValidAccessToken()
-                    val launchUrl = cardClient.resolveAppLaunchUrl(WbuYktXyyyClient.APP_ID, token)
-                    if (launchUrl.isNullOrBlank()) {
-                        Result.Unavailable("未获取到智能控水入口")
-                    } else {
+                is WbuYktXyyyClient.CheckResult.Valid ->
+                    openYkt(cardClient, posno, check.classLabel, "verified")
+
+                WbuYktXyyyClient.CheckResult.Invalid -> {
+                    Log.i(TAG, "ykt posno=$posno rejected by CheckKsPos")
+                    Result.InvalidDevice
+                }
+
+                is WbuYktXyyyClient.CheckResult.Blocked -> {
+                    // 机号是真的，只是这台控水器当前加锁 / 故障。**不挡路**：照样取启动票据进页面，
+                    // 由 1 栋 H5 自己提示「设备加锁或故障报警，暂不能交易」。
+                    // 过去这里被归成 Unavailable → 用户看到「连接校园服务失败」，等于把设备状态
+                    // 说成了网络故障，还把人挡在正确的页面之外。
+                    Log.i(TAG, "ykt posno=$posno device blocked (${check.reason}), opening anyway")
+                    openYkt(cardClient, posno, check.classLabel, "blocked")
+                }
+
+                is WbuYktXyyyClient.CheckResult.Unavailable -> {
+                    Log.w(TAG, "ykt posno=$posno check unavailable: ${check.message}")
+                    Result.Unavailable(check.message)
+                }
+            }
+        } catch (e: WbuSessionExpiredException) {
+            Log.w(TAG, "ykt posno=$posno needs login", e)
+            Result.NeedLogin
+        } catch (e: Exception) {
+            Log.w(TAG, "ykt posno=$posno failed", e)
+            Result.Unavailable(e.localizedMessage)
+        }
+    }
+
+    /**
+     * 1 栋：取一张**新的**启动票据并生成落地结果。
+     *
+     * 正证本身会消耗一张 ticket，所以无论设备是「正常」还是「加锁/故障」，进页面前都要重新取。
+     * [stage] 只用于日志（`verified` / `blocked`），便于真机区分这两种放行。
+     */
+    private suspend fun openYkt(
+        cardClient: WbuCampusCardClient,
+        posno: String,
+        classLabel: String?,
+        stage: String
+    ): Result {
+        val token = cardClient.ensureValidAccessToken()
+        val launchUrl = cardClient.resolveAppLaunchUrl(WbuYktXyyyClient.APP_ID, token)
+        if (launchUrl.isNullOrBlank()) {
+            Log.w(TAG, "ykt posno=$posno $stage but no launch url")
+            return Result.Unavailable("未获取到智能控水入口")
+        }
+        return Result.Ready(
+            initialUrl = launchUrl,
+            pendingAutoScan = ShowerQrLink.syntheticYktRaw(posno),
+            // CostDsp（所属区域名）只在服务端认识这台设备时才有意义；默认值已在
+            // WbuYktXyyyClient.classifyCheckKsPos 里过滤掉
+            storeName = classLabel,
+            resolvedSystem = CampusShowerLink.SYSTEM_YKT,
+            resolvedCode = posno
+        )
+    }
+
+    /**
+     * 手动输入 / 判型用的**严格** 2-3 栋正证：服务端不认这台设备就不算成功。
+     *
+     * 与 [resolveLifeServiceRaw] 的差别（这正是它存在的理由）：那边只把正证当作「要不要走原生页」
+     * 的附加判断，`getDevicesType` 失败就静默回落到网页、照样返回 [Result.Ready]。
+     * 手输设备码需要能得出「这不是 2-3 栋设备」的结论，否则把 1 栋机号当设备号传进去也会「看起来成功」。
+     *
+     * 注意它的上限：`getDevicesType` 实测**只回答「这个缴费项是淋浴」**，并不校验设备是否存在
+     * （拿 `99999999` 去问也回 `devicesType=101`）。所以这里最多能排除「服务端明确报错」与
+     * 「devicesType 为 0」两种情况；设备是否真实存在仍要等页面开单时才知道。
+     *
+     * 判定口径：
+     * - `getDevicesType` 返回 200 且 `devicesType` 非 0 → 命中；
+     * - 业务拒绝（`ShowerApiException`）→ [Result.InvalidDevice]；
+     * - 会话失效 → [Result.NeedLogin]；其它（网络 / 解析）→ [Result.Unavailable]。
+     */
+    suspend fun resolveLifeServiceVerified(imei: String, port: String? = null): Result {
+        val raw = buildLifeServiceRaw(imei, port) ?: return Result.InvalidDevice
+        return try {
+            val cardClient = WbuCampusCardClient(context, useVpn = false)
+            val token = cardClient.ensureValidAccessToken()
+            currentCoroutineContext().ensureActive()
+            val launchUrl = cardClient.resolveAppLaunchUrl(ShowerQrLink.LIFE_SERVICE_APP_ID, token)
+            if (launchUrl.isNullOrBlank()) {
+                Result.Unavailable("未获取到生活服务入口")
+            } else {
+                val billing = WbuShowerWaterClient.parseBilling(launchUrl)
+                if (billing == null) {
+                    Result.Unavailable("生活服务入口缺少计费信息")
+                } else {
+                    val device = lifeServiceDeviceId(raw) ?: return Result.InvalidDevice
+                    currentCoroutineContext().ensureActive()
+                    val check = try {
+                        WbuShowerWaterClient(context).getDevicesType(token, device, billing)
+                    } catch (e: WbuShowerWaterClient.ShowerApiException) {
+                        // 服务端明确拒绝：设备不存在 / 设备不匹配 —— 这是「换边」的信号，不是网络问题
+                        Log.i(TAG, "lifeService device rejected: ${e.message}")
+                        return Result.InvalidDevice
+                    }
+                    currentCoroutineContext().ensureActive()
+                    if (check.devicesType <= 0) return Result.InvalidDevice
+
+                    if (check.isShower && !check.hasGears) {
+                        Log.i(TAG, "lifeService device is a shower, opening the native screen")
                         Result.Ready(
                             initialUrl = launchUrl,
-                            pendingAutoScan = ShowerQrLink.syntheticYktRaw(posno),
-                            // CostDsp（所属区域名）只在 RetNo==0 的 Valid 分支里有值，
-                            // 无效机号的响应里是默认值「控水定额消费」，不会误传
-                            storeName = check.classLabel
+                            pendingAutoScan = null,
+                            nativeShower = NativeShower(
+                                deviceId = device,
+                                port = port?.takeIf { it.isNotBlank() }
+                                    ?: raw.substringAfter(ShowerQrLink.IMEI_PORT_SEPARATOR, "")
+                                        .takeIf { it.isNotBlank() },
+                                implid = billing.implid,
+                                feeitemid = billing.feeitemid
+                            ),
+                            resolvedSystem = CampusShowerLink.SYSTEM_LIFE,
+                            resolvedCode = device,
+                            resolvedPort = port?.takeIf { it.isNotBlank() }
+                                ?: raw.substringAfter(ShowerQrLink.IMEI_PORT_SEPARATOR, "")
+                                    .takeIf { it.isNotBlank() }
+                        )
+                    } else {
+                        // 其它设备类型 / 带档位的淋浴：仍然交给网页（它的 UI 覆盖全部类型）
+                        val separator = if (launchUrl.contains("?")) "&" else "?"
+                        val encoded = URLEncoder.encode(raw, "UTF-8")
+                        Result.Ready(
+                            initialUrl = "$launchUrl$separator" + "scanResult=$encoded",
+                            pendingAutoScan = null,
+                            resolvedSystem = CampusShowerLink.SYSTEM_LIFE,
+                            resolvedCode = device,
+                            resolvedPort = port?.takeIf { it.isNotBlank() }
+                                ?: raw.substringAfter(ShowerQrLink.IMEI_PORT_SEPARATOR, "")
+                                    .takeIf { it.isNotBlank() }
                         )
                     }
                 }
-
-                WbuYktXyyyClient.CheckResult.Invalid -> Result.InvalidDevice
-
-                is WbuYktXyyyClient.CheckResult.Unavailable -> Result.Unavailable(check.message)
             }
         } catch (e: WbuSessionExpiredException) {
             Result.NeedLogin
         } catch (e: Exception) {
             Result.Unavailable(e.localizedMessage)
+        }
+    }
+
+    /**
+     * 手动输入设备码：用户已在对话框里选定系统，这里直接走那一侧的入口。
+     *
+     * 为什么不再「两侧并行」：2-3 栋的 `getDevicesType` 实测**不校验设备是否存在**（拿 1 栋机号
+     * `10101`、甚至 `99999999` 去问，都回 `devicesType=101`），而它比 1 栋（要换票、四步接口）
+     * 快得多。任何「谁先成功用谁」的并行方案都会被 2-3 栋抢走，等于替用户编造一个成功答案。
+     * 系统归属是用户明确勾选的，这里只负责按那一侧解析，并把命中的系统/设备号带回去记使用记录。
+     *
+     * @param system [CampusShowerLink.SYSTEM_YKT] 或 [CampusShowerLink.SYSTEM_LIFE]
+     */
+    suspend fun resolveManual(system: String, code: String, port: String? = null): Result {
+        currentCoroutineContext().ensureActive()
+        val result = when (system.trim().lowercase()) {
+            CampusShowerLink.SYSTEM_YKT -> resolveYktXyyy(code.trim())
+            CampusShowerLink.SYSTEM_LIFE -> resolveLifeServiceVerified(code.trim(), port)
+            else -> Result.InvalidDevice
+        }
+        currentCoroutineContext().ensureActive()
+        return if (result is Result.Ready) {
+            result.copy(
+                resolvedSystem = result.resolvedSystem ?: system.trim().lowercase(),
+                resolvedCode = result.resolvedCode ?: code.trim(),
+                resolvedPort = result.resolvedPort ?: port?.takeIf { it.isNotBlank() }
+            )
+        } else {
+            result
         }
     }
 
@@ -152,6 +312,9 @@ class CampusShowerEntryResolver @Inject constructor(
      *
      * 先做一次设备正证：确认是淋浴就走原生页（[NativeShower]），其它设备类型（洗衣机 /
      * 饮水机 / 电吹风…）与正证失败的情形都保持原样 —— 交给网页，网页自己那套 UI 覆盖全部类型。
+     *
+     * **判型 / 手动输入请用 [resolveLifeServiceVerified]**：本方法把正证失败当作「走网页」，
+     * 服务端不认设备时也会返回 [Result.Ready]，不能用来判断「这是不是 2-3 栋设备」。
      */
     suspend fun resolveLifeServiceRaw(raw: String, port: String? = null): Result {
         return try {

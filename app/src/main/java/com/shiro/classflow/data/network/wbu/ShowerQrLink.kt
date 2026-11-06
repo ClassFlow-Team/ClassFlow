@@ -121,8 +121,11 @@ object ShowerQrLink {
      * 为什么不放宽成「任何带 `?id=` 的网址」：lifeService 页面取 `?id=` 时确实不看域名，
      * 但**扫码分流必须看** —— 否则一卡通平台页、CAS、通用链接节点等任何带 `id=` 的校园链接
      * 都会被当成洗浴设备（分流顺序里洗浴还在通用链接节点之前）。
+     *
+     * `internal` 而不是 private：手动输入判型（[ShowerManualCode]）要按同一份白名单判断
+     * 「这条链接是不是洗浴码载体」—— 白名单只有这一处，不要复制第二份。
      */
-    private fun isShowerLinkHost(host: String): Boolean {
+    internal fun isShowerLinkHost(host: String): Boolean {
         val lower = host.lowercase()
         return lower == WATER_METER_HOST ||
             lower.endsWith(".$WATER_METER_HOST") ||

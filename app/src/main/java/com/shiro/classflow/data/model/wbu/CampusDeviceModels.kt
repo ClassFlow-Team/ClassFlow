@@ -135,12 +135,47 @@ data class CampusDeviceEntry(
         CampusDeviceKind.SHOWER -> "洗浴"
     }
 
+    /**
+     * 洗浴系统（`y` / `l`），非洗浴或认不出时为 null。
+     *
+     * 优先用落库字段 [system]；老记录没写这个字段时从 [key] 的前缀还原
+     * （key 的格式一直是 `system:code[:port]`），免得卡片上的楼栋标签凭空消失。
+     */
+    val showerSystem: String?
+        get() {
+            if (kind != CampusDeviceKind.SHOWER) return null
+            val value = system?.takeIf { it.isNotBlank() } ?: key.substringBefore(':', "")
+            return value.takeIf {
+                it == CampusShowerLink.SYSTEM_YKT || it == CampusShowerLink.SYSTEM_LIFE
+            }
+        }
+
     /** 洗浴楼栋标签（非洗浴记录为 null）。 */
     val systemLabel: String?
-        get() = when (system) {
+        get() = when (showerSystem) {
             CampusShowerLink.SYSTEM_YKT -> "1栋"
             CampusShowerLink.SYSTEM_LIFE -> "2-3栋"
             else -> null
+        }
+
+    /**
+     * 这条记录能不能「改类型」。
+     *
+     * 改类型要重写 key，而 key 用冒号分段 —— 设备号本身含冒号时（旧数据把整条链接
+     * 当设备号存过）拼出来的 key 无法原样还原，改一次就会把号码截断。这种记录只能
+     * 重新扫码 / 手输，不提供改类型入口。
+     */
+    val canChangeShowerSystem: Boolean
+        get() {
+            if (kind != CampusDeviceKind.SHOWER) return false
+            val system = showerSystem ?: return false
+            val code = code
+            if (code.isEmpty() || code.contains(':')) return false
+            val rebuilt = buildString {
+                append(system).append(':').append(code)
+                port?.takeIf { it.isNotBlank() }?.let { append(':').append(it) }
+            }
+            return rebuilt == key
         }
 
     /** 洗浴的设备号段（`system:code[:port]` 里的 code）。 */

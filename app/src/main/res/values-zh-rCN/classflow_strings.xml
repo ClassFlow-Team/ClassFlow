@@ -1039,6 +1039,7 @@
     <string name="link_hub_error_network">网络异常，无法获取该分享内容</string>
     <string name="link_hub_error_server_not_configured">此构建未配置链接服务，无法解析服务端短码</string>
     <string name="link_hub_error_shower_invalid">未识别到该洗浴设备，请确认控水器编号是否正确</string>
+    <string name="link_hub_error_shower_unavailable">连接校园服务失败，请稍后重试（不是链接问题）</string>
     <string name="link_hub_error_not_json">该分享内容暂时打不开，请稍后再试</string>
     <string name="link_hub_open_in_browser">用浏览器打开</string>
     <string name="toast_web_scheme_unhandled">没有能打开该链接的应用</string>
@@ -1239,4 +1240,34 @@
     <string name="bill_error_load">账单加载失败，请重试</string>
     <string name="bill_action_relogin">重新登录</string>
     <string name="bill_balance_short">余额 ¥%1$s</string>
+
+    <!-- 洗浴：手动输入设备码（楼栋由用户勾选）、类型标签与改类型 -->
+    <string name="device_action_manual_shower">手动输入机号</string>
+    <string name="device_manual_shower_title">手动输入设备码</string>
+    <string name="device_manual_shower_hint">输入控水器上的机号或设备号，也可以粘贴整条链接</string>
+    <string name="device_manual_shower_placeholder">设备号 / 机号 / 链接</string>
+    <string name="device_manual_shower_detect_life">2-3 栋 · %1$s</string>
+    <string name="device_manual_shower_detect_ykt">1 栋 · 机号 %1$s</string>
+    <string name="device_manual_shower_detect_port">端口 %1$s</string>
+    <string name="device_manual_shower_detect_link">设备码取自链接</string>
+    <string name="device_manual_shower_detect_from_input">设备码取自输入</string>
+    <string name="device_manual_shower_pick_system">这台设备在哪一栋？</string>
+    <string name="device_manual_shower_pick_required">请先勾选这台设备属于哪一栋</string>
+    <string name="device_manual_shower_system_ykt">1 栋（控水器机号）</string>
+    <string name="device_manual_shower_system_life">2-3 栋（水表设备号）</string>
+    <string name="device_manual_shower_system_mismatch">1 栋机号只有 5 位、也不带端口，请换到 2-3 栋或改输入</string>
+    <string name="device_manual_shower_detect_invalid">看不清是哪台设备：请输入控水器机号、水表设备号，或粘贴整条链接</string>
+    <string name="device_manual_shower_resolving">正在连接设备…</string>
+    <string name="device_action_change_system">改类型</string>
+    <string name="device_system_chip_ykt">1栋</string>
+    <string name="device_system_chip_life">2-3栋</string>
+    <string name="device_shower_system_title">改控水器类型</string>
+    <string name="device_shower_system_device">设备号 %1$s</string>
+    <string name="device_shower_system_pick_required">请选择这台控水器属于哪一栋</string>
+    <string name="device_shower_system_mismatch">这个楼栋收不下 %1$s：1 栋机号最多 5 位、不带端口</string>
+    <string name="device_shower_system_port_label">端口（可选）</string>
+    <string name="device_shower_system_port_hint">只有多路控水器才需要填</string>
+    <string name="device_message_system_changed">已改类型</string>
+    <string name="shower_water_go_recharge">去充值</string>
+    <string name="shower_water_stop_unconfirmed">已请求结束，但服务端还没有确认停止计费。请稍后再试，或改用网页打开查看账单</string>
 </resources>

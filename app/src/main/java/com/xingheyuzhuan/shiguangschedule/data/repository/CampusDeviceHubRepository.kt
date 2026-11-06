@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.shiro.classflow.data.model.wbu.CampusDeviceEntry
 import com.shiro.classflow.data.model.wbu.CampusDeviceKind
 import com.shiro.classflow.data.network.wbu.CampusShowerLink
+import com.shiro.classflow.data.network.wbu.ShowerManualCode
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -92,6 +93,30 @@ class CampusDeviceHubRepository @Inject constructor(
 
     suspend fun setIcon(kind: CampusDeviceKind, key: String, iconId: String?) {
         update(kind, key) { it.copy(iconId = iconId) }
+    }
+
+    /**
+     * 改一台洗浴设备的类型（1 栋 ⇄ 2-3 栋）。
+     *
+     * 类型写在 key 里（`system:code[:port]`），所以「改类型」= **换 key**：这里负责把旧记录
+     * 搬到新 key 上，并处理「新 key 已经有一条记录」的撞键情形（合并次数与时间，名字 / 图标
+     * 优先保留目标记录已有的）。[target] 已由 [com.shiro.classflow.data.network.wbu.ShowerManualCode.normalize]
+     * 校验过，调用方不需要再检查「1 栋能不能收下这串数字」。
+     *
+     * @return 改完之后的记录（不存在时返回 null），供调用方刷新桌面快捷方式。
+     */
+    suspend fun changeShowerSystem(oldKey: String, target: ShowerManualCode.Candidate): CampusDeviceEntry? {
+        var updated: CampusDeviceEntry? = null
+        dataStore.edit { preferences ->
+            val list = decode(preferences[Keys.ENTRIES])
+            val next = applySystemChange(list, oldKey, target)
+            preferences[Keys.ENTRIES] = json.encodeToString(next)
+            updated = next.firstOrNull {
+                it.kind == CampusDeviceKind.SHOWER &&
+                    it.key == showerKey(target.system, target.code, target.port)
+            }
+        }
+        return updated
     }
 
     suspend fun delete(kind: CampusDeviceKind, key: String) {
@@ -216,6 +241,69 @@ class CampusDeviceHubRepository @Inject constructor(
                 }
             }
 
+        /**
+         * 「改洗浴设备类型」的纯函数（[changeShowerSystem] 用，便于单测）。
+         *
+         * 类型写在 key 里，所以改类型就是**换 key**：
+         * - 旧 key 不存在 → 原样返回；
+         * - 新 key 已被另一条记录占用 → 合并成一条（次数相加、时间取较近，名字 / 图标保留
+         *   目标记录已有的），不留下两条指向同一台设备的记录；
+         * - [CampusDeviceEntry.raw] 是**旧系统**的扫码原文，换系统后必须清掉，否则记录里
+         *   留着一条指向别的系统的链接；
+         * - [CampusDeviceEntry.storeName] 也是旧系统给的（1 栋 `CheckKsPos` 的位置名，
+         *   2-3 栋根本没有），不清掉的话换到 2-3 栋后标题还在说「马影河宿舍1栋」；
+         * - [CampusDeviceEntry.deviceNo] 对洗浴一直只是 code 的镜像，跟着 code 走，
+         *   否则卡片标题会显示上一个系统的号码。
+         */
+        fun applySystemChange(
+            list: List<CampusDeviceEntry>,
+            oldKey: String,
+            target: ShowerManualCode.Candidate,
+        ): List<CampusDeviceEntry> {
+            val old = list.firstOrNull { it.kind == CampusDeviceKind.SHOWER && it.key == oldKey }
+                ?: return list
+            val newKey = showerKey(target.system, target.code, target.port)
+            if (newKey == oldKey) {
+                return list.map {
+                    if (it.kind == CampusDeviceKind.SHOWER && it.key == oldKey) {
+                        it.copy(system = target.system, port = target.port)
+                    } else {
+                        it
+                    }
+                }
+            }
+
+            val oldCode = old.code
+            // 只有「换系统」才需要清掉旧系统的位置名 / 扫码原文；同一系统内改端口不算
+            val systemChanged = old.showerSystem != target.system
+            val moved = old.copy(
+                key = newKey,
+                system = target.system,
+                port = target.port,
+                raw = if (systemChanged) "" else old.raw,
+                // 旧系统给的位置名对新系统没有意义；用户起的名字在 alias 里，不受影响
+                storeName = if (systemChanged) null else old.storeName,
+                deviceNo = when {
+                    old.deviceNo.isNullOrBlank() -> target.code
+                    old.deviceNo == oldCode -> target.code
+                    else -> old.deviceNo
+                },
+            )
+            val existing = list.firstOrNull { it.kind == CampusDeviceKind.SHOWER && it.key == newKey }
+            val merged = if (existing == null) {
+                moved
+            } else {
+                existing.copy(
+                    port = target.port ?: existing.port,
+                    useCount = existing.useCount + moved.useCount,
+                    lastUsedAt = maxOf(existing.lastUsedAt, moved.lastUsedAt),
+                )
+            }
+            return (list.filterNot {
+                it.kind == CampusDeviceKind.SHOWER && (it.key == oldKey || it.key == newKey)
+            } + merged).sortedByDescending { it.lastUsedAt }
+        }
+
         /** 从洗浴 key 还原深链三要素。 */
         fun showerParts(key: String): Triple<String, String, String?> {
             val system = key.substringBefore(':')
@@ -224,6 +312,8 @@ class CampusDeviceHubRepository @Inject constructor(
             val port = rest.substringAfter(':', "").takeIf { it.isNotBlank() }
             val normalizedSystem = when (system) {
                 CampusShowerLink.SYSTEM_YKT, CampusShowerLink.SYSTEM_LIFE -> system
+                // 记录里的系统只可能是 y / l（手动输入时由用户勾选、归一后落库）。
+                // 真读到别的值（旧数据 / 手改）按 1 栋回落，与改动前一致。
                 else -> CampusShowerLink.SYSTEM_YKT
             }
             return Triple(normalizedSystem, code, port)

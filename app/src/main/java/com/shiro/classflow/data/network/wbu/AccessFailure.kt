@@ -300,6 +300,11 @@ object WbuFailureDetector {
             )
         // 手机自己没网：先认出来，别让用户以为是学校的服务器坏了
         is NoNetworkException -> AccessFailure.Unreachable(layer, e, offline = true)
+        // 一卡通平台自己的**业务拒绝**（余额不足 / 设备在使用中 / 设备不匹配…）：
+        // 虽然继承 IOException，但响应已经拿到、服务端也把原因写清楚了 —— 判成网络问题会让用户
+        // 去查网络，永远修不好。带上服务端原话归为 Unexpected，交给调用方原样显示。
+        is WbuShowerWaterClient.ShowerApiException ->
+            AccessFailure.Unexpected(layer, e.message)
         is UnknownHostException, is SocketTimeoutException, is SSLException, is IOException ->
             AccessFailure.Unreachable(layer, e)
         else -> AccessFailure.Unexpected(layer, e.message)

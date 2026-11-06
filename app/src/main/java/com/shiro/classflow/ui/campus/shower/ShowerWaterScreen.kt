@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -123,6 +124,20 @@ fun ShowerWaterScreen(
     }
     BackHandler { navBridge.popBackStack() }
 
+    // 读取状态期间**不画标题栏**：整页就是一层品牌色占位，切换进来不会先闪一条空白标题栏。
+    // （手输入口已经改为在弹窗里解析，不再经过 `ShowerDirect` 过渡页；这里保留给深链 / 扫码。）
+    if (uiState.stage is ShowerWaterUiStage.Loading) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .safeDrawingPadding(),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            LoadingBlock()
+        }
+        return
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -194,8 +209,20 @@ fun ShowerWaterScreen(
                 is ShowerWaterUiStage.Error -> ErrorBlock(
                     message = stage.message,
                     canRetry = stage.canRetry,
+                    canRecharge = stage.canRecharge,
                     busy = uiState.busy,
                     onRetry = viewModel::retry,
+                    onRecharge = {
+                        // 与门户里「一卡通充值」同一条链路（appCode 解析 + 固定深链兜底）
+                        navBridge.navigate(
+                            Destination.WebApp(
+                                appId = WebAppId.CAMPUS_CARD.name,
+                                campusCardAppCode = "card-recharge",
+                                campusCardDeepLinkFallback =
+                                    "/campus-card/?name=cardRecharge&feeitemid=410&hasinstallConfigForm=1"
+                            )
+                        )
+                    },
                     onOpenWeb = openWebFallback,
                     onExit = { navBridge.popBackStack() }
                 )
@@ -218,7 +245,8 @@ fun ShowerWaterScreen(
 /**
  * 读取状态中：WBU 编钟 logo 下面转圈圈。
  *
- * 用品牌色单色纹样（[wbuBrandAccent]）而不是满屏铺底，避免从上一个页面切进来时闪一大块色块。
+ * 用品牌色单色纹样（[wbuBrandAccent]）而不是满屏铺底：这一页是从**应用内**（手输弹窗 /
+ * 记录直达）进来的，整屏蓝底会像「又跳了一次过渡页」；页内轻量转圈才是正常的加载观感。
  */
 @Composable
 private fun LoadingBlock() {
@@ -450,13 +478,15 @@ private fun FinishedBlock(
     }
 }
 
-/** 出错：图标 + 原因，重试 / 改用网页 / 退出。 */
+/** 出错：图标 + 原因，充值（余额不足时）/ 重试 / 改用网页 / 退出。 */
 @Composable
 private fun ErrorBlock(
     message: String,
     canRetry: Boolean,
+    canRecharge: Boolean,
     busy: Boolean,
     onRetry: () -> Unit,
+    onRecharge: () -> Unit,
     onOpenWeb: (() -> Unit)?,
     onExit: () -> Unit
 ) {
@@ -486,6 +516,16 @@ private fun ErrorBlock(
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
+        }
+        if (canRecharge) {
+            // 余额不足是用户自己就能解决的情形：给一条直达充值的路，而不是只让他反复重试
+            PrimaryAction(
+                text = stringResource(R.string.shower_water_go_recharge),
+                busy = busy,
+                busyText = stringResource(R.string.shower_water_checking),
+                onClick = onRecharge
+            )
+            Spacer(Modifier.height(10.dp))
         }
         if (canRetry) {
             PrimaryAction(

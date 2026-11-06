@@ -79,6 +79,41 @@ class WbuYktXyyyClient(
         private const val USER_PASSWORD = "kv7XjPzrDNJY0pdZ#"
 
         private const val SSO_CHECK_PATH = "/accountapi/berserker-base/user/Sso/SsoCheck"
+
+        /** `CostDsp` 在没有命中具体区域时返回的默认值（不是位置名）。 */
+        private const val DEFAULT_COST_DSP = "控水定额消费"
+
+        /**
+         * `CheckKsPos` 响应归类（纯函数，供单测钉住）。
+         *
+         * - `RetNo == 0` → [CheckResult.Valid]（`CostDsp` 是所属区域名）；
+         * - `RetNo == -4` 或 `RetDsp` 含「无效」→ [CheckResult.Invalid]；
+         * - `RetDsp` 是**设备状态**（加锁 / 故障 / 暂停 / 停用 / 维修）→ [CheckResult.Blocked]：
+         *   机号是真的，只是这台机器现在不能交易。实测原文「设备加锁或故障报警，暂不能交易」；
+         * - 其余 → [CheckResult.Unavailable]（无法判定）。
+         *
+         * `CostDsp` 在无效 / 未命中的响应里是默认值「控水定额消费」，不是位置名，
+         * 所以只有看起来像位置名时才带出去当记录标题。
+         */
+        fun classifyCheckKsPos(retNo: Int, retDsp: String, costDsp: String): CheckResult {
+            val reason = retDsp.trim()
+            return when {
+                retNo == 0 -> CheckResult.Valid(areaLabel(costDsp))
+                retNo == -4 || reason.contains("无效") -> CheckResult.Invalid
+                reason.contains("加锁") || reason.contains("故障") ||
+                    reason.contains("暂停") || reason.contains("停用") ||
+                    reason.contains("维修") -> CheckResult.Blocked(areaLabel(costDsp), reason)
+                else -> CheckResult.Unavailable(reason.takeIf { it.isNotBlank() })
+            }
+        }
+
+        /** `CostDsp` → 可读位置名；服务端默认值一律当没有。 */
+        private fun areaLabel(costDsp: String): String? {
+            val label = costDsp.trim()
+            if (label.isEmpty()) return null
+            if (label == DEFAULT_COST_DSP) return null
+            return label
+        }
     }
 
     sealed interface CheckResult {
@@ -87,6 +122,15 @@ class WbuYktXyyyClient(
 
         /** 服务端明确判定机号无效。 */
         data object Invalid : CheckResult
+
+        /**
+         * 机号存在，但这台控水器当前不可交易（加锁 / 故障 / 停用 / 维修…）。
+         *
+         * 和 [Unavailable] 的区别是**结论已知**：服务端认这个机号，只是设备状态不对。
+         * 过去这类答复被归进 [Unavailable]，于是一台暂时锁着的设备会让用户看到
+         * 「连接校园服务失败」—— 而真正该做的恰恰是照常进页面，由 H5 自己提示设备状态。
+         */
+        data class Blocked(val classLabel: String?, val reason: String) : CheckResult
 
         /** 网络/鉴权异常，无法判定。 */
         data class Unavailable(val message: String?) : CheckResult
@@ -127,11 +171,8 @@ class WbuYktXyyyClient(
 
             val retNo = json.optInt("RetNo", Int.MIN_VALUE)
             val retDsp = json.optString("RetDsp")
-            when {
-                retNo == 0 -> CheckResult.Valid(json.optString("CostDsp").takeIf { it.isNotBlank() })
-                retNo == -4 || retDsp.contains("无效") -> CheckResult.Invalid
-                else -> CheckResult.Unavailable(retDsp.takeIf { it.isNotBlank() })
-            }
+            val costDsp = json.optString("CostDsp")
+            classifyCheckKsPos(retNo = retNo, retDsp = retDsp, costDsp = costDsp)
         } catch (e: WbuSessionExpiredException) {
             throw e
         } catch (e: Exception) {

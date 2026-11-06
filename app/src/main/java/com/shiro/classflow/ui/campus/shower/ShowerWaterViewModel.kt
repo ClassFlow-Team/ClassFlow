@@ -12,7 +12,10 @@ import com.shiro.classflow.data.network.wbu.AccessLayer
 import com.shiro.classflow.data.network.wbu.WbuFailureDetector
 import com.shiro.classflow.data.network.wbu.WbuShowerWaterClient
 import com.shiro.classflow.data.network.wbu.WbuShowerWaterSocket
+import com.shiro.classflow.data.network.wbu.ShowerRejection
+import com.shiro.classflow.data.network.wbu.classifyShowerRejection
 import com.shiro.classflow.data.network.wbu.needsRelogin
+import com.shiro.classflow.data.network.wbu.showerStartRefused
 import com.xingheyuzhuan.shiguangschedule.data.repository.CampusDeviceHubRepository
 import com.xingheyuzhuan.shiguangschedule.ui.components.accessFailureText
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -63,7 +66,12 @@ sealed interface ShowerWaterUiStage {
         val elapsedMinutes: Int?
     ) : ShowerWaterUiStage
 
-    data class Error(val message: String, val canRetry: Boolean = true) : ShowerWaterUiStage
+    /** 服务端业务拒绝（余额不足 / 设备在使用中…）：[canRetry] 之外再给「去充值」入口。 */
+    data class Error(
+        val message: String,
+        val canRetry: Boolean = true,
+        val canRecharge: Boolean = false
+    ) : ShowerWaterUiStage
 }
 
 data class ShowerWaterUiState(
@@ -134,6 +142,14 @@ class ShowerWaterViewModel @Inject constructor(
     private var justStartedAt: Long? = null
 
     /**
+     * 「已请求结束、但服务端还没确认」的那台设备。
+     *
+     * 这条路径的界面停在 [ShowerWaterUiStage.Error]（不是 `Active`），而兜底轮询平时只从
+     * `Active` 里取设备号 —— 没有这个字段，服务端真停下来之后界面就永远停在错误页了。
+     */
+    private var pendingStopDevice: String? = null
+
+    /**
      * 进入页面：查询令牌与当前用水状态。
      *
      * 重复调用（重组 / 配置变更）无副作用；进程重建后是新实例，会重新查一次服务端状态，
@@ -192,11 +208,25 @@ class ShowerWaterViewModel @Inject constructor(
             _uiState.update { it.copy(busy = true) }
             runCatching { client.startUse(token, deviceId, billing, port) }
                 .onSuccess { result ->
-                    Log.i(TAG, "start use ok: device=${result.deviceNo} status=${result.status}")
+                    Log.i(TAG, "start use ok: device=${result.deviceNo} status=${result.status} msg=${result.message}")
+                    // 新的一单：上一单的结算明细（金额 / 耗时）绝不能串过来
+                    lastSettlement = null
                     activeStartMillis = System.currentTimeMillis()
                     justStartedAt = activeStartMillis
-                    // 开单成功后立刻以服务端状态刷新一次：拿到 ordernum / startTime 好接着展示
-                    refreshInternal(showBusy = false)
+                    if (showerStartRefused(result.status, result.message)) {
+                        // code=200 但 data 说这一单没开成：不能直接当成功（界面会转一下就回到
+                        // 「开始用水」，用户以为按钮没反应）。按服务端状态复核一次：
+                        // 状态真的在用 → 照常显示；确实没开成 → 把服务端这句话摆出来。
+                        Log.w(TAG, "start use refused: status=${result.status} msg=${result.message}")
+                        refreshInternal(
+                            showBusy = true,
+                            idleFallback = result.message,
+                            clearStartGrace = true
+                        )
+                    } else {
+                        // 开单成功后立刻以服务端状态刷新一次：拿到 ordernum / startTime 好接着展示
+                        refreshInternal(showBusy = false)
+                    }
                 }
                 .onFailure { handleFailure(it, fallback = R.string.shower_water_start) }
         }
@@ -217,15 +247,30 @@ class ShowerWaterViewModel @Inject constructor(
                     stopPolling()
                     val stopped = confirmStopped(token, billing)
                     val minutes = currentStage() as? ShowerWaterUiStage.Active
+                    if (!stopped) {
+                        // 服务端还在计费：这时显示「用水已结束」是**在钱上骗人**。留着「正在用水」，
+                        // 说清「已请求结束、但服务端还没确认」，让用户能再点一次或去网页看账单。
+                        Log.w(TAG, "server still reports an active session after endConsumption")
+                        _uiState.update {
+                            it.copy(
+                                busy = false,
+                                stage = ShowerWaterUiStage.Error(
+                                    context.getString(R.string.shower_water_stop_unconfirmed),
+                                    canRetry = true
+                                )
+                            )
+                        }
+                        // 状态仍是「在用」，把轮询接回来，服务端真停了会自动切到「已结束」
+                        pendingStopDevice = device
+                        startPolling()
+                        return@onSuccess
+                    }
                     markFinished(
                         deviceNo = device,
                         message = message,
                         minutes = minutes?.let { elapsedMinutes(it.startTime) }
                     )
                     _uiState.update { it.copy(busy = false) }
-                    if (!stopped) {
-                        Log.w(TAG, "server still reports an active session after endConsumption")
-                    }
                 }
                 .onFailure { handleFailure(it, fallback = R.string.shower_water_stop) }
         }
@@ -265,9 +310,23 @@ class ShowerWaterViewModel @Inject constructor(
      * 拉令牌 + 查一次状态，并按结果切换界面。
      *
      * 状态是唯一的真相来源：服务端说在用就显示在用（并接上结算推送），说没有就显示可以开始。
+     *
+     * [idleFallback] 用于「设备在使用中」之后的接管刷新：如果服务端这时又说没在用（例如占用的
+     * 是别人、刷新期间刚结束），不要落回「可以开始」——那会让用户重复点开单、再撞一次同样的拒绝。
+     * 此时用它作为错误文案，保留「设备在使用中」这个真实结论。
+     *
+     * [clearStartGrace] 用于「开单返回 code=200 但 data 说没开成」的复核：那条路径刚刚把
+     * [justStartedAt] 设成了现在，如果不撤掉，宽限期会让界面照旧显示「用水中」，
+     * 复核就失去了意义。
      */
-    private fun refreshInternal(showBusy: Boolean, markRefreshed: Boolean = false) {
+    private fun refreshInternal(
+        showBusy: Boolean,
+        markRefreshed: Boolean = false,
+        idleFallback: String? = null,
+        clearStartGrace: Boolean = false
+    ) {
         val billing = billing ?: return
+        if (clearStartGrace) justStartedAt = null
         if (showBusy) _uiState.update { it.copy(busy = true) }
         viewModelScope.launch {
             runCatching {
@@ -298,6 +357,15 @@ class ShowerWaterViewModel @Inject constructor(
                         }
                         ensureSocket()
                         startPolling()
+                    } else if (idleFallback != null) {
+                        // 「在使用中」但服务端说没有本账号的单：多半是被别人占着，直接说清楚
+                        stopPolling()
+                        _uiState.update {
+                            it.copy(
+                                busy = false,
+                                stage = ShowerWaterUiStage.Error(idleFallback, canRetry = true)
+                            )
+                        }
                     } else {
                         stopPolling()
                         _uiState.update {
@@ -360,11 +428,15 @@ class ShowerWaterViewModel @Inject constructor(
                 val token = token ?: continue
                 val usage = runCatching { client.getUsage(token, billing) }.getOrNull() ?: continue
                 if (!usage.active) {
-                    val stage = currentStage() as? ShowerWaterUiStage.Active ?: continue
+                    // 两种来源：正在用水（Active）被服务端判定结束，或「已请求结束但未确认」的
+                    // 那一单终于停了（界面此时停在 Error，没有 Active 可取设备号）。
+                    val stage = currentStage() as? ShowerWaterUiStage.Active
+                    val device = stage?.deviceNo ?: pendingStopDevice ?: continue
+                    pendingStopDevice = null
                     markFinished(
-                        deviceNo = stage.deviceNo,
+                        deviceNo = device,
                         message = null,
-                        minutes = elapsedMinutes(stage.startTime)
+                        minutes = stage?.let { elapsedMinutes(it.startTime) }
                     )
                     break
                 }
@@ -389,6 +461,7 @@ class ShowerWaterViewModel @Inject constructor(
 
     private fun markFinished(deviceNo: String, message: String?, minutes: Int?) {
         closeSocket()
+        pendingStopDevice = null
         val settlement = lastSettlement
         val elapsed = activeStartMillis?.let {
             ((System.currentTimeMillis() - it) / 60_000L).toInt()
@@ -429,9 +502,53 @@ class ShowerWaterViewModel @Inject constructor(
     }
 
     /**
-     * 失败处理与 U净 一致：会话过期/凭据被拒 → 弹登录；其它 → 就地报错（可重试）。
+     * 失败处理：先认「服务端业务拒绝」，其余才走通用的 [WbuFailureDetector]。
+     *
+     * 业务拒绝（余额不足 / 设备在使用中 / 设备不匹配）的响应里服务端已经写清了原因，
+     * 原样显示即可；把它当成网络错误（「网络连接失败，请检查网络后重试」）会让用户
+     * 按提示反复检查网络，问题却在于余额或设备占用。
      */
     private fun handleFailure(error: Throwable, fallback: Int) {
+        val business = error as? WbuShowerWaterClient.ShowerApiException
+        if (business != null) {
+            Log.w(TAG, "shower business rejected: code=${business.code} msg=${business.message}")
+            when (classifyShowerRejection(business.message)) {
+                ShowerRejection.DEVICE_IN_USE -> {
+                    // 设备被占用往往就是「自己有一单没结束」：直接刷新一次，把那台设备接管过来显示，
+                    // 比停在错误页让用户以为坏了更有用。刷新若说没在用（占用方是别人 / 刚结束），
+                    // idleFallback 会把「设备在使用中」这个真实结论留在界面上，不诱导再开一单。
+                    refreshInternal(showBusy = true, idleFallback = business.message)
+                    return
+                }
+
+                ShowerRejection.INSUFFICIENT_BALANCE -> {
+                    _uiState.update {
+                        it.copy(
+                            busy = false,
+                            needLogin = false,
+                            stage = ShowerWaterUiStage.Error(
+                                business.message,
+                                canRetry = true,
+                                canRecharge = true
+                            )
+                        )
+                    }
+                    return
+                }
+
+                ShowerRejection.DEVICE_MISMATCH, ShowerRejection.OTHER -> {
+                    _uiState.update {
+                        it.copy(
+                            busy = false,
+                            needLogin = false,
+                            stage = ShowerWaterUiStage.Error(business.message, canRetry = true)
+                        )
+                    }
+                    return
+                }
+            }
+        }
+
         val failure: AccessFailure = WbuFailureDetector.fromThrowable(error, AccessLayer.Service)
         Log.w(TAG, "shower water failed: $failure")
         if (failure.needsRelogin) {

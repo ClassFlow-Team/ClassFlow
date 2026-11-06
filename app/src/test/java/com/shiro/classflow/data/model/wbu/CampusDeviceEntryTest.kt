@@ -1,6 +1,7 @@
 package com.shiro.classflow.data.model.wbu
 
 import com.shiro.classflow.data.network.wbu.CampusShowerLink
+import com.shiro.classflow.data.network.wbu.ShowerManualCode
 import com.xingheyuzhuan.shiguangschedule.data.repository.CampusDeviceHubRepository
 
 import org.junit.Assert.assertEquals
@@ -288,6 +289,165 @@ class CampusDeviceEntryTest {
         assertNull(
             CampusDeviceEntry(kind = CampusDeviceKind.WASHER, key = "uuid", deviceNo = "  ").shortDeviceNo
         )
+    }
+
+    // ---------- 洗浴类型标签 / 改类型 ----------
+
+    @Test
+    fun `shower system falls back to key prefix for legacy records`() {
+        // 老记录没写 system 字段，只能从 key 前缀还原，否则卡片上的楼栋标签会消失
+        val legacy = CampusDeviceEntry(kind = CampusDeviceKind.SHOWER, key = "l:17010737")
+        assertEquals(CampusShowerLink.SYSTEM_LIFE, legacy.showerSystem)
+        assertEquals("2-3栋", legacy.systemLabel)
+
+        val ykt = CampusDeviceEntry(kind = CampusDeviceKind.SHOWER, key = "y:10101")
+        assertEquals(CampusShowerLink.SYSTEM_YKT, ykt.showerSystem)
+        assertEquals("1栋", ykt.systemLabel)
+    }
+
+    @Test
+    fun `non shower records have no system label`() {
+        val water = CampusDeviceEntry(kind = CampusDeviceKind.WATER, key = "0011202004140940")
+        assertNull(water.showerSystem)
+        assertNull(water.systemLabel)
+        assertFalse(water.canChangeShowerSystem)
+    }
+
+    @Test
+    fun `can change system only when key roundtrips`() {
+        val normal = CampusDeviceEntry(
+            kind = CampusDeviceKind.SHOWER,
+            key = "y:10101",
+            system = CampusShowerLink.SYSTEM_YKT,
+        )
+        assertTrue(normal.canChangeShowerSystem)
+
+        // 设备号里带冒号（旧数据把整条链接当设备号存过）：改一次就会把号码截断
+        val broken = CampusDeviceEntry(
+            kind = CampusDeviceKind.SHOWER,
+            key = "l:https://example.com/s/l/17010737",
+            system = CampusShowerLink.SYSTEM_LIFE,
+        )
+        assertFalse(broken.canChangeShowerSystem)
+    }
+
+    @Test
+    fun `changing system moves the record to a new key`() {
+        val old = CampusDeviceEntry(
+            kind = CampusDeviceKind.SHOWER,
+            key = "l:17010737",
+            raw = "https://example.com/s/l/17010737",
+            system = CampusShowerLink.SYSTEM_LIFE,
+            storeName = "马影河宿舍2栋",
+            deviceNo = "17010737",
+            useCount = 3,
+            lastUsedAt = 500L,
+        )
+        val moved = CampusDeviceHubRepository.applySystemChange(
+            listOf(old),
+            oldKey = old.key,
+            target = ShowerManualCode.Candidate(CampusShowerLink.SYSTEM_YKT, "1701")
+        ).single()
+
+        assertEquals("y:1701", moved.key)
+        assertEquals(CampusShowerLink.SYSTEM_YKT, moved.system)
+        assertNull(moved.port)
+        // raw 是旧系统的扫码原文，换系统后必须清掉
+        assertEquals("", moved.raw)
+        // 位置名是旧系统服务端给的，换系统后标题不能还在说「马影河宿舍2栋」
+        assertNull(moved.storeName)
+        // deviceNo 跟着 code 走，否则标题会显示上一个系统的号码
+        assertEquals("1701", moved.deviceNo)
+        assertEquals(3, moved.useCount)
+        assertEquals(500L, moved.lastUsedAt)
+    }
+
+    @Test
+    fun `changing only the port keeps store name and raw`() {
+        val old = CampusDeviceEntry(
+            kind = CampusDeviceKind.SHOWER,
+            key = "l:17010737",
+            raw = "https://example.com/s/l/17010737",
+            system = CampusShowerLink.SYSTEM_LIFE,
+            storeName = "马影河宿舍2栋",
+            deviceNo = "17010737",
+        )
+        val moved = CampusDeviceHubRepository.applySystemChange(
+            listOf(old),
+            oldKey = old.key,
+            target = ShowerManualCode.Candidate(CampusShowerLink.SYSTEM_LIFE, "17010737", "3")
+        ).single()
+
+        assertEquals("l:17010737:3", moved.key)
+        assertEquals("3", moved.port)
+        // 系统没变：位置名与扫码原文都还有效
+        assertEquals("马影河宿舍2栋", moved.storeName)
+        assertEquals("https://example.com/s/l/17010737", moved.raw)
+    }
+
+    @Test
+    fun `changing system merges into an existing record at the new key`() {
+        val source = CampusDeviceEntry(
+            kind = CampusDeviceKind.SHOWER,
+            key = "l:10101",
+            system = CampusShowerLink.SYSTEM_LIFE,
+            deviceNo = "10101",
+            useCount = 2,
+            lastUsedAt = 100L,
+        )
+        val target = CampusDeviceEntry(
+            kind = CampusDeviceKind.SHOWER,
+            key = "y:10101",
+            system = CampusShowerLink.SYSTEM_YKT,
+            deviceNo = "10101",
+            alias = "一楼那个",
+            useCount = 5,
+            lastUsedAt = 900L,
+        )
+        val result = CampusDeviceHubRepository.applySystemChange(
+            listOf(source, target),
+            oldKey = source.key,
+            target = ShowerManualCode.Candidate(CampusShowerLink.SYSTEM_YKT, "10101")
+        )
+        // 不能留下两条指向同一台设备的记录
+        assertEquals(1, result.size)
+        val merged = result.single()
+        assertEquals("y:10101", merged.key)
+        assertEquals(7, merged.useCount)
+        assertEquals(900L, merged.lastUsedAt)
+        assertEquals("一楼那个", merged.alias)
+    }
+
+    @Test
+    fun `changing system with unknown old key is a no-op`() {
+        val list = listOf(
+            CampusDeviceEntry(kind = CampusDeviceKind.SHOWER, key = "y:10101")
+        )
+        val result = CampusDeviceHubRepository.applySystemChange(
+            list,
+            oldKey = "y:99999",
+            target = ShowerManualCode.Candidate(CampusShowerLink.SYSTEM_LIFE, "123456")
+        )
+        assertEquals(list, result)
+    }
+
+    @Test
+    fun `normalize enforces each system's rules`() {
+        // 1 栋：≤5 位、纯数字、无端口、去前导零
+        assertEquals(
+            ShowerManualCode.Candidate(CampusShowerLink.SYSTEM_YKT, "10101"),
+            ShowerManualCode.normalize(CampusShowerLink.SYSTEM_YKT, "010101", null)
+        )
+        assertNull(ShowerManualCode.normalize(CampusShowerLink.SYSTEM_YKT, "123456", null))
+        assertNull(ShowerManualCode.normalize(CampusShowerLink.SYSTEM_YKT, "10101", "2"))
+        assertNull(ShowerManualCode.normalize(CampusShowerLink.SYSTEM_YKT, "10a01", null))
+
+        // 2-3 栋：保留原文（可带前导零）与端口
+        assertEquals(
+            ShowerManualCode.Candidate(CampusShowerLink.SYSTEM_LIFE, "00123456", "2"),
+            ShowerManualCode.normalize(CampusShowerLink.SYSTEM_LIFE, "00123456", "2")
+        )
+        assertNull(ShowerManualCode.normalize(CampusShowerLink.SYSTEM_LIFE, "00123456", "abc"))
     }
 
     // ---------- 枚举 ----------

@@ -152,6 +152,30 @@ object CampusDeviceShortcuts {
         return if (isPinned(context, entry)) PinResult.ALREADY_PINNED else PinResult.FAILED
     }
 
+    /**
+     * 改完洗浴类型后刷新桌面快捷方式。
+     *
+     * 快捷方式 ID 是按 key 生成的，改类型换了 key 就等于换了 ID —— 但**桌面上那个图标的 ID
+     * 改不了**（钉住的位置由 Launcher 持有）。所以这里用**旧 ID** 重新写一遍 Intent：
+     * 图标留在原位，点下去却已经指向新的系统，不会拿旧系统去解析。
+     */
+    fun updateAfterSystemChange(
+        context: Context,
+        oldEntry: CampusDeviceEntry,
+        newEntry: CampusDeviceEntry,
+    ) {
+        if (!isPinned(context, oldEntry)) return
+        runCatching {
+            val shortcut = buildShortcut(
+                context = context,
+                entry = newEntry,
+                label = newEntry.displayTitle.take(12),
+                idOverride = shortcutIdOf(oldEntry),
+            )
+            ShortcutManagerCompat.updateShortcuts(context, listOf(shortcut))
+        }
+    }
+
     /** 这台设备是不是已经钉在桌面上了。 */
     fun isPinned(context: Context, entry: CampusDeviceEntry): Boolean = runCatching {
         val id = shortcutIdOf(entry)
@@ -163,6 +187,8 @@ object CampusDeviceShortcuts {
         context: Context,
         entry: CampusDeviceEntry,
         label: String,
+        /** 覆盖快捷方式 ID（改类型时要用旧 ID 覆盖桌面上的图标，见 [updateAfterSystemChange]）。 */
+        idOverride: String? = null,
     ): ShortcutInfoCompat {
         val intent = Intent(context, MainActivity::class.java).apply {
             action = when (entry.kind) {
@@ -178,7 +204,7 @@ object CampusDeviceShortcuts {
             // 同一台设备始终复用同一个快捷方式（不会越点越多）
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
-        return ShortcutInfoCompat.Builder(context, shortcutIdOf(entry))
+        return ShortcutInfoCompat.Builder(context, idOverride ?: shortcutIdOf(entry))
             .setShortLabel(label)
             .setLongLabel(label)
             .setIcon(IconCompat.createWithResource(context, iconResOf(entry.iconId, entry.kind)))

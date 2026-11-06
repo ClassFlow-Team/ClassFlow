@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -55,6 +57,8 @@ import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
 import com.shiro.classflow.data.model.wbu.CampusDeviceEntry
 import com.shiro.classflow.data.model.wbu.CampusDeviceKind
+import com.shiro.classflow.data.network.wbu.CampusShowerLink
+import com.shiro.classflow.data.network.wbu.ShowerManualCode
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -85,13 +89,24 @@ fun CampusDeviceHubScreen(
     }
 
     val state by viewModel.uiState.collectAsState()
+    val manualState by viewModel.manualShower.collectAsState()
     var expandedKey by remember { mutableStateOf<String?>(null) }
     var renameTarget by remember { mutableStateOf<CampusDeviceEntry?>(null) }
+    var systemTarget by remember { mutableStateOf<CampusDeviceEntry?>(null) }
     var pinTarget by remember { mutableStateOf<CampusDeviceEntry?>(null) }
+    var manualShowerInput by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { resId ->
             Toast.makeText(context, resId, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 手输解析成功：一次性跳到目标页（解析已在弹窗里完成，不再经过蓝色过渡页）
+    LaunchedEffect(Unit) {
+        viewModel.openShower.collect { destination ->
+            manualShowerInput = false
+            navBridge.navigate(destination)
         }
     }
 
@@ -167,6 +182,7 @@ fun CampusDeviceHubScreen(
                         },
                         onUse = { navBridge.navigate(entry.launchDestination()) },
                         onRename = { renameTarget = entry },
+                        onSystem = { systemTarget = entry },
                         onPin = { pinTarget = entry },
                         onCopyId = {
                             copyToClipboard(context, entry.key)
@@ -190,7 +206,37 @@ fun CampusDeviceHubScreen(
                     Text(stringResource(scanActionRes(kind)))
                 }
             }
+
+            // 只有洗浴需要手输入口：1 栋页面压根没有输入框、2-3 栋页面有但那是网页版的；
+            // 饮水机 / 洗衣机都印着完整机号，扫一下比敲一串 uuid 快得多。
+            if (kind == CampusDeviceKind.SHOWER) {
+                item {
+                    OutlinedButton(
+                        onClick = { manualShowerInput = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Filled.Keyboard, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Text(stringResource(R.string.device_action_manual_shower))
+                    }
+                }
+            }
         }
+    }
+
+    if (manualShowerInput) {
+        DeviceManualShowerDialog(
+            onDismiss = {
+                manualShowerInput = false
+                viewModel.resetManualShower()
+            },
+            resolving = manualState.resolving,
+            errorText = manualState.errorRes?.let { stringResource(it) },
+            onConfirm = { system, code, port ->
+                // 解析就在弹窗里跑（原地转圈），成功后才一次性导航到目标页
+                viewModel.resolveManualShower(system, code, port)
+            }
+        )
     }
 
     renameTarget?.let { target ->
@@ -200,6 +246,22 @@ fun CampusDeviceHubScreen(
             onConfirm = { alias ->
                 viewModel.rename(target.key, alias)
                 renameTarget = null
+            }
+        )
+    }
+
+    systemTarget?.let { target ->
+        DeviceShowerSystemDialog(
+            currentSystem = target.showerSystem,
+            code = target.code,
+            port = target.port,
+            onDismiss = { systemTarget = null },
+            onConfirm = { system, code, port ->
+                viewModel.changeShowerSystem(
+                    oldKey = target.key,
+                    target = ShowerManualCode.Candidate(system = system, code = code, port = port)
+                )
+                systemTarget = null
             }
         )
     }
@@ -251,7 +313,7 @@ private fun CampusDeviceEntry.launchDestination(): Destination = when (kind) {
     }
 }
 
-/** 记录卡片：大标题 / 小标题 / 次数与时间；展开是五个动作。 */
+/** 记录卡片：大标题 / 小标题 / 次数与时间；展开是六个动作。 */
 @Composable
 private fun DeviceHistoryCard(
     entry: CampusDeviceEntry,
@@ -259,6 +321,7 @@ private fun DeviceHistoryCard(
     onToggle: () -> Unit,
     onUse: () -> Unit,
     onRename: () -> Unit,
+    onSystem: () -> Unit,
     onPin: () -> Unit,
     onCopyId: () -> Unit,
     onDelete: () -> Unit,
@@ -289,6 +352,12 @@ private fun DeviceHistoryCard(
                         )
                     }
                 }
+                // 洗浴卡片右上角标出控水器类型（1 栋 / 2-3 栋）：这两套是完全不同的服务端，
+                // 光看标题里的楼栋名容易和「端口 #2」这类标签混在一起，单独给一个标签更好认。
+                if (entry.kind == CampusDeviceKind.SHOWER) {
+                    SystemChip(entry)
+                    Spacer(Modifier.width(6.dp))
+                }
                 KindChip(entry)
             }
 
@@ -311,6 +380,14 @@ private fun DeviceHistoryCard(
                     ) {
                         TextButton(onClick = onUse) { Text(stringResource(R.string.device_action_use)) }
                         TextButton(onClick = onRename) { Text(stringResource(R.string.device_action_rename)) }
+                        // 「改类型」只对洗浴有意义：饮水机 / 洗衣机没有多套服务端。
+                        // 另需 key 能原样还原成三元组 —— 设备号里含冒号（旧数据把整条 URL
+                        // 当设备号存过）时改类型会把号码截断，那种记录只能重新扫码 / 手输。
+                        if (entry.canChangeShowerSystem) {
+                            TextButton(onClick = onSystem) {
+                                Text(stringResource(R.string.device_action_change_system))
+                            }
+                        }
                         TextButton(onClick = onPin) { Text(stringResource(R.string.device_action_pin_shortcut)) }
                         TextButton(onClick = onCopyId) { Text(stringResource(R.string.device_action_copy_id)) }
                         TextButton(onClick = onDelete) {
@@ -327,9 +404,37 @@ private fun DeviceHistoryCard(
 }
 
 /**
+ * 洗浴控水器类型标签（右上角）：1 栋 / 2-3 栋。
+ *
+ * 和 [KindChip] 的端口标签分开配色 —— 类型是「这台设备归哪个服务端管」，
+ * 端口只是「同一台设备上的第几路」，两者语义完全不同，颜色一样会分不清。
+ */
+@Composable
+private fun SystemChip(entry: CampusDeviceEntry) {
+    val system = entry.showerSystem ?: return
+    val label = when (system) {
+        CampusShowerLink.SYSTEM_YKT -> stringResource(R.string.device_system_chip_ykt)
+        CampusShowerLink.SYSTEM_LIFE -> stringResource(R.string.device_system_chip_life)
+        else -> return
+    }
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
+    }
+}
+
+/**
  * 洗浴记录的端口标签（其余类型不显示）。
  *
- * 楼栋（1栋 / 2-3栋）已经写进标题了，这里不再重复；只有多路控水器需要标出端口。
+ * 楼栋（1栋 / 2-3栋）由右上角的 [SystemChip] 单独显示，这里只标多路控水器的端口。
  */
 @Composable
 private fun KindChip(entry: CampusDeviceEntry) {

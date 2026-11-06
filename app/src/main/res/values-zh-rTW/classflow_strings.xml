@@ -1039,6 +1039,7 @@
     <string name="link_hub_error_network">網路異常，無法取得此分享內容</string>
     <string name="link_hub_error_server_not_configured">此建置未設定連結服務，無法解析伺服器短碼</string>
     <string name="link_hub_error_shower_invalid">未識別到該洗浴設備，請確認控水器編號是否正確</string>
+    <string name="link_hub_error_shower_unavailable">連線校園服務失敗，請稍後重試（不是連結問題）</string>
     <string name="link_hub_error_not_json">此分享內容暫時無法開啟，請稍後再試</string>
     <string name="link_hub_open_in_browser">用瀏覽器開啟</string>
     <string name="toast_web_scheme_unhandled">沒有能開啟該連結的應用</string>
@@ -1239,4 +1240,34 @@
     <string name="bill_error_load">帳單載入失敗，請重試</string>
     <string name="bill_action_relogin">重新登入</string>
     <string name="bill_balance_short">餘額 ¥%1$s</string>
+
+    <!-- 洗浴：手動輸入設備碼（樓棟由使用者勾選）、類型標籤與改類型 -->
+    <string name="device_action_manual_shower">手動輸入機號</string>
+    <string name="device_manual_shower_title">手動輸入設備碼</string>
+    <string name="device_manual_shower_hint">輸入控水器上的機號或設備號，也可以貼上整條連結</string>
+    <string name="device_manual_shower_placeholder">設備號 / 機號 / 連結</string>
+    <string name="device_manual_shower_detect_life">2-3 棟 · %1$s</string>
+    <string name="device_manual_shower_detect_ykt">1 棟 · 機號 %1$s</string>
+    <string name="device_manual_shower_detect_port">埠 %1$s</string>
+    <string name="device_manual_shower_detect_link">設備碼取自連結</string>
+    <string name="device_manual_shower_detect_from_input">設備碼取自輸入</string>
+    <string name="device_manual_shower_pick_system">這台設備在哪一棟？</string>
+    <string name="device_manual_shower_pick_required">請先勾選這台設備屬於哪一棟</string>
+    <string name="device_manual_shower_system_ykt">1 棟（控水器機號）</string>
+    <string name="device_manual_shower_system_life">2-3 棟（水錶設備號）</string>
+    <string name="device_manual_shower_system_mismatch">1 棟機號只有 5 位、也不帶埠，請換到 2-3 棟或改輸入</string>
+    <string name="device_manual_shower_detect_invalid">看不清是哪台設備：請輸入控水器機號、水錶設備號，或貼上整條連結</string>
+    <string name="device_manual_shower_resolving">正在連線設備…</string>
+    <string name="device_action_change_system">改類型</string>
+    <string name="device_system_chip_ykt">1棟</string>
+    <string name="device_system_chip_life">2-3棟</string>
+    <string name="device_shower_system_title">改控水器類型</string>
+    <string name="device_shower_system_device">設備號 %1$s</string>
+    <string name="device_shower_system_pick_required">請選擇這台控水器屬於哪一棟</string>
+    <string name="device_shower_system_mismatch">這個樓棟收不下 %1$s：1 棟機號最多 5 位、不帶埠</string>
+    <string name="device_shower_system_port_label">埠（選填）</string>
+    <string name="device_shower_system_port_hint">只有多路控水器才需要填</string>
+    <string name="device_message_system_changed">已改類型</string>
+    <string name="shower_water_go_recharge">去儲值</string>
+    <string name="shower_water_stop_unconfirmed">已請求結束，但伺服端還沒確認停止計費。請稍後再試，或改用網頁開啟查看帳單</string>
 </resources>

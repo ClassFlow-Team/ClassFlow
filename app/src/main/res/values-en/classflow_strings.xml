@@ -1039,6 +1039,7 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="link_hub_error_network">Network error, could not fetch this shared content</string>
     <string name="link_hub_error_server_not_configured">This build has no link service configured, so server codes cannot be resolved</string>
     <string name="link_hub_error_shower_invalid">Shower device not found. Check the water controller number.</string>
+    <string name="link_hub_error_shower_unavailable">Could not reach the campus service — please try again (this is not a link problem)</string>
     <string name="link_hub_error_not_json">This shared content cannot be opened right now, please try again later</string>
     <string name="link_hub_open_in_browser">Open in browser</string>
     <string name="toast_web_scheme_unhandled">No app can open this link</string>
@@ -1239,4 +1240,34 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="bill_error_load">Failed to load the bill. Please try again.</string>
     <string name="bill_action_relogin">Sign in again</string>
     <string name="bill_balance_short">Balance ¥%1$s</string>
+
+    <!-- Shower: manual device-code entry (the user picks the building), type chip and type change -->
+    <string name="device_action_manual_shower">Enter the number manually</string>
+    <string name="device_manual_shower_title">Enter a device code</string>
+    <string name="device_manual_shower_hint">Type the number printed on the water controller, or paste the full link</string>
+    <string name="device_manual_shower_placeholder">Device number / controller number / link</string>
+    <string name="device_manual_shower_detect_life">Buildings 2-3 · %1$s</string>
+    <string name="device_manual_shower_detect_ykt">Building 1 · controller %1$s</string>
+    <string name="device_manual_shower_detect_port">port %1$s</string>
+    <string name="device_manual_shower_detect_link">code taken from the link</string>
+    <string name="device_manual_shower_detect_from_input">code taken from your input</string>
+    <string name="device_manual_shower_pick_system">Which building is this device in?</string>
+    <string name="device_manual_shower_pick_required">Pick which building this device belongs to first</string>
+    <string name="device_manual_shower_system_ykt">Building 1 (controller number)</string>
+    <string name="device_manual_shower_system_life">Buildings 2-3 (meter device number)</string>
+    <string name="device_manual_shower_system_mismatch">A Building 1 number is at most 5 digits and has no port — switch to Buildings 2-3 or edit the input</string>
+    <string name="device_manual_shower_detect_invalid">Could not tell which device this is — enter the controller number, the meter device number, or paste the full link</string>
+    <string name="device_manual_shower_resolving">Connecting…</string>
+    <string name="device_action_change_system">Change type</string>
+    <string name="device_system_chip_ykt">Bldg 1</string>
+    <string name="device_system_chip_life">Bldg 2-3</string>
+    <string name="device_shower_system_title">Change controller type</string>
+    <string name="device_shower_system_device">Device %1$s</string>
+    <string name="device_shower_system_pick_required">Pick which building this controller belongs to</string>
+    <string name="device_shower_system_mismatch">This building cannot take %1$s — a Building 1 number is at most 5 digits and has no port</string>
+    <string name="device_shower_system_port_label">Port (optional)</string>
+    <string name="device_shower_system_port_hint">Only multi-outlet controllers need this</string>
+    <string name="device_message_system_changed">Type changed</string>
+    <string name="shower_water_go_recharge">Top up</string>
+    <string name="shower_water_stop_unconfirmed">The stop request was sent, but the server has not confirmed that billing stopped. Try again shortly, or open the web page to check the bill.</string>
 </resources>
