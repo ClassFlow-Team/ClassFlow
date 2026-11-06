@@ -17,6 +17,8 @@ import com.shiro.classflow.data.network.wbu.WbuSessionExpiredException
 import com.shiro.classflow.data.network.wbu.UjingPayFlag
 import com.shiro.classflow.data.network.wbu.WbuUjingClient
 import com.shiro.classflow.data.network.wbu.directChannelTrouble
+import com.shiro.classflow.data.network.wbu.canAttemptSettle
+import com.shiro.classflow.data.network.wbu.isDispenseDone
 import com.shiro.classflow.data.network.wbu.isOutstanding
 import com.shiro.classflow.data.network.wbu.needsRelogin
 import com.shiro.classflow.data.network.wbu.pickOutstandingOrder
@@ -102,12 +104,51 @@ enum class WaterUnpaidReason {
     /** 订单没有 `orderNo`，没法结。 */
     NO_ORDER_NO,
 
-    /** 服务端拒绝了补缴。 */
+    /**
+     * 一卡通扣款没成功 —— **多半是余额不足**，充钱后重试就能过。
+     *
+     * 实测：`genPayArgs` 回 `1021`「一卡通异常，请联系一卡通处理：支付未成功，错误码：80」，
+     * 充值后同一请求立刻 `code: 0 success`。所以这类失败要给「去充值」的出路，
+     * 而不是「请联系一卡通」（那是在把用户推给一个他并不需要的流程）。
+     */
+    INSUFFICIENT_FUNDS,
+
+    /** 服务端明确拒绝了补缴（非扣款失败类）。 */
     SERVER_REJECTED,
+
+    /**
+     * 服务端回「请勿重复请求」（`6020208`）且复查后仍未结清。
+     *
+     * 不是失败：这笔补缴它收到了、正在处理。给用户一句「正在处理」远好过
+     * 「补缴失败：请勿重复请求」—— 后者看起来像我们写坏了。
+     */
+    PENDING,
 
     /** 请求本身没成功（网络 / 会话）。 */
     REQUEST_FAILED,
 }
+
+/**
+ * 这个补缴失败是不是「充钱就能好」的那一类。
+ *
+ * `1021` 是一卡通渠道的**扣款失败**（实测错误码 80 = 支付未成功，典型成因余额不足）。
+ * 判定刻意只看业务码、不去猜 message 里的字样：文案会变，码不会。
+ */
+fun isRetriableSettleFailure(e: WbuUjingClient.UjingApiException): Boolean =
+    e.code == WbuUjingClient.CODE_CARD_PAY_FAILED
+
+/**
+ * 这个错误是不是「账号名下还有一笔没走完的单，所以不能开新单」。
+ *
+ * 两个码都算：
+ * - [WbuUjingClient.CODE_ORDER_NOT_FINISHED]（`2040224`）—— 本校实测就是这个；
+ * - [WbuUjingClient.CODE_UNPAID_ORDER]（`1532`）—— 官方 H5 里的「支付宝订单未结账」分支。
+ *
+ * 注意它只说「有单没结束」，**不保证那单欠费**：可能正在出水。所以上层要么先查列表
+ * 确认，要么在结不掉时如实告诉用户「请先去结束那一单」。
+ */
+fun WbuUjingClient.UjingApiException.blocksDispensing(): Boolean =
+    code == WbuUjingClient.CODE_ORDER_NOT_FINISHED || code == WbuUjingClient.CODE_UNPAID_ORDER
 
 data class UjingWaterUiState(
     val stage: UjingWaterUiStage = UjingWaterUiStage.Splash,
@@ -185,12 +226,44 @@ class UjingWaterViewModel @Inject constructor(
     private var autoTunnelTried: Boolean = false
 
     /**
-     * 本次页面生命周期里已经尝试过补缴的订单（按 `orderNo` 去重）。
+     * 本次页面生命周期里**已经成功**补缴过的订单（按 **orderId** 去重）。
      *
-     * 只自动试一次：补缴失败多半是「这单就不该由我们扣」（余额不足 / 卡状态异常 /
-     * 不是一卡通），反复重试既不会成功，还会在服务端留下连串失败记录。
+     * 注意只记「成功」，不记「失败」：一卡通扣款失败最常见的成因是**余额不足**
+     * （实测 `genPayArgs` 回 `1021`「一卡通异常…错误码：80」，充值后同一请求立刻
+     * `code: 0 success`）。把失败也记进去，用户充完钱重进页面就再也不会自动重试 ——
+     * 那恰恰是他最需要重试的时刻。
+     *
+     * **key 必须统一用 `orderId`**：`waterOrderList` 的列表项**没有 `orderNo` 字段**
+     * （实测只有 `id`），而详情里有。之前一处用 `orderNo`、一处用 `orderId`，
+     * 两个集合永远对不上，退避形同虚设 —— 表现为每次进页面都会补缴两次，
+     * 第二次稳定拿到 `6020208 请勿重复请求`。
      */
-    private val attemptedSettles = mutableSetOf<String>()
+    private val settledOrders = mutableSetOf<Long>()
+
+    /**
+     * 刚才补缴失败过的订单 + 失败时刻，用于**短时退避**。
+     *
+     * 只防「同一屏内连打」（进页面 + 下单被拒 + MQTT 推送可能连着触发），
+     * 不阻止用户充完钱重进页面再试：超过 [settleRetryBackoffMs] 就重新放行。
+     */
+    private val settleBackoffUntil = mutableMapOf<Long, Long>()
+
+    /** 退避窗口：远小于「去充个值再回来」的时间，又足以挡住同一秒内的连打。 */
+    private val settleRetryBackoffMs = 30_000L
+
+    /** 这次能不能对 [orderId] 发起补缴（成功过就不再试；失败要过了退避窗口）。 */
+    private fun canAttemptSettle(orderId: Long, force: Boolean): Boolean =
+        canAttemptSettle(orderId, settledOrders, settleBackoffUntil, System.currentTimeMillis(), force)
+
+    /**
+     * 「请勿重复请求」([]WbuUjingClient.CODE_DUPLICATE_REQUEST]) 不该算失败。
+     *
+     * 它的意思是「这笔单的补缴我收到了、正在处理」，而不是「我拒绝你」。
+     * 真正常见的情形是：下单前补缴刚打过一次，下单被挡住后又强制打了一次。
+     * 这时正确做法是**重新查一次订单状态**看结果，而不是给用户报错。
+     */
+    private suspend fun recheckAfterDuplicate(orderId: Long): WbuUjingClient.WaterOrderDetail? =
+        runCatching { ujingClient.fetchOrderDetail(orderId) }.getOrNull()
 
     /**
      * 订单已经到终态、但这一单本身还欠着钱时，把它结掉。
@@ -237,40 +310,90 @@ class UjingWaterViewModel @Inject constructor(
 
         val orderNo = detail.orderNo
         if (orderNo.isNullOrBlank()) return null
-        if (!attemptedSettles.add(orderNo) && !force) return null
+        if (!canAttemptSettle(detail.orderId, force)) return null
 
+        return settleAndReload(orderNo, detail.payPrice, detail.orderId)
+    }
+
+    /**
+     * 真正调用补缴接口，并把结果写进 [UjingWaterUiState.settleNotice]。
+     *
+     * 失败分两类，因为它们对用户的意义完全不同：
+     * - [isRetriableSettleFailure]（`1021` 一卡通扣款没成功，多为余额不足）：**不记入
+     *   [settledOrders]**，只设退避；用户充值后重进页面会自动再试一次。
+     * - 其它业务拒绝：同样不记入，但文案按「服务端拒绝」处理。
+     *
+     * @return 成功后重新拉到的详情；失败返回 null。
+     */
+    private suspend fun settleAndReload(
+        orderNo: String,
+        amount: Double,
+        orderId: Long,
+    ): WbuUjingClient.WaterOrderDetail? {
         return try {
             ujingClient.settleWaterOrder(orderNo)
-            Log.i(TAG, "终态订单 $orderNo 已补缴（¥${detail.payPrice}）")
+            settledOrders.add(orderId)
+            settleBackoffUntil.remove(orderId)
+            Log.i(TAG, "已补缴订单 $orderNo（¥$amount）")
             _uiState.update {
-                it.copy(
-                    settleNotice = WaterUnpaidNotice.Settled(
-                        amount = detail.payPrice,
-                        orderNo = orderNo,
-                    )
-                )
+                it.copy(settleNotice = WaterUnpaidNotice.Settled(amount = amount, orderNo = orderNo))
             }
             // 重新拉一次：完成页要显示真实的扣费金额与「已支付」
-            runCatching { ujingClient.fetchOrderDetail(detail.orderId) }.getOrNull()
+            runCatching { ujingClient.fetchOrderDetail(orderId) }.getOrNull()
         } catch (e: WbuUjingClient.UjingApiException) {
-            Log.w(TAG, "终态订单补缴被拒: $orderNo / ${e.code} ${e.message}")
+            // 「请勿重复请求」= 服务端正在处理，不是拒绝：查一下结果再说
+            if (e.code == WbuUjingClient.CODE_DUPLICATE_REQUEST) {
+                Log.i(TAG, "补缴返回「请勿重复请求」，改为复查订单状态: $orderNo")
+                val fresh = recheckAfterDuplicate(orderId)
+                if (fresh != null && !UjingPayFlag.from(fresh.payFlag).isOutstanding(fresh.payPrice)) {
+                    // 其实已经结清了（上一次请求成功，只是回包慢）
+                    settledOrders.add(orderId)
+                    settleBackoffUntil.remove(orderId)
+                    _uiState.update {
+                        it.copy(settleNotice = WaterUnpaidNotice.Settled(amount = amount, orderNo = orderNo))
+                    }
+                    return fresh
+                }
+                // 还没结清：说「正在处理」，不说「失败」。不进退避 ——
+                // 这单可能下一刻就变成已支付，用户再点一次也无害。
+                _uiState.update {
+                    it.copy(
+                        settleNotice = WaterUnpaidNotice.Unsettled(
+                            amount = amount,
+                            orderNo = orderNo,
+                            reason = WaterUnpaidReason.PENDING,
+                        )
+                    )
+                }
+                return null
+            }
+
+            val funds = isRetriableSettleFailure(e)
+            settleBackoffUntil[orderId] = System.currentTimeMillis() + settleRetryBackoffMs
+            Log.w(
+                TAG,
+                if (funds) "补缴失败（疑似余额不足，可重试）: $orderNo / ${e.code} ${e.message}"
+                else "补缴被服务端拒绝: $orderNo / ${e.code} ${e.message}"
+            )
             _uiState.update {
                 it.copy(
                     settleNotice = WaterUnpaidNotice.Unsettled(
-                        amount = detail.payPrice,
+                        amount = amount,
                         orderNo = orderNo,
-                        reason = WaterUnpaidReason.SERVER_REJECTED,
+                        reason = if (funds) WaterUnpaidReason.INSUFFICIENT_FUNDS
+                        else WaterUnpaidReason.SERVER_REJECTED,
                         serverMessage = e.message,
                     )
                 )
             }
             null
         } catch (e: Exception) {
-            Log.w(TAG, "终态订单补缴失败: $orderNo", e)
+            settleBackoffUntil[orderId] = System.currentTimeMillis() + settleRetryBackoffMs
+            Log.w(TAG, "补缴请求失败: $orderNo", e)
             _uiState.update {
                 it.copy(
                     settleNotice = WaterUnpaidNotice.Unsettled(
-                        amount = detail.payPrice,
+                        amount = amount,
                         orderNo = orderNo,
                         reason = WaterUnpaidReason.REQUEST_FAILED,
                         serverMessage = e.message,
@@ -290,7 +413,10 @@ class UjingWaterViewModel @Inject constructor(
      * 全程**不抛异常、不阻塞取水**：查不到列表、网络不通、服务端拒绝，都只是记一条
      * [WaterUnpaidNotice]，把决定权留给用户。返回是否真的结清了一单。
      *
-     * @param force 忽略「本次已尝试过」的去重（用户点「先结清再试」时用）。
+     * **失败不写进 [settledOrders]**：一卡通扣款失败多为余额不足，用户充完钱重进页面
+     * 必须还能再自动试一次（只受 [settleBackoffUntil] 的短时退避约束）。
+     *
+     * @param force 忽略开关与退避（用户点「先结清再试」时用）。
      */
     private suspend fun settleOutstandingOrder(force: Boolean = false): Boolean {
         val app = getApplication<Application>()
@@ -309,9 +435,9 @@ class UjingWaterViewModel @Inject constructor(
             return false
         } ?: return false
 
-        val orderKey = outstanding.orderNo ?: outstanding.orderId.toString()
-        if (!attemptedSettles.add(orderKey) && !force) {
-            Log.d(TAG, "欠费单 $orderKey 本次已尝试过补缴，跳过")
+        val orderKey = outstanding.orderId
+        if (!canAttemptSettle(orderKey, force)) {
+            Log.d(TAG, "欠费单 $orderKey 已结清或在退避窗口内，跳过补缴")
             return false
         }
 
@@ -365,45 +491,7 @@ class UjingWaterViewModel @Inject constructor(
             return false
         }
 
-        return try {
-            ujingClient.settleWaterOrder(orderNo)
-            Log.i(TAG, "已自动补缴欠费单 $orderNo（¥${detail.payPrice}）")
-            _uiState.update {
-                it.copy(
-                    settleNotice = WaterUnpaidNotice.Settled(
-                        amount = detail.payPrice,
-                        orderNo = orderNo,
-                    )
-                )
-            }
-            true
-        } catch (e: WbuUjingClient.UjingApiException) {
-            Log.w(TAG, "补缴被服务端拒绝: $orderNo / ${e.code} ${e.message}")
-            _uiState.update {
-                it.copy(
-                    settleNotice = WaterUnpaidNotice.Unsettled(
-                        amount = detail.payPrice,
-                        orderNo = orderNo,
-                        reason = WaterUnpaidReason.SERVER_REJECTED,
-                        serverMessage = e.message,
-                    )
-                )
-            }
-            false
-        } catch (e: Exception) {
-            Log.w(TAG, "补缴请求失败: $orderNo", e)
-            _uiState.update {
-                it.copy(
-                    settleNotice = WaterUnpaidNotice.Unsettled(
-                        amount = detail.payPrice,
-                        orderNo = orderNo,
-                        reason = WaterUnpaidReason.REQUEST_FAILED,
-                        serverMessage = e.message,
-                    )
-                )
-            }
-            false
-        }
+        return settleAndReload(orderNo, detail.payPrice, detail.orderId) != null
     }
 
     /**
@@ -455,7 +543,8 @@ class UjingWaterViewModel @Inject constructor(
         stopStatusWatch()
         hasStarted = false
         autoTunnelTried = false
-        attemptedSettles.clear()
+        // 「再接一杯」是新一轮：上一轮失败的退避窗口不该继续拦着这单
+        settleBackoffUntil.clear()
         _uiState.update {
             it.copy(stage = UjingWaterUiStage.Splash, needLogin = false, settleNotice = null)
         }
@@ -498,7 +587,7 @@ class UjingWaterViewModel @Inject constructor(
                 _uiState.update { it.copy(stage = UjingWaterUiStage.Loading(getApplication<Application>().getString(R.string.status_binding_water_point))) }
                 val subject = ujingClient.bindWaterPoint(cd)
 
-                // 4. 先清掉账号名下的欠费单，否则下一步下单会被服务端直接拒掉（1532）
+                // 4. 先清掉账号名下的欠费单，否则下一步下单会被服务端直接拒掉（2040224）
                 _uiState.update { it.copy(stage = UjingWaterUiStage.Loading(getApplication<Application>().getString(R.string.status_checking_unpaid_water))) }
                 settleOutstandingOrder()
 
@@ -507,12 +596,16 @@ class UjingWaterViewModel @Inject constructor(
                 val order = try {
                     ujingClient.dispenseWater(cd)
                 } catch (e: WbuUjingClient.UjingApiException) {
-                    // 服务端说「有未结账订单」：刚才那次可能没查到（列表延迟 / 刚产生），
-                    // 这里强制再结一次，成了就重试下单一次 —— 只一次，不循环。
-                    if (e.code != WbuUjingClient.CODE_UNPAID_ORDER) throw e
-                    Log.i(TAG, "下单被欠费挡住（1532），强制补缴后重试一次")
+                    // 服务端说「有订单未结束」：可能是刚才没查到的欠费单（列表延迟 / 刚产生），
+                    // 也可能是真有一单在出水。
+                    //
+                    // 这里用 force = false：**刚在步骤 4 试过就别再打**。连打只会拿到
+                    // 6020208「请勿重复请求」，把一次「余额不足」的提示覆盖成一句看不懂的话。
+                    // 退避窗口（30s）正好挡住这种自打自脸，又不影响用户充完值重进页面。
+                    if (!e.blocksDispensing()) throw e
+                    Log.i(TAG, "下单被未结束订单挡住（${e.code}），尝试补缴后重试一次")
                     _uiState.update { it.copy(stage = UjingWaterUiStage.Loading(getApplication<Application>().getString(R.string.status_settling_unpaid_water))) }
-                    if (!settleOutstandingOrder(force = true)) throw e
+                    if (!settleOutstandingOrder(force = false)) throw e
                     ujingClient.dispenseWater(cd)
                 }
 
@@ -543,10 +636,9 @@ class UjingWaterViewModel @Inject constructor(
                 Log.e(TAG, "Water flow error", e)
                 val app = getApplication<Application>()
 
-                // 「有未支付订单」不是网络问题，重试一百次也还是同一句话：
-                // 单独成一类，页面给的是「先结清再试」而不是「重试」。
-                val unpaidBlocks = (e as? WbuUjingClient.UjingApiException)
-                    ?.code == WbuUjingClient.CODE_UNPAID_ORDER
+                // 「有订单没结束 / 有未支付订单」不是网络问题，重试一百次也还是同一句话：
+                // 单独成一类，页面给的是「去结清」而不是「重试」。
+                val unpaidBlocks = (e as? WbuUjingClient.UjingApiException)?.blocksDispensing() == true
                 if (unpaidBlocks) {
                     _uiState.update {
                         it.copy(
@@ -648,10 +740,10 @@ class UjingWaterViewModel @Inject constructor(
                     consecutiveFails = 0
                     updateWithDetail(detail, subject)
 
-                    if (detail.isTerminal) {
-                        Log.i(TAG, "Order reached terminal status via poll: ${detail.orderStatusName}")
-                        // 水取完了但钱没扣到（62 结账异常 / 65 支付失败结束，或终态却还挂着欠费）：
-                        // 先把账结掉再显示完成页，否则用户下次下单会被 1532 挡住却不知道为什么。
+                    if (isDispenseDone(detail)) {
+                        Log.i(TAG, "Dispense done via poll: ${detail.orderStatusName} / payFlag=${detail.payFlag}")
+                        // 水取完了但钱没扣到（62 结账异常 / 65 支付失败结束 / 卡在 30 + 支付失败）：
+                        // 先把账结掉再显示完成页，否则用户下次下单会被 2040224 挡住却不知道为什么。
                         val settleResult = settleOrderIfUnpaid(detail)
                         markOrderFinished(subject, settleResult ?: detail)
                         break
@@ -691,9 +783,9 @@ class UjingWaterViewModel @Inject constructor(
             val detail = runCatching { ujingClient.fetchOrderDetail(orderId) }.getOrNull()
             if (detail != null) {
                 updateWithDetail(detail, subject)
-                if (detail.isTerminal) {
-                    Log.i(TAG, "Order reached terminal status via MQTT/fetch: ${detail.orderStatusName}")
-                    // 与轮询那条路同口径：终态若还欠费，先结掉再进完成页
+                if (isDispenseDone(detail)) {
+                    Log.i(TAG, "Dispense done via MQTT/fetch: ${detail.orderStatusName} / payFlag=${detail.payFlag}")
+                    // 与轮询那条路同口径：还没结清就先结掉，再进完成页
                     val settleResult = settleOrderIfUnpaid(detail)
                     markOrderFinished(subject, settleResult ?: detail)
                 }
@@ -857,7 +949,7 @@ class UjingWaterViewModel @Inject constructor(
     /**
      * 「先结清欠费再试」（错误页上那个按钮）。
      *
-     * 与 [retry] 的区别：它**强制**再结一次（忽略「本次已尝试过」的去重），
+     * 与 [retry] 的区别：它**强制**再结一次（忽略开关与退避窗口），
      * 因为用户点它就是在说「我确实想付这笔钱」。开关关着时也照办 ——
      * 用户主动点的是「结清」，不是「帮我自动结清」。
      */
@@ -906,6 +998,23 @@ class UjingWaterViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * 「去充值」：跳到一卡通充值页（平台 `card-recharge` / `feeitemid=410`）。
+     *
+     * 只在一卡通扣款失败（余额不足）时才出现在界面上 —— 那正是唯一需要它的场景。
+     * 走与门户旧链接改道同一个 `appCode`，学校改配置也不会失效；解析不出应用表时
+     * 由 `campusCardDeepLinkFallback` 兜底。
+     */
+    fun rechargeCampusCard(navBridge: com.xingheyuzhuan.shiguangschedule.NavBridge) {
+        navBridge.navigate(
+            com.xingheyuzhuan.shiguangschedule.Destination.WebApp(
+                appId = com.shiro.classflow.data.model.wbu.WebAppId.CAMPUS_CARD.name,
+                campusCardAppCode = "card-recharge",
+                campusCardDeepLinkFallback = "/campus-card/?name=cardRecharge&feeitemid=410&hasinstallConfigForm=1",
+            )
+        )
     }
 
     /**

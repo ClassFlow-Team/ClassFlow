@@ -838,6 +838,7 @@
     <string name="ujing_water_pay_type">支付方式</string>
     <string name="ujing_water_order_no">订单编号</string>
     <string name="ujing_water_action_hint">请在饮水机按键接水，接水完毕后将自动结算</string>
+    <string name="ujing_water_waiting_settle_hint">取水已结束，正在等待结算</string>
     <string name="ujing_water_finished_title">取水已完成</string>
     <string name="ujing_water_repeat">再接一杯</string>
 
@@ -847,11 +848,15 @@
     <string name="ujing_water_unpaid_title">有一笔饮水订单未支付</string>
     <string name="ujing_water_auto_settled">已自动补缴 ¥%1$s</string>
     <string name="ujing_water_settle_failed">补缴失败：%1$s</string>
+    <string name="ujing_water_settle_insufficient_funds">一卡通扣款未成功，多半是余额不足，充值后可以再试</string>
+    <string name="ujing_water_settle_pending">服务端正在处理这笔补缴，稍等一会儿再看</string>
+    <string name="action_recharge_campus_card">去充值</string>
     <string name="ujing_water_unpaid_not_smart_card">这笔订单不是一卡通直扣（%1$s），需要你自己去付</string>
     <string name="ujing_water_unpaid_auto_disabled">已关闭自动补缴，这笔订单还没有结清</string>
     <string name="ujing_water_unpaid_no_order_no">这笔订单缺少订单号，无法补缴</string>
     <string name="ujing_water_unpaid_amount">待付金额</string>
-    <string name="err_unpaid_water_order">你有一笔饮水订单还没结清，结清后才能继续取水</string>
+    <string name="err_unpaid_water_order">你有一笔订单还没结束或未结清，处理之后才能继续取水</string>
+    <string name="ujing_water_unpaid_blocks_title">这笔账还没结清</string>
     <string name="action_settle_and_retry">先结清再试</string>
     <string name="action_settle_now">立即补缴</string>
     <string name="item_auto_settle_water_unpaid">自动补缴饮水欠费</string>

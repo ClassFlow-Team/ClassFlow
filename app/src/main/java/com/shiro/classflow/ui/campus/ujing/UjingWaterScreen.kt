@@ -154,6 +154,7 @@ fun UjingWaterScreen(
                             settleNotice = uiState.settleNotice,
                             onRepeat = { viewModel.restart(cd) },
                             onSettle = viewModel::settleCurrentOrder,
+                            onRecharge = { viewModel.rechargeCampusCard(navBridge) },
                             onDone = {
                                 UjingWaterViewModel.clearSession()
                                 navBridge.popBackStack()
@@ -175,6 +176,7 @@ fun UjingWaterScreen(
                             onRetry = viewModel::retry,
                             onRetryWithWebVpnOnce = viewModel::retryWithWebVpnOnce,
                             onSettleAndRetry = viewModel::settleThenRetry,
+                            onRecharge = { viewModel.rechargeCampusCard(navBridge) },
                             onExit = {
                                 UjingWaterViewModel.clearSession()
                                 navBridge.popBackStack()
@@ -306,7 +308,12 @@ private fun ActiveDispensingView(
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            text = stringResource(R.string.ujing_water_action_hint),
+            // 「等待结账」时水已经取完了，还写「请在饮水机按键接水」就是在骗人
+            text = if (stage.detail?.orderStatus == 30) {
+                stringResource(R.string.ujing_water_waiting_settle_hint)
+            } else {
+                stringResource(R.string.ujing_water_action_hint)
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -329,6 +336,7 @@ private fun FinishedView(
     settleNotice: WaterUnpaidNotice?,
     onRepeat: () -> Unit,
     onSettle: () -> Unit,
+    onRecharge: () -> Unit,
     onDone: () -> Unit,
     onContinueScan: () -> Unit
 ) {
@@ -374,7 +382,20 @@ private fun FinishedView(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        UnpaidNoticeCard(notice = settleNotice, onSettle = onSettle)
+        UnpaidNoticeCard(notice = settleNotice)
+
+        // 完成页也一样：欠着钱就给出路（充值 / 补缴同一行，与错误页一致）
+        if (settleNotice is WaterUnpaidNotice.Unsettled) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(onClick = onRecharge, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.action_recharge_campus_card))
+                }
+                OutlinedButton(onClick = onSettle, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.action_settle_now))
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(32.dp))
 
@@ -427,11 +448,13 @@ private fun ErrorView(
     onRetryWithWebVpnOnce: () -> Unit = {},
     unpaidBlocksOrder: Boolean = false,
     settleNotice: WaterUnpaidNotice? = null,
-    onSettleAndRetry: () -> Unit = {}
+    onSettleAndRetry: () -> Unit = {},
+    onRecharge: (() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -444,10 +467,16 @@ private fun ErrorView(
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = stringResource(R.string.title_load_failed),
+            // 欠费挡着下单不是「页面加载失败」——那是在说网络坏了，会让人白折腾
+            text = if (unpaidBlocksOrder) {
+                stringResource(R.string.ujing_water_unpaid_blocks_title)
+            } else {
+                stringResource(R.string.title_load_failed)
+            },
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.error
+            color = MaterialTheme.colorScheme.error,
+            textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
@@ -460,19 +489,35 @@ private fun ErrorView(
 
         // 欠费挡着下单：重试没用，先把账结清
         if (unpaidBlocksOrder) {
-            UnpaidNoticeCard(notice = settleNotice, onSettle = onSettleAndRetry)
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = onSettleAndRetry, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.action_settle_and_retry))
+            UnpaidNoticeCard(notice = settleNotice)
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 一卡通扣款失败基本都是余额不足 —— 先去充值，回来再结清。
+            // 两个动作同一行：它们是同一条路的两步，不该分主次两层排。
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(
+                    onClick = onRecharge ?: onSettleAndRetry,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.action_recharge_campus_card))
+                }
+                OutlinedButton(
+                    onClick = onSettleAndRetry,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.action_settle_and_retry))
+                }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
+        // 退出放在最后一行，与主操作拉开距离（误触退出就得多扫一次）
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onExit) {
                 Text(stringResource(R.string.action_exit))
             }
-            if (canRetry) {
+            // 欠费场景下「重试」是无效动作（账不结清永远同一句），不给
+            if (canRetry && !unpaidBlocksOrder) {
                 Button(onClick = onRetry) {
                     Text(stringResource(R.string.action_retry))
                 }
@@ -495,10 +540,7 @@ private fun ErrorView(
  * 这里说的是钱的事，不该把整页变成「失败」。
  */
 @Composable
-private fun UnpaidNoticeCard(
-    notice: WaterUnpaidNotice?,
-    onSettle: () -> Unit
-) {
+private fun UnpaidNoticeCard(notice: WaterUnpaidNotice?) {
     if (notice == null) return
     val isSettled = notice is WaterUnpaidNotice.Settled
     val amount = when (notice) {
@@ -553,16 +595,8 @@ private fun UnpaidNoticeCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error
                     )
-                    // 只有「服务端拒绝 / 请求失败」值得让用户再点一次；
-                    // 关着开关、非一卡通、缺订单号这三种，再点也是同样结果。
-                    if (notice.reason == WaterUnpaidReason.SERVER_REJECTED ||
-                        notice.reason == WaterUnpaidReason.REQUEST_FAILED
-                    ) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        TextButton(onClick = onSettle) {
-                            Text(stringResource(R.string.action_settle_now))
-                        }
-                    }
+                    // 按钮不在这里出：欠费单的出路（充值 / 补缴）由页面底部统一排，
+                    // 免得同一张卡片里再堆两个按钮，和下面那排抢注意力。
                 }
             }
         }
@@ -585,6 +619,14 @@ private fun unsettledReasonText(notice: WaterUnpaidNotice.Unsettled): String {
 
         WaterUnpaidReason.NO_ORDER_NO ->
             stringResource(R.string.ujing_water_unpaid_no_order_no)
+
+        WaterUnpaidReason.PENDING ->
+            stringResource(R.string.ujing_water_settle_pending)
+
+        // 一卡通扣款没成功（实测错误码 80，多半是余额不足）：说清楚「充钱再试」，
+        // 不把用户推去「联系一卡通」—— 那条路解决不了余额问题
+        WaterUnpaidReason.INSUFFICIENT_FUNDS ->
+            stringResource(R.string.ujing_water_settle_insufficient_funds)
 
         WaterUnpaidReason.SERVER_REJECTED, WaterUnpaidReason.REQUEST_FAILED ->
             stringResource(

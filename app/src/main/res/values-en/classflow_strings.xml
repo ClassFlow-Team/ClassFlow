@@ -838,6 +838,7 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="ujing_water_pay_type">Payment Method</string>
     <string name="ujing_water_order_no">Order No.</string>
     <string name="ujing_water_action_hint">Please press button on dispenser to get water. Order will settle automatically when finished.</string>
+    <string name="ujing_water_waiting_settle_hint">Dispensing has finished; waiting for settlement</string>
     <string name="ujing_water_finished_title">Water Dispensing Finished</string>
     <string name="ujing_water_repeat">Dispense Again</string>
 
@@ -847,11 +848,15 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="ujing_water_unpaid_title">You have an unpaid water order</string>
     <string name="ujing_water_auto_settled">Settled automatically: ¥%1$s</string>
     <string name="ujing_water_settle_failed">Could not settle: %1$s</string>
+    <string name="ujing_water_settle_insufficient_funds">The campus-card charge did not go through — most likely an insufficient balance. Top up and try again.</string>
+    <string name="ujing_water_settle_pending">The server is still processing this payment. Check again in a moment.</string>
+    <string name="action_recharge_campus_card">Top up</string>
     <string name="ujing_water_unpaid_not_smart_card">This order is not charged to your campus card (%1$s), so you need to pay it yourself</string>
     <string name="ujing_water_unpaid_auto_disabled">Automatic settlement is off, so this order is still unpaid</string>
     <string name="ujing_water_unpaid_no_order_no">This order has no order number, so it cannot be settled</string>
     <string name="ujing_water_unpaid_amount">Amount due</string>
-    <string name="err_unpaid_water_order">You have an unsettled water order. Settle it before dispensing again</string>
+    <string name="err_unpaid_water_order">You have an order that is still running or unsettled. Deal with it before dispensing again</string>
+    <string name="ujing_water_unpaid_blocks_title">This bill is still unsettled</string>
     <string name="action_settle_and_retry">Settle and retry</string>
     <string name="action_settle_now">Pay now</string>
     <string name="item_auto_settle_water_unpaid">Auto-settle unpaid water orders</string>
