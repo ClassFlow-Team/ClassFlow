@@ -22,6 +22,7 @@ import android.webkit.PermissionRequest
 import android.webkit.SslErrorHandler
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -65,14 +66,12 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -117,6 +116,9 @@ import com.shiro.classflow.ui.campus.components.WbuCampusAuthSheet
 import com.shiro.classflow.ui.campus.qrscan.QrScannerOverlay
 import com.xingheyuzhuan.shiguangschedule.ui.components.UjingBrandLoading
 import com.xingheyuzhuan.shiguangschedule.ui.components.WbuLoadingPlaceholder
+import com.xingheyuzhuan.shiguangschedule.ui.components.WebPageErrorInfo
+import com.xingheyuzhuan.shiguangschedule.ui.components.WebPageErrorView
+import com.xingheyuzhuan.shiguangschedule.ui.components.isRealWebLoadFailure
 import com.xingheyuzhuan.shiguangschedule.ui.components.WebJsDialogHost
 import com.xingheyuzhuan.shiguangschedule.ui.components.WebJsDialogRequest
 import com.xingheyuzhuan.shiguangschedule.ui.components.WebJsDialogState
@@ -455,6 +457,8 @@ fun WebAppScreen(
         var sslErrorState by remember { mutableStateOf<Pair<SslErrorHandler, SslError>?>(null) }
         var webViewInstance by remember { mutableStateOf<WebView?>(null) }
         var scanRequest by remember { mutableStateOf<ScanRequest?>(null) }
+        /** 内容区正盖着自己的错误页：此时隐藏悬浮退出球，别压住错误页的按钮。 */
+        var pageErrorVisible by remember { mutableStateOf(false) }
 
         /** 最终用于加载的入口地址（洗衣机深链解析完成后才有值；其余场景等于入参）。 */
         var resolvedInitialUrl by rememberSaveable(pendingAutoScan) { mutableStateOf(initialTargetUrl) }
@@ -757,49 +761,29 @@ fun WebAppScreen(
                         onJsAgentScan = { callbackName -> scanRequest = ScanRequest.JsAgent(callbackName) },
                         onAndroidFuncScan = { callbackName -> scanRequest = ScanRequest.AndroidFunc(callbackName) },
                         onDeepLinkAutoStartHandedOff = { deepLinkAutoStarted = true },
+                        onPageErrorVisibleChanged = { pageErrorVisible = it },
                         onPageBackExit = { navBridge.popBackStack() },
                         onWebViewReady = { webViewInstance = it }
                     )
                 }
 
                 stage is WebAppStage.Error -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.title_load_failed),
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                            Text(
-                                text = stage.message,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                OutlinedButton(onClick = { navBridge.popBackStack() }) {
-                                    Text(stringResource(R.string.action_exit))
-                                }
-                                Button(onClick = { viewModel.retry() }) {
-                                    Text(stringResource(R.string.action_retry))
-                                }
-                            }
-                        }
-                    }
+                    // 取 Token / 票据失败这类业务错误：与上面网络失败用同一张错误页。
+                    // 这类失败没有具体页面地址（还没走到页面），所以只给说明与出路。
+                    WebPageErrorView(
+                        info = WebPageErrorInfo(url = null, code = null, description = null),
+                        title = stringResource(R.string.title_load_failed),
+                        message = stage.message,
+                        onReload = { viewModel.retry() },
+                        onBack = { navBridge.popBackStack() }
+                    )
                 }
             }
 
-            // 可拖拽的悬浮退出球（仅在页面内容或加载阶段显示）
-            if (uiState.stage is WebAppStage.ContentReady || uiState.stage is WebAppStage.LoadingToken) {
+            // 可拖拽的悬浮退出球（仅在页面内容或加载阶段显示；错误页有自己的「返回」，别压住它）
+            if (!pageErrorVisible &&
+                (uiState.stage is WebAppStage.ContentReady || uiState.stage is WebAppStage.LoadingToken)
+            ) {
                 DraggableExitFab(
                     onExit = { navBridge.popBackStack() }
                 )
@@ -1004,6 +988,28 @@ private fun copyToClipboard(context: Context, text: String) {
     if (text.isBlank()) return
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
     runCatching { clipboard.setPrimaryClip(ClipData.newPlainText("ClassFlow", text)) }
+}
+
+/**
+ * 用系统浏览器打开一个地址（错误页的「用浏览器打开」用）。
+ *
+ * 有些页面在内置 WebView 里走不通但浏览器里没问题（例如自己会跳 `intent://` 的支付页、
+ * 需要用户手势才认的 App Links），所以留这条逃生口。没有浏览器可处理时给一句提示。
+ */
+private fun openInExternalBrowser(context: Context, url: String) {
+    if (url.isBlank()) return
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    val opened = runCatching { context.startActivity(intent) }.isSuccess
+    if (!opened) {
+        Log.w("WebAppScreen", "没有应用能打开这个地址：$url")
+        Toast.makeText(
+            context,
+            context.getString(R.string.format_no_app_handle_request, "HTTP"),
+            Toast.LENGTH_SHORT
+        ).show()
+    }
 }
 
 /**
@@ -1386,6 +1392,8 @@ private fun FullScreenWebContent(
     onAndroidFuncScan: (callbackName: String) -> Unit,
     /** 深链的一次性自启已经交给页面（见 [WebAppScreen] 的 [deepLinkAutoStarted] 说明）。 */
     onDeepLinkAutoStartHandedOff: () -> Unit = {},
+    /** 盖着网页错误页：外层据此隐藏可拖拽退出球（它会压住错误页的按钮）。 */
+    onPageErrorVisibleChanged: (Boolean) -> Unit = {},
     /**
      * 页面**自己**的返回控件（lifeService 顶栏箭头 / 1 栋控水「主页」按钮）要求返回、
      * 而 WebView 已无历史时调用 —— 通常等于退出容器。见 [pageBack] 的桥接说明。
@@ -1396,6 +1404,14 @@ private fun FullScreenWebContent(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var loadingProgress by remember { mutableFloatStateOf(0f) }
+
+    // 主框架网络层失败（服务器压根没返回内容）：盖一层应用自己的错误页，
+    // 替掉 WebView 内置那张绿色机器人页。HTTP 4xx/5xx 不会走到这里，那些页面原样展示。
+    var pageError by remember { mutableStateOf<WebPageErrorInfo?>(null) }
+    /** 用户点了「重新加载」：错误页继续挡着，直到新页面真的加载成功才撤。 */
+    var reloadingAfterError by remember { mutableStateOf(false) }
+    /** 本轮加载是否已经失败过：`onPageFinished` 在失败之后也会回调，不能拿它当「成功」的信号。 */
+    var loadFailedThisRound by remember { mutableStateOf(false) }
 
     var pendingPermissionRequest by remember { mutableStateOf<PermissionRequest?>(null) }
     var filePathCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
@@ -1849,8 +1865,45 @@ private fun FullScreenWebContent(
                     onSslError(handler, error)
                 }
 
+                /**
+                 * 主框架网络层失败（连不上 / 超时 / DNS / SSL / 服务器直接断开…）。
+                 *
+                 * 只有「服务器压根没返回内容」才会回调这里；服务端真回了 4xx/5xx 页面走的是
+                 * [onReceivedHttpError]，我们**不接管** —— 那些页面带着服务端自己的提示，抢过来只会丢信息。
+                 * 这里把失败信息留下来，由 Compose 盖一层自己的错误页，替掉 WebView 内置的绿色机器人页。
+                 */
+                override fun onReceivedError(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                    error: WebResourceError?
+                ) {
+                    super.onReceivedError(view, request, error)
+                    if (request == null || error == null) return
+                    // 子框架（iframe）里的小广告挂掉不该把整页判死
+                    if (!request.isForMainFrame) return
+                    val failedUrl = request.url?.toString()
+                    // aborted（-3）是导航被新页面顶掉，不是真失败；about:/data: 不是真页面
+                    if (!isRealWebLoadFailure(failedUrl, error.errorCode)) return
+                    Log.w(
+                        "WebAppScreen",
+                        "主框架加载失败：$failedUrl code=${error.errorCode} desc=${error.description}"
+                    )
+                    pageError = WebPageErrorInfo(
+                        url = failedUrl?.takeIf { it.isNotBlank() } ?: view?.url,
+                        code = error.errorCode,
+                        description = error.description?.toString()
+                    )
+                    loadFailedThisRound = true
+                    // 又失败了：把主按钮的转圈停下，让用户能再点一次
+                    reloadingAfterError = false
+                }
+
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
+                    // 新一轮加载开始：上一轮失败记录作废。但不是立刻撤掉错误页 ——
+                    // 用户点「重新加载」时，先露出的往往是 WebView 还没渲染好的空白/旧页，
+                    // 等 onPageFinished 确认这次没失败再撤（见下面的 pageError 处理）。
+                    loadFailedThisRound = false
                     // 兜底：服务端 302 直接跳到「路径里混进空格」的地址时上头那处拦不到，
                     // 页面刚上手就换成修好的地址（修好的地址不会再触发，不会成环）
                     if (repairUrlIfNeeded(view, url)) return
@@ -1885,6 +1938,12 @@ private fun FullScreenWebContent(
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
+                    // 这一次真的加载成功了：撤掉上次留下的错误页（失败的话 loadFailedThisRound 是 true，
+                    // 且 onPageFinished 在失败回调之后也会来一次，不能拿它当成功信号）。
+                    if (!loadFailedThisRound) {
+                        pageError = null
+                        reloadingAfterError = false
+                    }
                     applyCampusCardUserAgent(view, url)
                     // 定位接管脚本兜底再装一次（部分机型 onPageStarted 时 JS 上下文尚未就绪）
                     injectGeolocationShim(view)
@@ -2155,7 +2214,36 @@ private fun FullScreenWebContent(
         // 网页原生 alert / confirm / prompt：用应用自己的弹窗替代系统样式
         WebJsDialogHost(jsDialogState)
 
-        if (loadingProgress < 1.0f) {
+        // 主框架网络层失败：盖掉 WebView 内置的绿色机器人页，换成应用自己的错误页。
+        // 会话 WebView 不销毁，点「重新加载」就是 reload()，历史与登录态都还在。
+        pageError?.let { error ->
+            WebPageErrorView(
+                info = error,
+                retrying = reloadingAfterError,
+                onReload = {
+                    // 错误页继续挡着：等 onPageFinished 确认这次加载成功再撤，
+                    // 否则重载过程中会先露出 WebView 里那张绿机器人页。
+                    reloadingAfterError = true
+                    webView.reload()
+                },
+                onCopyUrl = {
+                    copyToClipboard(context, error.url.orEmpty())
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.web_error_url_copied),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                },
+                onOpenInBrowser = error.url?.takeIf { it.startsWith("http", ignoreCase = true) }?.let { url ->
+                    {
+                        openInExternalBrowser(context, url)
+                    }
+                },
+                onBack = onPageBackExit
+            )
+        }
+
+        if (pageError == null && loadingProgress < 1.0f) {
             LinearProgressIndicator(
                 progress = { loadingProgress },
                 modifier = Modifier
@@ -2165,6 +2253,14 @@ private fun FullScreenWebContent(
                 trackColor = Color.Transparent
             )
         }
+    }
+
+    // 让外层把可拖拽退出球收起来：错误页自带「返回」，不被悬浮球压住
+    LaunchedEffect(pageError != null) {
+        onPageErrorVisibleChanged(pageError != null)
+    }
+    DisposableEffect(Unit) {
+        onDispose { onPageErrorVisibleChanged(false) }
     }
 }
 

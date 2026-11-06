@@ -1241,6 +1241,24 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="bill_action_relogin">Sign in again</string>
     <string name="bill_balance_short">Balance ¥%1$s</string>
 
+    <!-- Web page load failure (replaces WebView's built-in Chromium error page) -->
+    <string name="web_error_title">This page can\'t be opened</string>
+    <string name="web_error_desc_offline">This device is offline. Check your Wi-Fi or mobile data and try again.</string>
+    <string name="web_error_desc_dns">Couldn\'t find the server for this site. DNS lookup failed or the campus network isn\'t reachable.</string>
+    <string name="web_error_desc_connection">Couldn\'t reach the server. Check your connection and try again.</string>
+    <string name="web_error_desc_timeout">The server took too long to respond and the connection timed out.</string>
+    <string name="web_error_desc_empty">The server returned nothing at all. The service may be down or the connection was blocked.</string>
+    <string name="web_error_desc_ssl">This site\'s security certificate has a problem, so loading was stopped.</string>
+    <string name="web_error_desc_scheme">This link needs a matching app to open it.</string>
+    <string name="web_error_desc_unknown">The page failed to load. Please try again.</string>
+    <string name="web_error_label_url">Address</string>
+    <string name="web_error_label_code">Error code</string>
+    <string name="web_error_copy_url">Copy address</string>
+    <string name="web_error_open_browser">Open in browser</string>
+    <string name="web_error_reload">Reload</string>
+    <string name="web_error_back">Back</string>
+    <string name="web_error_url_copied">Address copied</string>
+
     <!-- Shower: manual device-code entry (the user picks the building), type chip and type change -->
     <string name="device_action_manual_shower">Enter the number manually</string>
     <string name="device_manual_shower_title">Enter a device code</string>

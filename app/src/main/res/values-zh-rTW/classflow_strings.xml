@@ -1241,6 +1241,24 @@
     <string name="bill_action_relogin">重新登入</string>
     <string name="bill_balance_short">餘額 ¥%1$s</string>
 
+    <!-- 網頁載入失敗（接管 WebView 內建的綠色機器人錯誤頁） -->
+    <string name="web_error_title">頁面打不開</string>
+    <string name="web_error_desc_offline">裝置沒有連上網路，請檢查 Wi-Fi 或行動數據後重試。</string>
+    <string name="web_error_desc_dns">找不到這個網站的伺服器，可能是網域解析失敗或校園網路未連通。</string>
+    <string name="web_error_desc_connection">連不上伺服器，請確認網路是否正常，或稍後再試。</string>
+    <string name="web_error_desc_timeout">伺服器回應太慢，連線逾時了，請稍後重試。</string>
+    <string name="web_error_desc_empty">伺服器沒有回傳任何內容，可能是服務暫時無法使用或網路被封鎖。</string>
+    <string name="web_error_desc_ssl">網站的安全憑證有問題，為了安全已停止載入。</string>
+    <string name="web_error_desc_scheme">這個連結需要對應的 App 才能開啟。</string>
+    <string name="web_error_desc_unknown">頁面載入失敗了，請稍後重試。</string>
+    <string name="web_error_label_url">網址</string>
+    <string name="web_error_label_code">錯誤代碼</string>
+    <string name="web_error_copy_url">複製網址</string>
+    <string name="web_error_open_browser">用瀏覽器開啟</string>
+    <string name="web_error_reload">重新載入</string>
+    <string name="web_error_back">返回</string>
+    <string name="web_error_url_copied">網址已複製</string>
+
     <!-- 洗浴：手動輸入設備碼（樓棟由使用者勾選）、類型標籤與改類型 -->
     <string name="device_action_manual_shower">手動輸入機號</string>
     <string name="device_manual_shower_title">手動輸入設備碼</string>

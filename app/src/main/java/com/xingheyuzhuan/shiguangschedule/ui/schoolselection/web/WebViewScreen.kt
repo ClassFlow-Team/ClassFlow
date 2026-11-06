@@ -108,6 +108,9 @@ import com.xingheyuzhuan.shiguangschedule.data.repository.CourseConversionReposi
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseTableRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
 import com.xingheyuzhuan.shiguangschedule.ui.components.CourseTablePickerDialog
+import com.xingheyuzhuan.shiguangschedule.ui.components.WebPageErrorInfo
+import com.xingheyuzhuan.shiguangschedule.ui.components.WebPageErrorView
+import com.xingheyuzhuan.shiguangschedule.ui.components.isRealWebLoadFailure
 import com.xingheyuzhuan.shiguangschedule.ui.components.WebJsDialogHost
 import com.xingheyuzhuan.shiguangschedule.ui.components.WebJsDialogRequest
 import com.xingheyuzhuan.shiguangschedule.ui.components.WebJsDialogState
@@ -214,6 +217,13 @@ fun WebViewScreen(
         }
     }
     var loadingProgress by remember { mutableFloatStateOf(0f) }
+    // 主框架网络层失败（服务器压根没返回内容）：盖一层应用自己的错误页，
+    // 替掉 WebView 内置那张绿色机器人页。HTTP 4xx/5xx 不会走到这里，那些页面原样展示。
+    var pageError by remember { mutableStateOf<WebPageErrorInfo?>(null) }
+    /** 用户点了「重新加载」：错误页继续挡着，直到新页面真的加载成功才撤。 */
+    var reloadingAfterError by remember { mutableStateOf(false) }
+    /** 本轮加载是否已经失败过：`onPageFinished` 在失败之后也会回调，不能拿它当「成功」的信号。 */
+    var loadFailedThisRound by remember { mutableStateOf(false) }
     var pageTitle by remember {
         mutableStateOf(
             if (startedEmpty) titleEnterUrl else titleLoading
@@ -319,12 +329,21 @@ fun WebViewScreen(
 
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                     super.onPageStarted(view, url, favicon)
+                    // 新一轮加载开始：上一轮失败记录作废。错误页不立刻撤 ——
+                    // 重载过程中先露出的是 WebView 里那张绿机器人页，等 onPageFinished 确认成功再撤。
+                    loadFailedThisRound = false
                     Log.d("WebViewScreen", "页面开始加载: $url")
                     Log.d("WebViewScreen", "硬件加速状态: ${view?.isHardwareAccelerated}")
                 }
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
+                    // 这一次真的加载成功了：撤掉上次留下的错误页（失败时 loadFailedThisRound 为 true，
+                    // 且 onPageFinished 在失败回调之后也会来一次，不能拿它当成功信号）。
+                    if (!loadFailedThisRound) {
+                        pageError = null
+                        reloadingAfterError = false
+                    }
                     Log.d("WebViewScreen", "页面加载完成: $url")
                     view?.injectAllJavaScript(isDesktopMode)
                     view?.let { maybeAutofillWbuCredentials(context, it, url) }
@@ -353,10 +372,19 @@ fun WebViewScreen(
                 override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
                     if (request.isForMainFrame) {
                         val description = error.description.toString()
-                        val ctx = view.context
-                        Log.e("WebViewScreen", "页面加载错误: $description")
-                        view.post {
-                            Toast.makeText(ctx, ctx.getString(R.string.toast_web_load_error_format, description), Toast.LENGTH_LONG).show()
+                        val failedUrl = request.url?.toString()
+                        Log.e("WebViewScreen", "页面加载错误: $failedUrl code=${error.errorCode} desc=$description")
+                        // 只接管「服务器压根没返回内容」的网络层失败（替掉 WebView 内置的绿色机器人页）。
+                        // aborted（-3）是导航被新页面顶掉，不是真失败；about:/data: 不是真页面。
+                        if (isRealWebLoadFailure(failedUrl, error.errorCode)) {
+                            pageError = WebPageErrorInfo(
+                                url = failedUrl?.takeIf { it.isNotBlank() } ?: view.url,
+                                code = error.errorCode,
+                                description = description
+                            )
+                            loadFailedThisRound = true
+                            // 又失败了：把主按钮的转圈停下，让用户能再点一次
+                            reloadingAfterError = false
                         }
                     }
                 }
@@ -753,7 +781,7 @@ fun WebViewScreen(
             )
 
             // 加载进度条
-            if (loadingProgress < 1.0f) {
+            if (pageError == null && loadingProgress < 1.0f) {
                 LinearProgressIndicator(
                     progress = { loadingProgress },
                     modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
@@ -766,6 +794,29 @@ fun WebViewScreen(
                 webView = webView,
                 uiEvents = uiEventChannel.receiveAsFlow()
             )
+
+            // 主框架网络层失败：盖掉 WebView 内置的绿色机器人页，换成应用自己的错误页。
+            // WebView 不销毁，点「重新加载」就是 reload()，历史与登录态都还在。
+            pageError?.let { error ->
+                WebPageErrorView(
+                    info = error,
+                    retrying = reloadingAfterError,
+                    onReload = {
+                        // 错误页继续挡着：等 onPageFinished 确认这次加载成功再撤，
+                        // 否则重载过程中会先露出 WebView 里那张绿机器人页。
+                        reloadingAfterError = true
+                        webView.reload()
+                    },
+                    onCopyUrl = {
+                        copyPageUrlToClipboard(context, error.url.orEmpty())
+                        Toast.makeText(context, context.getString(R.string.web_error_url_copied), Toast.LENGTH_SHORT).show()
+                    },
+                    onOpenInBrowser = error.url?.takeIf { it.startsWith("http", ignoreCase = true) }?.let { url ->
+                        { openPageInExternalBrowser(context, url) }
+                    },
+                    onBack = { navBridge.popBackStack() }
+                )
+            }
 
             // 网页原生 alert / confirm / prompt：用应用自己的弹窗替代系统样式
             WebJsDialogHost(jsDialogState)
@@ -1328,6 +1379,28 @@ private fun launchExternally(context: Context, uri: Uri): Boolean {
         Toast.makeText(context, context.getString(R.string.toast_web_scheme_unhandled), Toast.LENGTH_SHORT).show()
     }
     return true
+}
+
+/** 错误页的「复制地址」。 */
+private fun copyPageUrlToClipboard(context: Context, url: String) {
+    if (url.isBlank()) return
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+        ?: return
+    runCatching {
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("ClassFlow", url))
+    }
+}
+
+/** 错误页的「用浏览器打开」：有些页面在 WebView 里走不通，但浏览器里是好的。 */
+private fun openPageInExternalBrowser(context: Context, url: String) {
+    if (url.isBlank()) return
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    val launched = runCatching { context.startActivity(intent) }.isSuccess
+    if (!launched) {
+        Toast.makeText(context, context.getString(R.string.toast_web_scheme_unhandled), Toast.LENGTH_SHORT).show()
+    }
 }
 
 /** WebView 自己能处理的 scheme（其余一律拦截后交给系统）。 */

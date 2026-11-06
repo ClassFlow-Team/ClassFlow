@@ -1238,6 +1238,24 @@
     <string name="bill_action_relogin">重新登录</string>
     <string name="bill_balance_short">余额 ¥%1$s</string>
 
+    <!-- 网页加载失败（接管 WebView 内置的绿色机器人错误页） -->
+    <string name="web_error_title">页面打不开</string>
+    <string name="web_error_desc_offline">设备没有连上网络，请检查 Wi-Fi 或移动数据后重试。</string>
+    <string name="web_error_desc_dns">找不到这个网站的服务器，可能是域名解析失败或校园网未连通。</string>
+    <string name="web_error_desc_connection">连不上服务器，请确认网络是否正常，或稍后再试。</string>
+    <string name="web_error_desc_timeout">服务器响应太慢，连接超时了，请稍后重试。</string>
+    <string name="web_error_desc_empty">服务器没有返回任何内容，可能是服务暂时不可用或网络被拦截。</string>
+    <string name="web_error_desc_ssl">站点的安全证书有问题，为了安全已停止加载。</string>
+    <string name="web_error_desc_scheme">这个链接需要对应的 App 才能打开。</string>
+    <string name="web_error_desc_unknown">页面加载失败了，请稍后重试。</string>
+    <string name="web_error_label_url">地址</string>
+    <string name="web_error_label_code">错误代码</string>
+    <string name="web_error_copy_url">复制地址</string>
+    <string name="web_error_open_browser">用浏览器打开</string>
+    <string name="web_error_reload">重新加载</string>
+    <string name="web_error_back">返回</string>
+    <string name="web_error_url_copied">地址已复制</string>
+
     <!-- 洗浴：手动输入设备码（楼栋由用户勾选）、类型标签与改类型 -->
     <string name="device_action_manual_shower">手动输入机号</string>
     <string name="device_manual_shower_title">手动输入设备码</string>
