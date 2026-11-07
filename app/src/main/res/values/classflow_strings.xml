@@ -15,7 +15,7 @@
     <string name="hint_webvpn_captcha_code">输入 4 位字符</string>
     <string name="action_submit_webvpn_captcha">继续登录</string>
     <string name="dialog_option_on_vacation">假期中</string>
-    <string name="font_style_apple">平方</string>
+    <string name="font_style_apple">苹方</string>
     <string name="font_style_default">默认</string>
     <string name="font_style_rounded">圆润</string>
     <string name="font_style_serif">衬线</string>
@@ -160,8 +160,7 @@
     <string name="hint_wallpaper_gesture_guide">支持双指缩放与拖动；退出页面时自动保存。</string>
     <string name="format_preview_week_1">第 1 周</string>
     <string name="title_update_found">发现新版本 %1$s</string>
-    <string name="format_update_dialog_versions">当前版本：%1$s
-最新版本：%2$s</string>
+    <string name="format_update_dialog_versions">当前版本：%1$s\n最新版本：%2$s</string>
     <string name="label_update_content">更新内容</string>
     <string name="desc_update_no_notes">本次版本未提供详细说明。</string>
     <string name="action_update_now">立即更新</string>
@@ -195,10 +194,8 @@
     <string name="onboarding_tap_anywhere_finish">✓ 点击任意处完成</string>
     <string name="onboarding_tap_anywhere_continue">点击任意处继续 →</string>
     <string name="onboarding_tap_sync_continue">请点击右上角同步按钮继续 →</string>
-    <string name="onboarding_cross_week_release">跨周
-释放</string>
-    <string name="onboarding_screen_edge">屏幕
-边缘</string>
+    <string name="onboarding_cross_week_release">跨周\n释放</string>
+    <string name="onboarding_screen_edge">屏幕\n边缘</string>
     <string name="onboarding_cross_week_suspended">跨周挂起中</string>
     <string name="onboarding_demo_course">示例课程</string>
     <string name="onboarding_move_to_next_week">移动至下周</string>
@@ -213,9 +210,7 @@
     <string name="format_dup_sample_keep_one">如：%1$s 仅保留一条</string>
     <string name="format_keep_all_courses">全部保留（%1$d 门）</string>
     <string name="title_semester_mismatch">学期不一致提醒</string>
-    <string name="msg_semester_mismatch">您选择导入的学期是【%1$s】，而当前课表绑定的学期是【%2$s】。
-
-如选择覆盖，当前课表内的课程将被清空重写。</string>
+    <string name="msg_semester_mismatch">您选择导入的学期是【%1$s】，而当前课表绑定的学期是【%2$s】。\n\n如选择覆盖，当前课表内的课程将被清空重写。</string>
     <string name="label_auto_rename_table">自动修改该课表名称</string>
     <string name="action_create_new_table">新建课表</string>
     <string name="action_overwrite_table">覆盖课表</string>
@@ -282,7 +277,7 @@
     <string name="pref_qr_with_webvpn">二维码内容包含WebVPN链接</string>
     <string name="pref_use_https_webvpn">使用 https 访问 WebVPN (443)</string>
     <string name="pref_send_english_sms">发送英语验证码（可能更慢）</string>
-    <string name="pref_fixed_ticket_service">使用固定service获取ticket</string>
+    <string name="pref_fixed_ticket_service">使用固定 service 获取 ticket</string>
     <string name="channel_stable_title">正式版 (stable)</string>
     <string name="channel_stable_desc">推荐所有用户使用，版本稳定可靠</string>
     <string name="channel_beta_title">公测版 (beta)</string>
@@ -752,7 +747,7 @@
     <string name="myh_time_fix_mode_never_desc">保留教务系统给的时间，需要时自己到作息时间里改</string>
     <string name="title_myh_time_fix">更正第 %1$d 节下课时间</string>
     <string name="msg_myh_time_fix">教务系统给马影河校区第 %1$d 节的作息是 %2$s 下课，实际作息是 %3$s。要按实际作息更正吗？</string>
-    <string name="desc_myh_time_fix_reason">只改这一节的下课时间，其它节次和你的自定义调整都不动。以后可以在「设置 → 账号与凭据 → 更多设置」里改这个行为</string>
+    <string name="desc_myh_time_fix_reason">只改这一节的下课时间，其他节次和你的自定义调整都不动。以后可以在「设置 → 账号与凭据 → 更多设置」里改这个行为</string>
     <string name="label_do_not_ask_again">不再提示（按这次的选择记住）</string>
     <string name="action_fix_to_real_time">改为 %1$s</string>
     <string name="action_keep_school_time">保留教务时间</string>

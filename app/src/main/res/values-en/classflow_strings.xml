@@ -25,7 +25,7 @@
     <string name="onboarding_title_course_drag">Drag &amp; Resize Courses</string>
     <string name="onboarding_body_course_drag">Long-press any course block to tweak:\n• Drag handles to resize duration\n• Drag card to adjust schedule\n• Drag to screen edge for cross-week move</string>
     <string name="onboarding_body_3">Tap the top-right button to import your schedule</string>
-    <string name="onboarding_body_4">"Today" for today · "Schedule" for the week · "Me" for settings</string>
+    <string name="onboarding_body_4">\"Today\" for today · \"Schedule\" for the week · \"Settings\" for the rest</string>
     <string name="onboarding_body_5">Set the start date so weeks display correctly</string>
     <string name="onboarding_title_manage_tables">Manage Schedules</string>
     <string name="onboarding_body_manage_tables">Create or switch schedules across semesters. Supports locking, student ID binding, and independent storage.</string>
@@ -146,8 +146,7 @@
     <string name="hint_wallpaper_gesture_guide">Pinch to zoom and drag. Auto-saved on exit.</string>
     <string name="format_preview_week_1">Week 1</string>
     <string name="title_update_found">New Version %1$s Found</string>
-    <string name="format_update_dialog_versions">Current: %1$s
-Latest: %2$s</string>
+    <string name="format_update_dialog_versions">Current: %1$s\nLatest: %2$s</string>
     <string name="label_update_content">What\'s New</string>
     <string name="desc_update_no_notes">No release notes provided for this version.</string>
     <string name="action_update_now">Update Now</string>
@@ -181,10 +180,8 @@ Latest: %2$s</string>
     <string name="onboarding_tap_anywhere_finish">✓ Tap anywhere to finish</string>
     <string name="onboarding_tap_anywhere_continue">Tap anywhere to continue →</string>
     <string name="onboarding_tap_sync_continue">Tap top-right sync button →</string>
-    <string name="onboarding_cross_week_release">Drop
-Week</string>
-    <string name="onboarding_screen_edge">Screen
-Edge</string>
+    <string name="onboarding_cross_week_release">Drop\nWeek</string>
+    <string name="onboarding_screen_edge">Screen\nEdge</string>
     <string name="onboarding_cross_week_suspended">Moving cross-week</string>
     <string name="onboarding_demo_course">Sample Course</string>
     <string name="onboarding_move_to_next_week">Move to next week</string>
@@ -199,9 +196,7 @@ Edge</string>
     <string name="format_dup_sample_keep_one">e.g. %1$s keep one only</string>
     <string name="format_keep_all_courses">Keep All (%1$d)</string>
     <string name="title_semester_mismatch">Semester Mismatch</string>
-    <string name="msg_semester_mismatch">The selected semester is [%1$s], but this schedule is bound to [%2$s].
-
-Overwriting will replace all current courses.</string>
+    <string name="msg_semester_mismatch">The selected semester is [%1$s], but this schedule is bound to [%2$s].\n\nOverwriting will replace all current courses.</string>
     <string name="label_auto_rename_table">Auto rename this schedule</string>
     <string name="action_create_new_table">Create New</string>
     <string name="action_overwrite_table">Overwrite</string>
@@ -275,9 +270,7 @@ Overwriting will replace all current courses.</string>
     <string name="desc_archive_table">Archived schedules prevent sync overwrite to avoid mistakes</string>
     <string name="tag_archived">Archived</string>
     <string name="title_student_id_conflict">Account ID Mismatch</string>
-    <string name="msg_student_id_conflict">Current schedule belongs to [%1$s], but logged-in account is [%2$s].
-
-Overwriting replaces old schedule data and rebinds. Creating a new schedule is recommended.</string>
+    <string name="msg_student_id_conflict">Current schedule belongs to [%1$s], but logged-in account is [%2$s].\n\nOverwriting replaces old schedule data and rebinds. Creating a new schedule is recommended.</string>
     <string name="action_create_new_table_recommend">Create New (Rec.)</string>
     <string name="action_overwrite_anyway">Overwrite Anyway</string>
     <string name="item_feedback">Feedback</string>
@@ -367,7 +360,7 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="title_grade_query">Grade Query</string>
     <string name="a11y_relogin_jwxt">Re-login</string>
     <string name="tab_all_semesters">All Terms</string>
-    <string name="hint_search_grade">Search course or instructor</string>
+    <string name="hint_search_grade">Search course or teacher</string>
     <string name="filter_chip_all">All</string>
     <string name="filter_chip_passed_only">Passed Only</string>
     <string name="filter_chip_failed_only">Failed Only</string>
@@ -390,14 +383,14 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="tab_campus_hgh">Houguanhu Campus</string>
     <string name="tab_campus_myh">Mayinghe Campus</string>
     <string name="tab_campus_all">All Campuses</string>
-    <string name="hint_search_room">Search room, e.g. 北①-104 or 102</string>
+    <string name="hint_search_room">Search room, e.g. 北④-203 or 102</string>
     <string name="label_building_dropdown">Building</string>
     <string name="label_select_day_of_week">Select Day</string>
-    <string name="label_quick_sections">Quick Sections</string>
+    <string name="label_quick_sections">Quick Periods</string>
     <string name="section_preset_morning_all">Entire Morning</string>
     <string name="section_preset_afternoon_all">Entire Afternoon</string>
     <string name="format_free_classrooms_count">Available Classrooms (%1$d)</string>
-    <string name="tip_click_to_probe_schedule"></string>
+    <string name="tip_click_to_probe_schedule">Tap a card to probe the week\'s schedule</string>
     <string name="status_room_free">Available</string>
     <string name="format_room_capacity_type">%1$d seats · %2$s</string>
     <string name="empty_classroom_error">Failed to load data</string>
@@ -432,7 +425,7 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="room_type_all">All Types</string>
     <string name="label_select_sections">Select Periods</string>
     <string name="format_section_short">P%1$d</string>
-    <string name="filter_unlimited">None</string>
+    <string name="filter_unlimited">No Limit</string>
     <string name="action_clear_filter">Clear</string>
     <string name="action_select_all_short">All</string>
     <string name="mode_by_section">By Period</string>
@@ -450,7 +443,7 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="item_academic_progress">Academic Progress</string>
     <string name="desc_academic_progress">Academic completion, GPA major rank, curriculum timeline</string>
     <string name="title_academic_progress">Academic Progress</string>
-    <string name="tab_semester_progress">Timeline</string>
+    <string name="tab_semester_progress">Semester Progress</string>
     <string name="tab_nature_progress">By Category</string>
     <string name="label_plan_progress_card">Academic Completion</string>
     <string name="action_ok">OK</string>
@@ -470,7 +463,7 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="status_chip_all">All</string>
     <string name="status_chip_completed">Completed</string>
     <string name="status_chip_studying">In Progress</string>
-    <string name="status_chip_uncompleted">Planned</string>
+    <string name="status_chip_uncompleted">Not Taken</string>
     <string name="format_group_course_count">%1$d courses</string>
     <string name="format_group_credits">%1$s / %2$s credits</string>
     <string name="format_student_class">Class: %1$s</string>
@@ -480,9 +473,9 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="format_nature_tab_count">%1$d categories</string>
     <string name="empty_academic_data">No academic data found. Please check network or re-login</string>
     <string name="empty_academic_filtered">No matching courses found</string>
-    <string name="status_completed_tag">Done</string>
+    <string name="status_completed_tag">Completed</string>
     <string name="status_studying_tag">Taking</string>
-    <string name="status_uncompleted_tag">Plan</string>
+    <string name="status_uncompleted_tag">Not Taken</string>
     <string name="tag_exam_single">Exam</string>
     <string name="tag_inspect_single">Test</string>
     <string name="filter_exam_mode_all">All Modes</string>
@@ -552,12 +545,12 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="action_renew_all">Renew All</string>
     <string name="action_renew_book">Renew</string>
     <string name="action_view_detail">Details</string>
-    <string name="label_borrow_date">Borrowed</string>
-    <string name="label_due_date">Due</string>
+    <string name="label_borrow_date">Borrowed On</string>
+    <string name="label_due_date">Due On</string>
     <string name="label_renew_count">Renewed</string>
     <string name="value_renew_times">%1$d times</string>
     <string name="label_barcode">Barcode</string>
-    <string name="status_borrowing">Borrowed</string>
+    <string name="status_borrowing">On Loan</string>
     <string name="status_remaining_days">%1$d days left</string>
     <string name="status_due_soon_days">Due in %1$d days</string>
     <string name="status_overdue_days">%1$d days overdue</string>
@@ -614,7 +607,7 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="format_err_login_exception">Login error: %1$s</string>
     <string name="err_otp_login_generic_failed">Verification code login failed</string>
     <string name="format_err_otp_login_failed">Code login failed: %1$s</string>
-    <string name="title_campus_network_detect">Network Environment</string>
+    <string name="title_campus_network_detect">Campus Network Check</string>
     <string name="status_probing_campus_network">Detecting campus network environment...</string>
     <string name="status_campus_detected_connecting">Campus network detected. Connecting directly...</string>
     <string name="status_not_campus_routing_webvpn">Not on campus network. Routing via WebVPN...</string>
@@ -762,7 +755,7 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="toast_myh_time_fixed">End time corrected to %1$s</string>
     <string name="item_login">Sign in</string>
     <string name="desc_login_service">Sign in again to refresh this service\'s authorization</string>
-    <string name="err_no_valid_credentials">No valid credentials. Please use "Sign-in sync" to log in first.</string>
+    <string name="err_no_valid_credentials">No valid credentials. Please use \"Sign-in sync\" to log in first.</string>
     <string name="err_need_unified_auth_session">No valid unified-auth session yet. Please sign in once with your unified-auth password.</string>
     <string name="format_need_login_long_press">%1$s (long-press the button to open the login panel)</string>
     <string name="action_go_to_credential_management">Go to Account &amp; Credentials</string>
@@ -1157,7 +1150,7 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="hairdryer_action_delete">Delete</string>
     <string name="hairdryer_action_scan">Scan a hair dryer</string>
     <string name="hairdryer_message_shortcut_requested">Home-screen shortcut requested</string>
-    <string name="hairdryer_message_shortcut_unsupported">目前桌面不支援加入圖示，可在系統桌面裡手動加入</string>
+    <string name="hairdryer_message_shortcut_unsupported">Your launcher does not support adding icons; add it manually instead</string>
     <string name="hairdryer_message_names_updated">Device names updated</string>
     <string name="hairdryer_message_type_changed">Type updated</string>
     <string name="hairdryer_settings_title">Hair dryer settings</string>
@@ -1187,9 +1180,9 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="hairdryer_icon_picker_hint">The icon only changes how the shortcut looks</string>
     <string name="hairdryer_action_refresh_names">Update device names</string>
     <!-- 吹风机桌面快捷方式的结果提示 -->
-    <string name="hairdryer_message_shortcut_updated">桌面圖示已更新</string>
-    <string name="hairdryer_message_shortcut_already">桌面上已經有這台吹風機的圖示了</string>
-    <string name="hairdryer_message_shortcut_failed">加入失敗，請稍後再試</string>
+    <string name="hairdryer_message_shortcut_updated">Home-screen icon updated</string>
+    <string name="hairdryer_message_shortcut_already">This hair dryer is already pinned to your home screen</string>
+    <string name="hairdryer_message_shortcut_failed">Could not add the shortcut, try again later</string>
 
     <!-- Campus device hub (water dispenser / washer / shower: history, rename, shortcuts) -->
     <string name="item_device_hub_water">Water dispenser</string>
@@ -1318,7 +1311,7 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="washer_progress_remaining">%1$s left</string>
     <string name="washer_progress_finishing">Almost done — get ready to collect your laundry</string>
     <string name="washer_progress_hint_running">You will be notified when it finishes, based on your reminder settings</string>
-    <string name="washer_progress_hint_waiting">Order paid. Press "Start wash" on the machine to begin</string>
+    <string name="washer_progress_hint_waiting">Order paid. Press \"Start wash\" on the machine to begin</string>
     <string name="washer_progress_done">Finished — you can collect your laundry</string>
     <string name="washer_progress_paid">Paid ¥%1$s</string>
     <string name="washer_progress_error_refresh">Could not load wash progress. Please try again.</string>
@@ -1364,6 +1357,7 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="washer_settings_experimental_desc">Battery optimisers on many phones stop this app from notifying you once it goes to the background or the screen is locked, so do not count on it to call you back for your laundry. The system clock below does not need this app to be running, and is more reliable.</string>
     <string name="washer_settings_set_alarm">Remind me with the system clock</string>
     <string name="washer_alarm_label">Laundry done</string>
+    <string name="washer_settings_no_clock_app">No system clock app was found. Please set an alarm manually.</string>
     <string name="washer_alarm_dialog_title">Set a reminder</string>
     <string name="washer_alarm_dialog_desc">This app can miss reminders once it leaves the foreground. The system clock is more reliable.</string>
     <string name="washer_alarm_dialog_alarm">Alarm</string>

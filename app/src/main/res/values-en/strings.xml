@@ -44,7 +44,7 @@
     <string name="title_add_course">Add course</string>
     <string name="label_course_name">Course name*</string>
     <string name="toast_name_empty">Course name cannot be empty</string>
-    <string name="label_teacher">Instructor</string>
+    <string name="label_teacher">Teacher</string>
     <string name="label_position">Location</string>
     <string name="label_course_time">Class time</string>
     <string name="label_day_of_week">Day of week</string>
@@ -75,7 +75,7 @@
     <string name="label_remark">Remark</string>
     <string name="course_time_description">Time: Period %1$s-%2$s (%3$s-%4$s)</string>
     <string name="course_position_prefix">Location: %1$s</string>
-    <string name="course_teacher_prefix">Instructor: %1$s</string>
+    <string name="course_teacher_prefix">Teacher: %1$s</string>
     <string name="title_course_overlap">Overlapping Courses</string>
     <string name="label_courses_overlap">%d overlapping</string>
     <string name="course_time_sections_count">(%1$s periods)</string>
@@ -183,7 +183,7 @@
     <string name="action_close">Close</string>
     <string name="toast_notification_permission_denied">Notification permission denied, cannot receive course reminders.</string>
     <string name="item_compat_wearable_sync">Wearable Sync Compatibility</string>
-    <string name="desc_compat_wearable_sync">Android 16\'s dynamic notification updates conflict with some wearable sync apps. Enabling this will improve compatibility but disable real-time "Ongoing" update effects.</string>
+    <string name="desc_compat_wearable_sync">Android 16\'s dynamic notification updates conflict with some wearable sync apps. Enabling this will improve compatibility but disable real-time \"Ongoing\" update effects.</string>
     
     <!-- Settings Options -->
     <string name="title_schedule_settings">Schedule settings</string>
@@ -317,7 +317,7 @@
     <!-- More Settings -->
     <string name="section_sync">Sync</string>
     <string name="item_sync_to_system_calendar">Sync to System Calendar</string>
-    <string name="desc_sync_to_system_calendar">Sync the current schedule to your phone\\\'s system calendar with one click</string>
+    <string name="desc_sync_to_system_calendar">Sync the current schedule to your phone\'s system calendar with one click</string>
     <string name="toast_sync_calendar_success">Synced successfully</string>
     <string name="error_sync_calendar_failed">Sync failed. Please check calendar permissions.</string>
     <string name="title_more_options">More</string>
@@ -530,7 +530,7 @@
     <string name="custom_color_title">Custom Primary Color</string>
     <string name="light_primary_color">Light Primary Color</string>
     <string name="dark_primary_color">Dark Primary Color</string>
-    <string name="theme_color_hint">Note: After changing this color, the system will use it as a seed color to recalculate the entire app\\\'s color scheme.</string>
+    <string name="theme_color_hint">Note: After changing this color, the system will use it as a seed color to recalculate the entire app\'s color scheme.</string>
     <string name="label_page_text_color">Schedule text color</string>
     <string name="widget_course_remaining_count">%1$d left</string>
 

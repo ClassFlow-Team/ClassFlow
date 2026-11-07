@@ -217,7 +217,7 @@
     <string name="item_time_slot_customization">自定义时间段</string>
     <string name="desc_time_slot_customization">编辑您的课程时间段设置</string>
     <string name="item_more_options">更多</string>
-    <string name="desc_more_options">提供我们的更多信息</string>
+    <string name="desc_more_options">更多信息与选项</string>
     <string name="a11y_more_options">更多选项</string>
     <string name="dialog_title_select_total_weeks">选择总周数</string>
     <string name="dialog_title_manual_set_week">手动设置当前周数</string>

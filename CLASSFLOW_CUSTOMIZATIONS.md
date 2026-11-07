@@ -52,7 +52,7 @@ git diff 3eb39c2 --stat -- app/src/main/java app/src/main/res | sort -t'|' -k2 -
 | `ui/theme/Color.kt` / `Theme.kt` | 已恢复上游逐字版；定制全部在 `ThemeClassFlow.kt` |
 | `ui/schedule/components/CourseBlock.kt` | 上游逐字版 |
 | `ui/schedule/components/ScheduleGridComponents.kt` | 上游原版 |
-| `res/values*/strings.xml` | 上游骨架（仅 `app_name`、zh-rTW `item_personalization` 值定制） |
+| `res/values*/strings.xml` | 上游骨架（仅 `app_name`、zh-rTW `item_personalization` 值定制，以及下方「i18n 修复」列出的译文纠错） |
 | `res/values*/classflow_strings.xml` | 独有文件（定制字符串） |
 
 ## 有意差异文件（按类别）
@@ -194,6 +194,11 @@ widget/{moderate,large}/*Native{Provider,Renderer}.kt
 - 启动更新检查频率（**上游无此结构**）：`AppSettingsModel.UpdateCheckInterval`（每次启动 / 6h / 12h / 24h / 3d / 7d）+ DataStore `update_check_interval`，`MainActivity` 按「距上次检查」冷却，`Found` 与 `Latest` 都会记录时间戳
 - `classflow://` 自定义协议（**上游无此结构**）：`data/network/wbu/ClassFlowScheme.kt` 把 `classflow://` / `classflow:///` 规范化为现有 https 路由后交给 `CampusLinkRouter`；`AndroidManifest.xml` 注册 VIEW + `NDEF_DISCOVERED`（不加 `autoVerify`，不依赖签名证书），`MainActivity.enableNfcForegroundDispatch` 始终注册 `classflow` scheme，`WebViewScreen.handleNonHttpNavigation` 直接切原生页；prod/dev 共用 scheme。另有两个**应用内直达页**：`classflow://pay`（付款码原生页）、`classflow://scan`（扫一扫）——`ClassFlowScheme` 首段白名单含 `pay` / `scan`，`CampusLinkRouter` 只认精确路径（`/pay/{多余段}` 不路由、query 忽略），入口与设备直达共用同一条 `pendingDeepLink` 链路
 - `service/` 系列（闹钟/通知 worker，上游有对应文件——注意差异多为字段/逻辑小改）
+- **i18n 修复（`res/values*/strings.xml` + `classflow_strings.xml`，2026-11）**：上游 `strings.xml` 自带若干编译期会出错的写法，已就地修正，merge 上游时**不要回退**：
+  - `values-en/strings.xml`：`desc_sync_to_system_calendar` / `theme_color_hint` 的 `\\\'` → `\'`（3 反斜杠会让真机显示 `\'`）；`desc_compat_wearable_sync` 的裸 `"Ongoing"` → `\"Ongoing\"`（裸双引号被 aapt 吞掉）；`label_teacher` / `course_teacher_prefix` 由 Instructor 统一为 Teacher；`desc_more_options` 语义对齐。
+  - `values/strings.xml`：`desc_more_options`「提供我们的更多信息」→「更多信息与选项」。
+  - `values-zh-rCN/strings.xml`、`values-zh-rTW/strings.xml`：`snackbar_add_course_within_semester` 由「开学后」改为与 base 一致的「教学周期间」；zh-rTW 另有术语统一（設置→設定、數據→資料、支持→支援、在線→線上、周次→週次、實時→即時、軟件→軟體、兼容→相容、用戶→使用者、其它→其他）、`desc_sync_to_system_calendar` 简体「课」→「課」、`btn_add_date` 添加→新增。
+  - `classflow_strings.xml`（四语种）：`font_style_apple` 平方/平方→苹方/蘋方；`washer_settings_no_clock_app` 补齐 en / zh-rCN / zh-rTW；zh-rCN 补齐整块 66 条 `washer_*`；`<string>` 内真实换行改 `\n`（`format_update_dialog_versions`、`onboarding_cross_week_release`、`onboarding_screen_edge`、`msg_semester_mismatch`、`msg_student_id_conflict`）；英文裸 `"` → `\"`；英文术语统一（Teacher / Period / Completed / Not Taken / Borrowed On / Due On / On Loan / No Limit / Campus Network Check）；`hint_search_room` 保留专有楼栋名 `北④-203`。
 
 ## 已知历史教训（避免重蹈）
 
