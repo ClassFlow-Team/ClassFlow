@@ -409,8 +409,10 @@ class WebAppViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 }
             } catch (e: WbuSessionExpiredException) {
-                // CASTGC / WebVPN 门禁过期：先用保存的密码静默重登一次，失败才弹登录 Sheet
-                val failure = trySilentUnifiedAuthLogin()
+                // CASTGC / WebVPN 门禁过期：先用保存的密码静默重登一次，失败才弹登录 Sheet。
+                // forceWebVpn = useVpn：内容在隧道里时，重登也必须走隧道 —— 走公网会撞 WAF
+                // 挡板页，被归成「内容不符预期」，用户看到一句完全无关的话，且永远修不好。
+                val failure = trySilentUnifiedAuthLogin(forceWebVpn = useVpn)
                 if (failure == null) {
                     proceedWithChannel(def, useVpn)
                     return@launch
@@ -422,7 +424,7 @@ class WebAppViewModel(application: Application) : AndroidViewModel(application) 
                     msg.contains("失效") || msg.contains("过期") || msg.contains("登录") || msg.contains("WebVPN") || msg.contains("门禁") ||
                     msg.contains("expired", ignoreCase = true) || msg.contains("log in", ignoreCase = true) || msg.contains("login", ignoreCase = true)
                 ) {
-                    val failure = trySilentUnifiedAuthLogin()
+                    val failure = trySilentUnifiedAuthLogin(forceWebVpn = useVpn)
                     if (failure == null) {
                         proceedWithChannel(def, useVpn)
                         return@launch

@@ -645,7 +645,16 @@ class WbuSyncEngine(
 
     /**
      * 凭当前会话中已有的 CASTGC 向 CAS 请求教务系统 Ticket 并跟随重定向完成换票。
-     * WebVPN 模式下会将 302 Location 改写为代理宿主，由 WebVPN 隧道代理至教务系统确立会话。
+     *
+     * 换票宿主**跟着内容通道走**（[useVpn]），与移动门户 / 图书借阅 / 座位预约同一条规则：
+     * 内容在隧道里时，公网 `login?service=jwxt` 会被云 WAF 回一张挡板页（403 / 404 + websaas），
+     * 用户只能看到「被网关拦截」，而「统一认证经过 WebVPN」开关本来就关着 —— 再怎么点也没用。
+     * 详见 [CasTicketExchange] 的类注释。
+     *
+     * 票据核销：隧道内 CAS 回跳的 `Location` 已经是代理宿主
+     * （实测 `jwxt-wbu-edu-cn-s.webvpn.wbu.edu.cn:8118/admin/caslogin?ticket=ST-…`），
+     * 公网时则是真实 `jwxt.wbu.edu.cn` —— 两种情况都直接用当前通道的 client 请求，
+     * **不需要**再做宿主改写（那里的改写是给「ids 走公网、回跳却指向内网 jwxt」准备的，见 [IdsCasClient]）。
      */
     suspend fun exchangeCastgcForJwxtSession(flowTag: String): Boolean = withContext(Dispatchers.IO) {
         val serviceTarget = if (WbuAuthTransport.getUseFixedServiceForTicket(context)) {
@@ -653,24 +662,41 @@ class WbuSyncEngine(
         } else {
             "https://jwxt.wbu.edu.cn/admin/caslogin"
         }
-        val encodedService = URLEncoder.encode(serviceTarget, "UTF-8")
-        val idsLoginUrl = "${transport.idsBase()}/authserver/login?service=$encodedService"
-        Log.i("WbuSyncEngine", "$flowTag 开始使用 CASTGC 换取教务 Ticket: $idsLoginUrl")
 
-        // 仅在已有 CASTGC 时换票；clearAuthCookies = false 保留凭据，consumeTicket = true 跟随并核销 ticket
-        val casResult = cas.casPasswordLogin(
-            studentId = "",
-            password = "",
-            idsLoginUrl = idsLoginUrl,
-            flowTag = flowTag,
-            clearAuthCookies = false,
-            consumeTicket = true
-        )
-        if (!casResult.success) {
-            Log.w("WbuSyncEngine", "$flowTag CASTGC 换票失败: ${casResult.message}")
-            return@withContext fail(casFailure(casResult, AccessLayer.UnifiedAuth))
+        val landing = try {
+            CasTicketExchange.fetchLanding(
+                context = context,
+                serviceUrl = serviceTarget,
+                contentViaVpn = useVpn,
+            )
+        } catch (e: Exception) {
+            Log.w("WbuSyncEngine", "$flowTag CASTGC 换教务票失败：${e.message}")
+            return@withContext fail(WbuFailureDetector.fromThrowable(e, AccessLayer.UnifiedAuth))
         }
-        bootstrapJwxtSession(casResult.landingHtml)
+        // 不打带 ticket 的完整地址：票据是一次性凭据，不该进日志
+        Log.i("WbuSyncEngine", "$flowTag 已换到教务票据，核销：${landing.substringBefore("?ticket=")}")
+
+        val landingHtml = try {
+            client.newCall(
+                Request.Builder()
+                    .url(landing)
+                    .header("User-Agent", transport.authUserAgent())
+                    .header("Accept-Language", transport.authAcceptLanguage)
+                    .get()
+                    .build()
+            ).execute().use { resp ->
+                if (resp.code !in 200..299) {
+                    Log.w("WbuSyncEngine", "$flowTag 核销票据返回 HTTP ${resp.code}")
+                }
+                resp.body?.string().orEmpty()
+            }
+        } catch (e: Exception) {
+            Log.w("WbuSyncEngine", "$flowTag 核销票据失败：${e.message}")
+            val layer = if (useVpn) AccessLayer.WebVpnPortal else AccessLayer.Service
+            return@withContext fail(WbuFailureDetector.fromThrowable(e, layer))
+        }
+
+        bootstrapJwxtSession(landingHtml)
     }
 
     /**

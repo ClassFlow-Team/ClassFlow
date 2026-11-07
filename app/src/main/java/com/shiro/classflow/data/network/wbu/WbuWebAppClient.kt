@@ -179,40 +179,22 @@ class WbuWebAppClient(
     /**
      * 请求 CAS 为 [serviceUrl] 签发 Service Ticket，返回 CAS 回跳的完整落地地址。
      *
-     * 只做「换票」这一跳（`followRedirects = false`），票据留在地址里不被消费 ——
-     * 谁核销由调用方决定：取 JWT 的应用自己核销，门户类交给 WebView 核销。
+     * 通道由**本次内容通道**（[useVpn]）决定，见 [CasTicketExchange]：校外内容走隧道时，
+     * 换票也必须在隧道里换，否则公网那一跳会被云 WAF 回 403 挡板页。
+     * 票据留在地址里不被消费 —— 谁核销由调用方决定。
+     *
+     * @throws WbuSessionExpiredException 凭据缺失 / 没换出票 / WebVPN 门禁失效
+     * @throws WafBlockedException 换票那一跳被云 WAF 拦
+     * @throws IOException 网络不可用
      */
     private fun requestCasTicket(serviceUrl: String): String {
-        val hasTgc = transport.cookieStore.any { it.name == "CASTGC" && it.value.isNotBlank() }
-        if (!hasTgc) {
-            Log.w("WbuWebAppClient", "No CASTGC found in cookie store (service=$serviceUrl)")
-            throw WbuSessionExpiredException(AccessLayer.UnifiedAuth)
-        }
-
-        val encodedService = URLEncoder.encode(serviceUrl, "UTF-8")
-        val casLoginUrl = "${transport.idsBase()}/authserver/login?service=$encodedService"
-
-        val casReq = Request.Builder()
-            .url(casLoginUrl)
-            .header("User-Agent", transport.authUserAgent())
-            .header("Accept-Language", transport.authAcceptLanguage)
-            .get()
-            .build()
-
-        val casLocation = client.newBuilder().followRedirects(false).build()
-            .newCall(casReq).execute().use { resp -> resp.header("Location") }
-
-        if (casLocation.isNullOrBlank() || !casLocation.contains("ticket=")) {
-            if (casLocation.orEmpty().contains("/por/") || casLocation.orEmpty().contains("webvpn")) {
-                throw WbuSessionExpiredException(AccessLayer.WebVpnPortal)
-            }
-            Log.w("WbuWebAppClient", "CAS failed to grant ST ticket. Location: $casLocation")
-            throw WbuSessionExpiredException(AccessLayer.UnifiedAuth)
-        }
-
-        // 去掉首尾空白：Location 头偶尔会带一个尾随空格，直接交给 WebView 会被编码成 `%20`
-        // 变成另一条路径（实测 `…/ydmh%20` 会被 Tomcat 直接 404）
-        return casLocation.trim()
+        // CasTicketExchange 内部已经处理了：CASTGC 缺失、无票据、门禁接管（会抛
+        // WbuSessionExpiredException(WebVpnPortal)）、被 WAF 拦、连不上。
+        return CasTicketExchange.fetchLanding(
+            context = context,
+            serviceUrl = serviceUrl,
+            contentViaVpn = useVpn,
+        ).trim()   // Location 头偶尔带尾随空格（实测 `…/ydmh%20` 被 Tomcat 直接 404）
     }
 
     /**

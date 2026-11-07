@@ -68,7 +68,9 @@ class CredentialVerifier @Inject constructor(
         if (!hasTgc) return SessionState.NOT_LOGGED_IN
         return runCatching {
             val service = URLEncoder.encode(transport.casServiceTarget, "UTF-8")
-            val url = "${transport.idsBase()}/authserver/login?service=$service"
+            // 用 idsBaseForContent(useVpn) 而不是 idsBase()：后者只看「统一认证经过 WebVPN」开关
+            // （默认关），校外内容走隧道时它会去打公网 ids，被 WAF 拦成 403 → 本页误报「已过期」。
+            val url = "${transport.idsBaseForContent(useVpn)}/authserver/login?service=$service"
             val req = Request.Builder()
                 .url(url)
                 .header("User-Agent", transport.authUserAgent())

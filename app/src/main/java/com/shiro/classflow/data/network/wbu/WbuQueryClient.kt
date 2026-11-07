@@ -1103,48 +1103,30 @@ class WbuQueryClient(
             if (valid) return@withContext existingSession.value
         }
 
-        // 需要通过 CASTGC 换票
-        val tgcCookie = transport.cookieStore.find { it.name == "CASTGC" && !it.value.isBlank() }
-        if (tgcCookie == null) {
-            Log.w("WbuQueryClient", "No CASTGC found in cookie store for OPAC authentication")
-            throw WbuSessionExpiredException(AccessLayer.UnifiedAuth)
-        }
-
-        // 1. 请求 CAS 获取重定向到 OPAC 的 ST ticket
+        // 需要通过 CASTGC 换票。通道跟着内容走（useVpn）—— 校外直连换票会被云 WAF 拦成 403
+        // 挡板页，表现为「统一身份认证登录状态已过期」，让人白登一次也修不好（见 CasTicketExchange）。
         // 核心关键点：汇文 OPAC 后端 phpCAS 核销 ST 时，其向 CAS 声明的自身原始服务地址始终是
-        // https://opac.wbu.edu.cn/reader/hwthau.php（若传 WebVPN 镜像地址会导致 CAS 校验 service 不匹配抛出 500 Authentication failed!）
-        val opacService = "https://opac.wbu.edu.cn/reader/hwthau.php"
-        val casLoginUrl = "${transport.idsBase()}/authserver/login?service=${URLEncoder.encode(opacService, "UTF-8")}"
-
-        val noRedirectClient = client.newBuilder().followRedirects(false).build()
-        val casReq = Request.Builder()
-            .url(casLoginUrl)
-            .header("User-Agent", transport.authUserAgent())
-            .header("Accept-Language", transport.authAcceptLanguage)
-            .get()
-            .build()
-
-        val location = noRedirectClient.newCall(casReq).execute().use { resp ->
-            resp.header("Location")
-        }
-
-        if (location.isNullOrBlank() || !location.contains("ticket=")) {
-            Log.w("WbuQueryClient", "CAS failed to grant ST ticket for OPAC; redirect location=$location")
-            throw WbuSessionExpiredException(AccessLayer.UnifiedAuth)
-        }
+        // https://opac.wbu.edu.cn/reader/hwthau.php（若传 WebVPN 镜像地址会导致 CAS 校验
+        // service 不匹配，抛出 500 Authentication failed!）。
+        val landing = CasTicketExchange.fetchLanding(
+            context = context,
+            serviceUrl = "https://opac.wbu.edu.cn/reader/hwthau.php",
+            contentViaVpn = useVpn,
+        )
 
         // 2. 将 CAS 回跳的目标地址映射到当前网络通道（WebVPN 下重写为代理子域以穿透校外网关）
         val targetHwthauUrl = if (useVpn) {
-            val queryPart = location.substringAfter("?", "")
+            val queryPart = landing.substringAfter("?", "")
             val querySuffix = if (queryPart.isNotBlank()) "?$queryPart" else ""
             "$opacBaseUrl/reader/hwthau.php$querySuffix"
         } else {
-            location
+            landing
         }
 
         Log.i("WbuQueryClient", "Accessing OPAC hwthau to exchange ticket: $targetHwthauUrl (useVpn=$useVpn)")
 
         // 访问 OPAC 登录跳转链接，禁用重定向以捕获第一跳的 Set-Cookie: PHPSESSID
+        val noRedirectClient = client.newBuilder().followRedirects(false).build()
         val opacAuthReq = Request.Builder()
             .url(targetHwthauUrl)
             .header("User-Agent", transport.authUserAgent())

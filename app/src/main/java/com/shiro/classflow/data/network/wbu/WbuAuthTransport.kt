@@ -353,6 +353,16 @@ internal class WbuAuthTransport(
     /** ids 认证基址：受「ids 走 WebVPN」开关控制（默认公网）。 */
     fun idsBase(): String = if (getIdsViaWebVpn(context)) idsProxyBase() else idsPublicBase
 
+    /**
+     * 换票 / 验票用的 ids 基址，**按内容通道决定**。
+     *
+     * 与 [idsBase] 的区别：后者只看「统一认证经过 WebVPN」这个设置项（默认关），
+     * 于是内容走隧道、换票却走公网 —— 校外必撞云 WAF 的 403 挡板页
+     * （见 [CasTicketExchange] 的类注释）。需要「跟着内容通道走」的地方请用这个。
+     */
+    fun idsBaseForContent(viaVpn: Boolean): String =
+        if (viaVpn || getIdsViaWebVpn(context)) idsProxyBase() else idsPublicBase
+
     /** 二维码认证基址：受「二维码走 WebVPN」开关控制（默认公网）。 */
     fun qrBase(): String = if (getQrViaWebVpn(context)) idsProxyBase() else idsPublicBase
 
