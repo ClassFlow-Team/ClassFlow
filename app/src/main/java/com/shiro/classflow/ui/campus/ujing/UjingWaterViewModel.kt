@@ -216,6 +216,18 @@ class UjingWaterViewModel @Inject constructor(
     private var currentCd: String = ""
     private var hasStarted: Boolean = false
 
+    /**
+     * 这个 ViewModel 实例是否已经为本次进入跑过 [start]。
+     *
+     * 页面被**别的页面盖住**（从欠费卡片点「去充值」、去看账单…）再回来时，composition 会被
+     * 重建，但 ViewModel 按导航条目保留着 —— 订单、进度、结算结果都还在。这时唯一正确的做法是
+     * 把原状态接回来；重走一遍 [executeFlow] 会**再下一单**，而用户只是去充了个值。
+     *
+     * 它同时是「页面被恢复」与「进程被重建」的分界：进程死了就是一个全新实例，
+     * 这里为 false，页面据此判断自己手里已经没有任何订单信息（见 `UjingWaterScreen`）。
+     */
+    private var processedEntry: Boolean = false
+
     /** 已经向使用记录补过店铺名的订单 id：轮询每 2.5 秒一次，同一单只补一次。 */
     private val namesFilledOrders = mutableSetOf<Long>()
 
@@ -501,6 +513,18 @@ class UjingWaterViewModel @Inject constructor(
         val trimmed = cd.trim()
         if (trimmed.isBlank()) return
 
+        // 0. **同一个页面被别的页面盖过又回来**（去充值 / 看账单 / 补登录）：
+        //    ViewModel 还活着，订单号、进度、结算结果都还在手里。这时唯一正确的做法是
+        //    把原状态接回来 —— 重走 [executeFlow] 会**再下一单**，而用户只是去充了个值。
+        //
+        //    刻意**不在这里自动补缴**：用户只是去充值，回来该看到的是原来那一页
+        //    （欠费提示 + 「立即补缴」），由他自己决定什么时候扣这笔钱。
+        //    悄悄动账比多按一次按钮更糟 —— 那是在用户没同意的时间点花他的钱。
+        if (processedEntry && currentCd == trimmed) {
+            Log.i(TAG, "start: 从覆盖页返回，复用现有状态 stage=${_uiState.value.stage::class.simpleName}")
+            return
+        }
+
         // 1. 同一 ViewModel 实例防重入：若正在加载或正在出水中，防止重复触发
         if (hasStarted && (_uiState.value.stage is UjingWaterUiStage.Active || _uiState.value.stage is UjingWaterUiStage.Loading)) {
             Log.d(TAG, "start ignored: already active in stage=${_uiState.value.stage::class.simpleName}")
@@ -514,6 +538,7 @@ class UjingWaterViewModel @Inject constructor(
             if (cached.stage is UjingWaterUiStage.Active) {
                 Log.i(TAG, "Resuming active water session for cd=$trimmed, orderId=${cached.orderId}")
                 hasStarted = true
+                processedEntry = true
                 currentCd = trimmed
                 _uiState.update { it.copy(cd = trimmed, stage = cached.stage, needLogin = false) }
                 startStatusWatch(trimmed, cached.orderId, cached.subject)
@@ -522,6 +547,7 @@ class UjingWaterViewModel @Inject constructor(
         }
 
         hasStarted = true
+        processedEntry = true
         autoTunnelTried = false
         currentCd = trimmed
         _uiState.update {
@@ -542,6 +568,8 @@ class UjingWaterViewModel @Inject constructor(
         clearSession()
         stopStatusWatch()
         hasStarted = false
+        // 「再接一杯」明确是新的一单：必须让 [start] 走完整流程，而不是当成「从覆盖页返回」
+        processedEntry = false
         autoTunnelTried = false
         // 「再接一杯」是新一轮：上一轮失败的退避窗口不该继续拦着这单
         settleBackoffUntil.clear()
@@ -1013,9 +1041,21 @@ class UjingWaterViewModel @Inject constructor(
                 appId = com.shiro.classflow.data.model.wbu.WebAppId.CAMPUS_CARD.name,
                 campusCardAppCode = "card-recharge",
                 campusCardDeepLinkFallback = "/campus-card/?name=cardRecharge&feeitemid=410&hasinstallConfigForm=1",
+                // 这一趟只为充值：用户点「完成」回到平台首页时自动收起容器，
+                // 把他送回取水页（页面还活着，欠费提示与「立即补缴」都还在）
+                endsWithTask = true,
             )
         )
     }
+
+    /**
+     * 这个 ViewModel 是否已经为本次进入跑过流程（见 [processedEntry]）。
+     *
+     * 页面用它在**页面被重建**时区分两种截然不同的情况：
+     * - 为 true：只是被别的页面盖过又回来，订单还在，原样显示即可；
+     * - 为 false：进程已经死过一次，手里没有任何订单信息，别装出「正在取水」的样子。
+     */
+    fun hasProcessedEntry(): Boolean = processedEntry
 
     /**
      * 「改用 WebVPN 再试」。

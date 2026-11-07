@@ -131,7 +131,19 @@ sealed interface Destination : NavKey {
          * 平台应用深链的固定兜底（应用表拿不到时用），形如
          * `/campus-card/?name=cardRecharge&feeitemid=410&hasinstallConfigForm=1`。
          */
-        val campusCardDeepLinkFallback: String? = null
+        val campusCardDeepLinkFallback: String? = null,
+        /**
+         * 这个容器是**为一件具体的事**开的（如取水页点「去充值」）：事情办完就该收起。
+         *
+         * 为 true 时，容器一旦跳回平台首页（`/plat/shouyeUser`）就自动退出，把用户送回
+         * 发起这一趟的那一页。典型场景：欠费 → 去充值 → 微信支付 → 点「完成」→ 平台首页，
+         * 用户真正想回的是取水页接着结算，而不是站在一卡通首页上。
+         *
+         * **只有设备页（取水 / 洗浴）的「去充值」该传 true**。门户里点一卡通功能入口改道
+         * 进来时同样带 [campusCardAppCode]，但那是「浏览」，用户在里面走两步是正常的，
+         * 不能因为回到首页就被踢出去 —— 所以刻意用显式字段而不是拿 appCode 当判据。
+         */
+        val endsWithTask: Boolean = false
     ) : Destination
 
     @Serializable

@@ -671,12 +671,22 @@ fun WebAppScreen(
     campusCardAppCode: String? = null,
     /** 一卡通平台应用深链兜底，见 [Destination.WebApp.campusCardDeepLinkFallback]。 */
     campusCardDeepLinkFallback: String? = null,
+    /** 这个容器为一件具体的事而开，办完即收起，见 [Destination.WebApp.endsWithTask]。 */
+    endsWithTask: Boolean = false,
     viewModel: WebAppViewModel = viewModel()
 ) {
     /** 仅洗衣机（/wm/ 或小天鹅链接）进入时显示 U净 品牌首屏。 */
     val isWasherEntry = remember(pendingAutoScan) { isWasherRaw(pendingAutoScan) }
     /** 只带设备码、没有直达地址的洗衣机深链：需要先解析出洗衣机 H5 真实入口。 */
     val isWasherDeepLink = isWasherEntry && initialTargetUrl.isNullOrBlank()
+
+    /**
+     * 这个容器是**为一件具体的事**开的（如取水页点「去充值」）：见 [Destination.WebApp.endsWithTask]。
+     *
+     * 由调用方显式声明，不拿 `campusCardAppCode` 反推 —— 门户里点一卡通功能入口改道进来时
+     * 同样带 appCode，但那是浏览，不能因为用户走回首页就把他踢出去。
+     */
+    val isTaskContainer = endsWithTask
 
     /**
      * 退出这个容器的落点。
@@ -1021,6 +1031,9 @@ fun WebAppScreen(
                         onDeepLinkAutoStartHandedOff = { deepLinkAutoStarted = true },
                         onPageErrorVisibleChanged = { pageErrorVisible = it },
                         onPageBackExit = exitContainer,
+                        /** 一卡通任务容器跳回平台首页时「任务已完成」：见 [FullScreenWebContent] 的说明。 */
+                        taskEndOnPlatformHome = isTaskContainer,
+                        onTaskFinished = exitContainer,
                         onWebViewReady = { webViewInstance = it }
                     )
                 }
@@ -1685,6 +1698,19 @@ private fun FullScreenWebContent(
      * 而 WebView 已无历史时调用 —— 通常等于退出容器。见 [pageBack] 的桥接说明。
      */
     onPageBackExit: () -> Unit = {},
+    /**
+     * 这个容器是「为某个具体动作开的一卡通任务」（例如取水页点「去充值」）。
+     *
+     * 为 true 时，页面一旦回到平台首页（`/plat/shouyeUser`）就认为**任务已经结束**，
+     * 调 [onTaskFinished] 自动收起容器 —— 用户要的是回到发起任务的那一页，
+     * 不是站在一卡通首页上再按一次返回。
+     *
+     * 注意这与「用户不充值直接返回」不冲突：直接返回走的是 BackHandler，
+     * 那时页面还停在充值页（不是首页），根本不会命中这里。
+     */
+    taskEndOnPlatformHome: Boolean = false,
+    /** 任务结束（见 [taskEndOnPlatformHome]）：收起这个容器。 */
+    onTaskFinished: () -> Unit = {},
     onWebViewReady: (WebView) -> Unit
 ) {
     val context = LocalContext.current
@@ -1698,6 +1724,15 @@ private fun FullScreenWebContent(
     var reloadingAfterError by remember { mutableStateOf(false) }
     /** 本轮加载是否已经失败过：`onPageFinished` 在失败之后也会回调，不能拿它当「成功」的信号。 */
     var loadFailedThisRound by remember { mutableStateOf(false) }
+
+    /**
+     * 「任务容器」是否**已经离开过**平台首页。
+     *
+     * 一卡通平台进容器时可能先落首页、再一跳转到目标应用页（`/campus-card/?name=cardRecharge…`）。
+     * 若只看「当前在首页」就收工，这一跳会把它掐死在半路 —— 用户根本还没看到充值页。
+     * 所以要求「先离开首页，之后又回到首页」才算任务走完一轮。
+     */
+    var leftPlatformHomeOnce by remember { mutableStateOf(false) }
 
     var pendingPermissionRequest by remember { mutableStateOf<PermissionRequest?>(null) }
     var filePathCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
@@ -2321,6 +2356,27 @@ private fun FullScreenWebContent(
                     // 反过来，这里是最该补注入的时机：页面刚要把 query 里的令牌抹掉，
                     // 让兜底脚本抢在它前面把令牌落到 sessionStorage。
                     injectChargeAppPayToken(view, url)
+
+                    // 「有目的的一卡通任务」跳回平台首页 = 任务结束，自动收起这个容器。
+                    //
+                    // 实测路径（真机 2026-11-07）：取水页欠费 → 点「去充值」→ 微信支付 →
+                    // 支付结果页点「完成」→ 一卡通首页。此时用户要的是「回到我的取水页接着结算」，
+                    // 而不是站在一卡通首页。不收起的话，他得先按一次返回退出容器（还要碰运气
+                    // 命中「首页即退出」的判据），再指望那一页自己活着 —— 实测那次直接掉回了课表。
+                    //
+                    // 两个条件都不能省：
+                    // - **只在首页触发**：这顺带保证了「用户不充值直接返回」不受影响 ——
+                    //   那时页面还停在充值页，BackHandler 先接住，压根走不到这里。
+                    // - **必须先离开过首页**（[leftPlatformHomeOnce]）：进容器时可能先落首页
+                    //   再一跳转到充值页，少了这条会把那次跳转掐死在半路，用户根本看不到充值页。
+                    if (taskEndOnPlatformHome && !isReload && url != null) {
+                        if (!isAtHomeRoute(url, definition, ownHosts)) {
+                            leftPlatformHomeOnce = true
+                        } else if (leftPlatformHomeOnce) {
+                            Log.w("WebAppScreen", "任务容器回到平台首页，自动收起：$url")
+                            onTaskFinished()
+                        }
+                    }
                 }
 
                 override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {

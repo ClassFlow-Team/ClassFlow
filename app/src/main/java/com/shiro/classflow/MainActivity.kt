@@ -1119,7 +1119,8 @@ fun AppNavigation(
                                 pendingAutoScan = destination.pendingAutoScan,
                                 pendingHashRoute = destination.pendingHashRoute,
                                 campusCardAppCode = destination.campusCardAppCode,
-                                campusCardDeepLinkFallback = destination.campusCardDeepLinkFallback
+                                campusCardDeepLinkFallback = destination.campusCardDeepLinkFallback,
+                                endsWithTask = destination.endsWithTask
                             )
 
                             is Destination.UjingWater -> com.shiro.classflow.ui.campus.ujing.UjingWaterScreen(

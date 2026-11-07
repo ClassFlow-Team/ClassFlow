@@ -219,7 +219,9 @@ fun ShowerWaterScreen(
                                 appId = WebAppId.CAMPUS_CARD.name,
                                 campusCardAppCode = "card-recharge",
                                 campusCardDeepLinkFallback =
-                                    "/campus-card/?name=cardRecharge&feeitemid=410&hasinstallConfigForm=1"
+                                    "/campus-card/?name=cardRecharge&feeitemid=410&hasinstallConfigForm=1",
+                                // 只为充值而开：点「完成」回到平台首页即收起容器，回到洗浴页
+                                endsWithTask = true
                             )
                         )
                     },

@@ -77,8 +77,19 @@ fun UjingWaterScreen(
     // 系统用保存状态恢复出来的旧取水页（进程被杀后回来、Activity 重建）：本进程已经没有进行中的
     // 订单了（订单信息只在内存里，不落盘），这页面拿不到订单的任何信息，显示什么都是错的。
     // 所以什么都不渲染，直接退回上一页 —— 不重新下单，也不挂在「正在连接饮水机…」上误导人。
-    val deadRestoredPage = handledInSavedState && !handledInProcess &&
-        !UjingWaterViewModel.hasResumableSession(cd)
+    //
+    // 判据里**必须**带上 ViewModel 自己记的「处理过这次进入」：
+    // `remember` 在「页面被别的页面盖住又回来」时也会丢（从欠费卡片点「去充值」就是这个场景），
+    // 只看 `!handledInProcess` 会把**还活着的页面**误判成死页面，于是用户充完值回来，
+    // 页面自己 popBackStack 消失，落在课表 / 一卡通主页上 —— 结算也就无从继续。
+    // ViewModel 按导航条目存活，它说「我手里有这一单」，页面就一定有状态可显示。
+    val deadRestoredPage = isDeadRestoredWaterPage(
+        handledInProcess = handledInProcess,
+        handledInSavedState = handledInSavedState,
+        viewModelHasOrder = viewModel.hasProcessedEntry(),
+        hasResumableSession = UjingWaterViewModel.hasResumableSession(cd),
+    )
+
     if (deadRestoredPage) {
         LaunchedEffect(cd) { navBridge.popBackStack() }
         return
