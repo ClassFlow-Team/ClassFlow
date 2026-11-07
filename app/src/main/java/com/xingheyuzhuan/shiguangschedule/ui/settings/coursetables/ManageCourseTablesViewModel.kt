@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import androidx.lifecycle.viewModelScope
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTable
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
@@ -25,7 +27,8 @@ import kotlinx.coroutines.launch
 class ManageCourseTablesViewModel @Inject constructor(
     private val appSettingsRepository: AppSettingsRepository,
     private val courseTableRepository: CourseTableRepository,
-    private val timeSlotRepository: TimeSlotRepository
+    private val timeSlotRepository: TimeSlotRepository,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     // 组合两个数据流，提供一个包含课表列表和当前选中ID的单一UI状态
@@ -91,7 +94,7 @@ class ManageCourseTablesViewModel @Inject constructor(
     }
 
     suspend fun applySemesterConfig(
-        config: com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSemesterConfig?,
+        config: com.shiro.classflow.data.network.wbu.WbuSemesterConfig?,
         targetTableId: String
     ) {
         if (config == null) return
@@ -110,6 +113,10 @@ class ManageCourseTablesViewModel @Inject constructor(
                 tableId = targetTableId
             )
             if (normalizedSlots.isNotEmpty()) {
+                // 先登记再写库：写库会触发 timeSlots 流，课表页那一刻就该看到标记
+                com.shiro.classflow.data.network.wbu.WbuAuthTransport.markMyhTimeAuditPending(
+                    context, targetTableId, config.campusId
+                )
                 timeSlotRepository.replaceAllForCourseTable(targetTableId, normalizedSlots)
             }
         }

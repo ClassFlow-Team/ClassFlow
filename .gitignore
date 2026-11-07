@@ -31,3 +31,22 @@ build/
 *.aab
 # CI 签名 keystore（由 KEYSTORE_BASE64 在 runner 上解码生成，禁止入库）
 app/release.jks
+
+# 本地开发/调试产物（有意不提交，仅本机使用）
+/.vscode/
+/.commandcode/
+/command-code-session-*.html
+/update_server.py
+/release_notes_*.txt
+/CHANGELOG.md
+
+# 抓包文件（含 Cookie / 票据，不入库；排查时放本机，别提交）
+*.har
+*.har.gz
+
+# 线上网页与短链服务端全都在 web/（本机维护、手动部署，暂不入库；含私有域名与节点数据）
+#   site/   官网静态站（独立域名，纯静态）
+#   pages/  「打开 App / 下载」落地页（纯静态，部署在 hub 站点的 /pages/index.php）
+#   api/    通用链接节点服务端 linkhub.php（部署在 hub 站点的 /api/linkhub.php）
+#   tools/  本机用 URL 生成器 / 深链调试页（不部署）
+/web/

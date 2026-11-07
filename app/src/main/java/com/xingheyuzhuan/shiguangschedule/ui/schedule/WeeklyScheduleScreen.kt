@@ -47,29 +47,30 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import android.util.Log
-import com.xingheyuzhuan.shiguangschedule.ui.campus.components.WbuAuthTipsScenario
-import com.xingheyuzhuan.shiguangschedule.ui.campus.components.WbuCampusAuthSheet
+import com.shiro.classflow.ui.campus.components.WbuAuthTipsScenario
+import com.shiro.classflow.ui.campus.components.WbuCampusAuthSheet
 import com.xingheyuzhuan.shiguangschedule.ui.components.VpnSmsCodeDialog
+import com.xingheyuzhuan.shiguangschedule.ui.components.VpnPasswordPromptDialog
+import com.xingheyuzhuan.shiguangschedule.ui.components.WbuScheduleTimeFixDialog
 import com.xingheyuzhuan.shiguangschedule.ui.components.DockSafeBottomPadding
 import com.xingheyuzhuan.shiguangschedule.ui.components.NavigationRailWidth
 import com.xingheyuzhuan.shiguangschedule.ui.components.isWideScreen
 import com.xingheyuzhuan.shiguangschedule.ui.components.CourseTablePickerDialog
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.VpnFullLoginStatus
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuAuthMode
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSyncEngine
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WebVpnClient
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuNetworkProbe
+import com.shiro.classflow.data.network.wbu.VpnFullLoginStatus
+import com.shiro.classflow.data.network.wbu.WbuAuthMode
+import com.shiro.classflow.data.model.wbu.CredentialService
+import com.shiro.classflow.data.network.wbu.WbuAuthTransport
+import com.shiro.classflow.data.network.wbu.MyhTimeSlotCorrection
+import com.shiro.classflow.data.network.wbu.WbuSyncEngine
+import com.shiro.classflow.data.network.wbu.needsRelogin
+import com.shiro.classflow.data.network.wbu.PortalCaptchaData
+import com.shiro.classflow.data.network.wbu.PortalCaptchaResult
+import com.shiro.classflow.data.network.wbu.WebVpnClient
+import com.xingheyuzhuan.shiguangschedule.ui.components.PortalCaptchaDialog
+import com.shiro.classflow.data.network.wbu.WbuNetworkProbe
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleModeProto
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTable
 import java.util.Locale
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -102,6 +103,7 @@ import dev.chrisbanes.haze.hazeSource
 import com.xingheyuzhuan.shiguangschedule.ui.theme.ClassFlowTheme
 import com.xingheyuzhuan.shiguangschedule.ui.theme.ThemeGradients
 import com.xingheyuzhuan.shiguangschedule.ui.schoolselection.web.WbuWebLoginAutofillStore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -112,6 +114,12 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
+import com.xingheyuzhuan.shiguangschedule.ui.components.accessFailureText
+import com.xingheyuzhuan.shiguangschedule.ui.components.WbuSyncSession
+import com.xingheyuzhuan.shiguangschedule.ui.components.needLoginHintText
+import com.xingheyuzhuan.shiguangschedule.ui.components.prepareWbuImportWithSavedPassword
+import com.xingheyuzhuan.shiguangschedule.ui.components.prepareWbuSyncSession
+import com.xingheyuzhuan.shiguangschedule.ui.components.silentUnifiedAuthLogin
 
 /**
  * 无限时间轴的中值锚点。
@@ -148,6 +156,10 @@ fun WeeklyScheduleScreen(
         }
     }
 
+    // 马影河作息修正：消费导入 / 升级时留下的「待审计」标记，整个 App 只在这里判断一次。
+    // 依赖 timeSlots：导入落幕（作息写库）后列表会更新，这次 LaunchedEffect 才会被重新拉起；
+    // 标记在校验开始前就清掉，所以无论用户选什么，都不会再问第二遍。
+
     val pagerState = rememberPagerState(
         initialPage = INFINITE_PAGER_CENTER,
         pageCount = { Int.MAX_VALUE }
@@ -181,11 +193,13 @@ fun WeeklyScheduleScreen(
     // SMS 验证码对话框状态
     var smsDialogPhone by remember { mutableStateOf<String?>(null) }
     var smsDialogIsStillValid by remember { mutableStateOf(false) }
-    var smsDialogSendInterval by remember { mutableIntStateOf(60) }
+    var smsDialogSendInterval by remember { mutableIntStateOf(0) }
     var smsDialogPromptText by remember { mutableStateOf<String?>(null) }
     var smsDeferred by remember { mutableStateOf<CompletableDeferred<String?>?>(null) }
     var smsVerifying by remember { mutableStateOf(false) }
     var smsError by remember { mutableStateOf<String?>(null) }
+    var portalCaptchaData by remember { mutableStateOf<PortalCaptchaData?>(null) }
+    var portalCaptchaDeferred by remember { mutableStateOf<CompletableDeferred<PortalCaptchaResult?>?>(null) }
     // 保持 vpnEngine 引用以便 resend
     var activeVpnEngine by remember { mutableStateOf<WbuSyncEngine?>(null) }
 
@@ -226,8 +240,49 @@ fun WeeklyScheduleScreen(
     var newSemesterPromptXnxq by remember { mutableStateOf<String?>(null) }
     var newSemesterPromptEngine by remember { mutableStateOf<WbuSyncEngine?>(null) }
 
+    // 马影河作息修正（导入后 / 老版本升级首启各一次）
+    var myhTimeFix by remember { mutableStateOf<MyhTimeSlotCorrection.Fix?>(null) }
+    var myhTimeFixTableId by remember { mutableStateOf<String?>(null) }
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+    // 马影河作息修正：消费导入 / 升级时留下的「待审计」标记，整个 App 只在这里判断一次。
+    // 依赖 timeSlots：导入落幕（作息写库）后列表会更新，这次 LaunchedEffect 才会被重新拉起；
+    // 标记在校验开始前就清掉，所以无论用户选什么，都不会再问第二遍。
+    // 同步 / 登录面板还开着时先不动手（把弹窗盖在导入流程上很吓人），等它们收起来再看。
+    LaunchedEffect(uiState.tableId, uiState.timeSlots, isWbuSyncing, showWbuAuthDialog) {
+        val tableId = uiState.tableId ?: return@LaunchedEffect
+        if (isWbuSyncing || showWbuAuthDialog) return@LaunchedEffect
+        // 作息还没从库里读出来时**绝不能**消费标记：那一刻看到的是空列表，
+        // 判断结果恒为「无事可做」，标记却被清掉，这次询问就永久丢了。
+        if (uiState.timeSlots.isEmpty()) return@LaunchedEffect
+        val pending = WbuAuthTransport.pendingMyhTimeAudits(appContext)
+        if (!pending.containsKey(tableId)) return@LaunchedEffect
+        val campusId = pending[tableId]
+        WbuAuthTransport.clearMyhTimeAuditPending(appContext, tableId)
+        // 作息已写进库，用库里这份判断，避免再拿导入返回值判一次
+        val slots = viewModel.getTimeSlotsOnce(tableId)
+        val fix = MyhTimeSlotCorrection.detect(slots, campusId)
+        when (val decision = MyhTimeSlotCorrection.decide(WbuSyncEngine.getMyhTimeFixMode(appContext), fix)) {
+            is MyhTimeSlotCorrection.Decision.None -> Unit
+            is MyhTimeSlotCorrection.Decision.SilentFix -> {
+                val corrected = MyhTimeSlotCorrection.apply(slots, decision.fix, tableId)
+                if (corrected != null && viewModel.applyCorrectedTimeSlots(tableId, corrected)) {
+                    // 提示独立成一个协程：showSnackbar 会挂起到提示消失，别把这次 LaunchedEffect 卡住
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(
+                            appContext.getString(R.string.toast_myh_time_fixed, decision.fix.toEnd)
+                        )
+                    }
+                }
+            }
+            is MyhTimeSlotCorrection.Decision.Ask -> {
+                myhTimeFix = decision.fix
+                myhTimeFixTableId = tableId
+            }
+        }
+    }
 
     val composedStyle by remember(uiState.style) {
         derivedStateOf { with(ScheduleGridStyleComposed) { uiState.style.toComposedStyle() } }
@@ -450,7 +505,12 @@ fun WeeklyScheduleScreen(
         withContext(Dispatchers.Main) {
             wbuSyncStatus = ""
             showWbuAuthDialog = false
-            snackbarHostState.showSuccessSnackbar(appContext.getString(R.string.toast_schedule_imported_success))
+            // 成功提示独立成协程：showSnackbar 会挂起到提示消失（Short ≈ 4s）。
+            // 若在这里 await，调用方的 finally 也要等提示消失才能把 isWbuSyncing 置回 false，
+            // 那段时间点右上角同步按钮会被 `if (isWbuSyncing) return` 直接吞掉（表现为「点了没反应」）。
+            coroutineScope.launch {
+                snackbarHostState.showSuccessSnackbar(appContext.getString(R.string.toast_schedule_imported_success))
+            }
         }
 
         // 检查教务系统是否有新于本地全部课表的新学期
@@ -468,6 +528,74 @@ fun WeeklyScheduleScreen(
         }
 
         return true
+    }
+
+    /** 同步 / 导入的提示：先顶掉上一条，免得一秒钟弹出三条排队等着播的提示。null / 空 = 不提示。 */
+    suspend fun showWbuSnackbar(message: String?) {
+        if (message.isNullOrBlank()) return
+        withContext(Dispatchers.Main) {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.showSnackbar(message)
+        }
+    }
+
+    /**
+     * 单击同步：**全程不打开登录面板**。
+     *
+     * 1. 用保存的密码 / 现有会话把登录态静默准备好（缺门禁密码、短信验证码、滑块校验就地弹小窗）；
+     * 2. 需要校园网：开了「自动校园网探测」且人就在校园网内时直接连，不绕 WebVPN；
+     *    判据过期导致直连白跑一趟时（刚走出 WiFi 范围最常见）重算一次通道再试，不把这次失败甩给用户；
+     * 3. 直接跑导入管线；真需要用户重新登录时只提示一句 —— 登录面板的入口是**长按**按钮。
+     */
+    suspend fun performDirectSync() {
+        if (isWbuSyncing) return
+        // 立刻进入加载态：探测 / 静默登录 / 换票这几秒里，按钮得看得出「正在干活」，
+        // 而不是像点了没反应（校外探测要等超时，用户最先抱怨的就是这个「没反应」）。
+        isWbuSyncing = true
+        wbuError = ""
+        wbuSyncStatus = appContext.getString(R.string.status_fetching_schedule)
+
+        fun stopLoading() {
+            wbuSyncStatus = ""
+            isWbuSyncing = false
+        }
+
+        try {
+            // 通道 + 教务会话一次办齐：这一步内部会按需静默登录、必要时重算一次通道
+            val session = prepareWbuSyncSession(appContext, "SCHEDULE") {
+                coroutineScope.launch {
+                    showWbuSnackbar(appContext.getString(R.string.status_login_saved_credentials))
+                }
+            }
+            when (session) {
+                is WbuSyncSession.Failed -> {
+                    stopLoading()
+                    showWbuSnackbar(needLoginHintText(appContext, session.failure))
+                }
+
+                is WbuSyncSession.Ready -> performCourseImportPipeline(
+                    session.engine,
+                    WbuSyncEngine.getSavedStudentId(appContext)
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("WbuSync", "单击同步发生错误", e)
+            showWbuSnackbar(
+                accessFailureText(appContext, e)
+                    ?: appContext.getString(R.string.format_err_sync_error, e.message ?: "")
+            )
+        } finally {
+            stopLoading()
+            // 导入管线把「为什么没导成」写在 wbuError 里（那是登录面板在显示的状态），
+            // 单击同步没有那个面板，所以在这里补一条提示，别让失败静默掉。
+            val pipelineError = wbuError
+            if (pipelineError.isNotBlank()) {
+                wbuError = ""
+                showWbuSnackbar(pipelineError)
+            }
+        }
     }
 
     fun vpnStatusText(authMode: WbuAuthMode): (VpnFullLoginStatus) -> Unit = { status ->
@@ -615,9 +743,12 @@ fun WeeklyScheduleScreen(
                                 modifier = syncButtonModifier,
                                 hazeState = hazeState,
                                 contentColor = composedStyle.pageTextColor ?: MaterialTheme.colorScheme.onSurface,
-                                onClick = {
-                            if (onSyncButtonClickIntercept?.invoke() == true) return@WbuSyncActionButton
-                            if (isWbuSyncing) return@WbuSyncActionButton
+                                loading = isWbuSyncing,
+                                onLongClickLabel = stringResource(R.string.a11y_long_press_login),
+                                // 长按 = 打开登录面板：需要重新登录 / 想换账号 / 想改导入偏好时走这里
+                                onLongClick = syncLongPress@{
+                            if (onSyncButtonClickIntercept?.invoke() == true) return@syncLongPress
+                            if (isWbuSyncing) return@syncLongPress
                             coroutineScope.launch {
                                 val activeTableId = viewModel.uiState.value.tableId
                                 if (activeTableId == null) {
@@ -628,30 +759,41 @@ fun WeeklyScheduleScreen(
                                 wbuInitialStudentId = WbuSyncEngine.getSavedStudentId(appContext)
                                 wbuSyncStatus = ""
                                 wbuError = ""
+
+                                // 「自动使用保存的密码登录」：本地登录态缺失时先用保存的密码静默建好，
+                                // 打开的面板就是一份「已经登录好、只差点确认」的状态 —— 用户不必再输一次密码。
+                                // 静默过程中需要门禁密码 / 短信 / 图形校验会就地弹小窗。
+                                val prepareFailure = prepareWbuImportWithSavedPassword(appContext, "SCHEDULE") {
+                                    snackbarHostState.showSnackbar(appContext.getString(R.string.status_login_saved_credentials))
+                                }
+                                if (prepareFailure != null && !prepareFailure.needsRelogin) {
+                                    // 网络类 / 协议类失败：不是「重新登录」能解决的，别把用户推到登录面板前
+                                    snackbarHostState.showSnackbar(
+                                        accessFailureText(appContext, prepareFailure)
+                                            ?: appContext.getString(R.string.err_need_unified_auth_session)
+                                    )
+                                    return@launch
+                                }
+                                // 会话失效 / 凭据被拒：照常打开面板（面板本身就是登录入口），并把原因写进去
+                                wbuError = prepareFailure?.let { accessFailureText(appContext, it).orEmpty() }.orEmpty()
                                 showWbuAuthDialog = true
                             }
                         },
-                            // 长按：忽略已保存登录态，清除会话并强制走重新登录
-                            onLongClick = {
-                                if (isWbuSyncing) return@WbuSyncActionButton
-                                coroutineScope.launch {
-                                    val activeTableId = viewModel.uiState.value.tableId
-                                    if (activeTableId == null) {
-                                        snackbarHostState.showSnackbar(appContext.getString(R.string.snackbar_no_syncable_table))
-                                        return@launch
-                                    }
-
-                                    val savedUseVpn = WbuSyncEngine.getSavedUseVpn(appContext) ?: false
-                                    WbuSyncEngine(context = appContext, useVpn = savedUseVpn)
-                                        .clearPersistedSession()
-                                    snackbarHostState.showSnackbar(appContext.getString(R.string.snackbar_ignored_saved_session))
-
-                                    wbuInitialStudentId = WbuSyncEngine.getSavedStudentId(appContext)
-                                    wbuSyncStatus = ""
-                                    wbuError = ""
-                                    showWbuAuthDialog = true
+                                // 单击 = 直接同步：不打开登录面板（真要登录时提示一句「长按按钮」）
+                                onClick = syncTap@{
+                            if (onSyncButtonClickIntercept?.invoke() == true) return@syncTap
+                            if (isWbuSyncing) return@syncTap
+                            coroutineScope.launch {
+                                if (viewModel.uiState.value.tableId == null) {
+                                    snackbarHostState.showSnackbar(appContext.getString(R.string.snackbar_no_syncable_table))
+                                    return@launch
                                 }
-                            })
+                                wbuInitialStudentId = WbuSyncEngine.getSavedStudentId(appContext)
+                                wbuSyncStatus = ""
+                                wbuError = ""
+                                performDirectSync()
+                            }
+                        })
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -989,13 +1131,14 @@ fun WeeklyScheduleScreen(
                             isWbuSyncing = false
                             return@launch
                         }
-                        val useVpn = WbuSyncEngine.getSavedUseVpn(appContext) ?: false
+                        val useVpn = WbuSyncEngine.getSavedUseVpn(appContext)
                         val sid = WbuSyncEngine.getSavedStudentId(appContext)
                         val engine = WbuSyncEngine(context = appContext, useVpn = useVpn)
                         performCourseImportPipeline(engine, sid)
                     } catch (e: Exception) {
                         Log.e("WbuSync", "同步发生错误", e)
-                        wbuError = appContext.getString(R.string.format_err_sync_error, e.message ?: "")
+                        wbuError = accessFailureText(appContext, e)
+                            ?: appContext.getString(R.string.format_err_sync_error, e.message ?: "")
                     } finally {
                         isWbuSyncing = false
                     }
@@ -1025,7 +1168,7 @@ fun WeeklyScheduleScreen(
                     wbuError = ""
                     coroutineScope.launch {
                         try {
-                            val useVpn = WbuSyncEngine.getSavedUseVpn(appContext) ?: false
+                            val useVpn = WbuSyncEngine.getSavedUseVpn(appContext)
                             val engine = WbuSyncEngine(context = appContext, useVpn = useVpn)
                             activeVpnEngine = engine
                             engine.sslIssueHandler = { msg ->
@@ -1035,6 +1178,14 @@ fun WeeklyScheduleScreen(
                                     sslIssueDeferred = d
                                 }
                                 d.await()
+                            }
+                            engine.portalCaptchaProvider = { captcha ->
+                                val d = CompletableDeferred<PortalCaptchaResult?>()
+                                withContext(Dispatchers.Main) {
+                                    portalCaptchaData = captcha
+                                    portalCaptchaDeferred = d
+                                }
+                                d.await() ?: PortalCaptchaResult.Cancel
                             }
                             // WebVPN 模式下先打通门禁：TWFID 缺失/失效时弹窗索取密码 + 短信二次验证
                             if (useVpn) {
@@ -1066,7 +1217,14 @@ fun WeeklyScheduleScreen(
                                 if (!tunnelOk) {
                                     isWbuSyncing = false
                                     wbuSyncStatus = ""
-                                    wbuError = appContext.getString(R.string.err_webvpn_connect_failed)
+                                    // 结构化原因优先：用户取消输入 → 空文案（不报错），
+                                    // 其余情况同理给出「连不上 WebVPN / WebVPN 登录状态已过期」这类可执行提示
+                                    val tunnelFailure = engine.lastFailure
+                                    wbuError = if (tunnelFailure == null) {
+                                        appContext.getString(R.string.err_webvpn_connect_failed)
+                                    } else {
+                                        accessFailureText(appContext, tunnelFailure).orEmpty()
+                                    }
                                     return@launch
                                 }
                             }
@@ -1077,7 +1235,8 @@ fun WeeklyScheduleScreen(
                             }
                         } catch (e: Exception) {
                             Log.e("WbuSync", "已有凭据同步错误", e)
-                            wbuError = appContext.getString(R.string.format_err_sync_error, e.message ?: "")
+                            wbuError = accessFailureText(appContext, e)
+                            ?: appContext.getString(R.string.format_err_sync_error, e.message ?: "")
                         } finally {
                             isWbuSyncing = false
                         }
@@ -1108,14 +1267,14 @@ fun WeeklyScheduleScreen(
                 smsVerifying = false
             },
             onResend = {
-                coroutineScope.launch {
-                    val result = activeVpnEngine?.resendVpnSmsCode()
-                    if (result?.success == true) {
-                        smsDialogSendInterval = result.cooldownSeconds
-                        snackbarHostState.showSnackbar(appContext.getString(R.string.snackbar_otp_resent))
-                    } else {
-                        snackbarHostState.showSnackbar(appContext.getString(R.string.snackbar_otp_resend_failed))
-                    }
+                val result = activeVpnEngine?.resendVpnSmsCode()
+                if (result?.success == true) {
+                    smsDialogSendInterval = result.cooldownSeconds
+                    snackbarHostState.showSnackbar(appContext.getString(R.string.snackbar_otp_resent))
+                    result.cooldownSeconds
+                } else {
+                    snackbarHostState.showSnackbar(appContext.getString(R.string.snackbar_otp_resend_failed))
+                    null
                 }
             },
             onDismiss = {
@@ -1124,6 +1283,27 @@ fun WeeklyScheduleScreen(
                 smsDeferred = null
                 smsVerifying = false
                 smsError = null
+            }
+        )
+    }
+
+    portalCaptchaData?.let { captcha ->
+        PortalCaptchaDialog(
+            captcha = captcha,
+            onSubmit = { code ->
+                portalCaptchaDeferred?.complete(PortalCaptchaResult.Submit(code))
+                portalCaptchaDeferred = null
+                portalCaptchaData = null
+            },
+            onRefresh = {
+                portalCaptchaDeferred?.complete(PortalCaptchaResult.Refresh)
+                portalCaptchaDeferred = null
+                portalCaptchaData = null
+            },
+            onDismiss = {
+                portalCaptchaDeferred?.complete(PortalCaptchaResult.Cancel)
+                portalCaptchaDeferred = null
+                portalCaptchaData = null
             }
         )
     }
@@ -1182,178 +1362,12 @@ fun WeeklyScheduleScreen(
     }
 
     // WebVPN 统一认证密码询问弹窗（教务密码模式且未配置 TWFID 时触发）
+        // WebVPN 统一认证密码询问弹窗（教务密码模式且未配置 TWFID 时触发）
     vpnPasswordDeferred?.let { deferred ->
-        var rememberVpnPassword by remember { mutableStateOf(WbuSyncEngine.isRememberVpnPasswordEnabled(appContext)) }
-        var hasSavedVpnPassword by remember { mutableStateOf(WbuSyncEngine.hasSavedVpnPassword(appContext)) }
-        var isVpnPasswordModified by remember { mutableStateOf(false) }
-        var inputPassword by remember {
-            mutableStateOf(if (WbuSyncEngine.hasSavedVpnPassword(appContext)) "••••••••" else "")
-        }
-        var passwordVisible by remember { mutableStateOf(false) }
-
-        // 延迟清空防抖：关闭弹窗时若用户取消了记住密码，统一清空持久化数据
-        DisposableEffect(rememberVpnPassword) {
-            onDispose {
-                if (!rememberVpnPassword) {
-                    WbuSyncEngine.setRememberVpnPasswordEnabled(appContext, false)
-                    WbuSyncEngine.clearSavedVpnPassword(appContext)
-                }
-            }
-        }
-
-        AlertDialog(
-            onDismissRequest = {
-                deferred.complete(null)
+        VpnPasswordPromptDialog(
+            onSubmit = { value ->
+                deferred.complete(value)
                 vpnPasswordDeferred = null
-            },
-            title = { Text(stringResource(R.string.title_connect_webvpn)) },
-            text = {
-                Column {
-                    Text(
-                        text = stringResource(R.string.desc_connect_webvpn),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = inputPassword,
-                        onValueChange = { newValue ->
-                            if (hasSavedVpnPassword && !isVpnPasswordModified) {
-                                isVpnPasswordModified = true
-                                inputPassword = if (newValue.startsWith("••••••••")) {
-                                    newValue.removePrefix("••••••••")
-                                } else if (newValue.endsWith("••••••••")) {
-                                    newValue.removeSuffix("••••••••")
-                                } else if (newValue.contains("••••••••")) {
-                                    newValue.replace("••••••••", "")
-                                } else {
-                                    newValue
-                                }
-                            } else {
-                                inputPassword = newValue
-                            }
-                        },
-                        label = { Text(stringResource(R.string.label_webvpn_password)) },
-                        singleLine = true,
-                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        trailingIcon = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(end = 6.dp)
-                            ) {
-                                // 预填已记住的密码（••••••••）时隐藏"显示密码"按钮，避免展示无意义的占位符
-                                if (!(hasSavedVpnPassword && !isVpnPasswordModified)) {
-                                    IconButton(
-                                        onClick = { passwordVisible = !passwordVisible },
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                            contentDescription = if (passwordVisible) stringResource(R.string.a11y_hide_password) else stringResource(R.string.a11y_show_password),
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable {
-                                            val next = !rememberVpnPassword
-                                            rememberVpnPassword = next
-                                            if (!next) {
-                                                hasSavedVpnPassword = false
-                                                if (!isVpnPasswordModified && inputPassword == "••••••••") {
-                                                    inputPassword = ""
-                                                }
-                                            } else {
-                                                WbuSyncEngine.setRememberVpnPasswordEnabled(appContext, true)
-                                                val effective = if (hasSavedVpnPassword && !isVpnPasswordModified) {
-                                                    WbuSyncEngine.getSavedVpnPassword(appContext) ?: ""
-                                                } else {
-                                                    inputPassword
-                                                }
-                                                if (effective.isNotBlank()) {
-                                                    WbuSyncEngine.saveVpnPassword(appContext, effective)
-                                                    hasSavedVpnPassword = true
-                                                }
-                                            }
-                                        }
-                                        .padding(horizontal = 4.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.label_remember_password),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Checkbox(
-                                        checked = rememberVpnPassword,
-                                        onCheckedChange = { checked ->
-                                            rememberVpnPassword = checked
-                                            if (!checked) {
-                                                hasSavedVpnPassword = false
-                                                if (!isVpnPasswordModified && inputPassword == "••••••••") {
-                                                    inputPassword = ""
-                                                }
-                                            } else {
-                                                WbuSyncEngine.setRememberVpnPasswordEnabled(appContext, true)
-                                                val effective = if (hasSavedVpnPassword && !isVpnPasswordModified) {
-                                                    WbuSyncEngine.getSavedVpnPassword(appContext) ?: ""
-                                                } else {
-                                                    inputPassword
-                                                }
-                                                if (effective.isNotBlank()) {
-                                                    WbuSyncEngine.saveVpnPassword(appContext, effective)
-                                                    hasSavedVpnPassword = true
-                                                }
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .scale(0.85f)
-                                    )
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                val canSubmit = inputPassword.isNotBlank() || hasSavedVpnPassword
-                TextButton(
-                    onClick = {
-                        val effectiveVpn = if (hasSavedVpnPassword && !isVpnPasswordModified) {
-                            WbuSyncEngine.getSavedVpnPassword(appContext) ?: inputPassword
-                        } else {
-                            inputPassword
-                        }
-                        if (rememberVpnPassword && effectiveVpn.isNotBlank()) {
-                            WbuSyncEngine.setRememberVpnPasswordEnabled(appContext, true)
-                            WbuSyncEngine.saveVpnPassword(appContext, effectiveVpn)
-                        } else if (!rememberVpnPassword) {
-                            WbuSyncEngine.setRememberVpnPasswordEnabled(appContext, false)
-                            WbuSyncEngine.clearSavedVpnPassword(appContext)
-                        }
-                        deferred.complete(effectiveVpn)
-                        vpnPasswordDeferred = null
-                    },
-                    enabled = canSubmit
-                ) {
-                    Text(stringResource(R.string.action_continue_connect))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        deferred.complete(null)
-                        vpnPasswordDeferred = null
-                    }
-                ) {
-                    Text(stringResource(R.string.action_cancel))
-                }
             }
         )
     }
@@ -1715,6 +1729,42 @@ fun WeeklyScheduleScreen(
             }
         )
     }
+
+    // 4. 马影河作息修正（导入后 / 老版本升级首启）
+    myhTimeFix?.let { fix ->
+        val tableId = myhTimeFixTableId
+        WbuScheduleTimeFixDialog(
+            fix = fix,
+            onDismiss = {
+                myhTimeFix = null
+                myhTimeFixTableId = null
+            },
+            onConfirm = { apply, noMorePrompts ->
+                myhTimeFix = null
+                myhTimeFixTableId = null
+                if (tableId == null) return@WbuScheduleTimeFixDialog
+                if (noMorePrompts) {
+                    val mode = MyhTimeSlotCorrection.modeAfterPrompt(
+                        noMorePrompts = true,
+                        applied = apply,
+                        current = WbuSyncEngine.getMyhTimeFixMode(appContext)
+                    )
+                    WbuSyncEngine.setMyhTimeFixMode(appContext, mode)
+                }
+                if (apply) {
+                    coroutineScope.launch {
+                        val slots = viewModel.getTimeSlotsOnce(tableId)
+                        val corrected = MyhTimeSlotCorrection.apply(slots, fix, tableId) ?: return@launch
+                        if (viewModel.applyCorrectedTimeSlots(tableId, corrected)) {
+                            snackbarHostState.showSnackbar(
+                                appContext.getString(R.string.toast_myh_time_fixed, fix.toEnd)
+                            )
+                        }
+                    }
+                }
+            }
+        )
+    }
 }
 
 private enum class AppSnackbarLeadingIcon {
@@ -1738,4 +1788,3 @@ private suspend fun SnackbarHostState.showSuccessSnackbar(message: String) {
         )
     )
 }
-

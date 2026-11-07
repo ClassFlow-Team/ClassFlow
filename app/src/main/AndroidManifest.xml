@@ -1,18 +1,36 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- 打开系统时钟并预填洗衣结束时间（AlarmClock.ACTION_SET_ALARM）。
+         系统时钟的 HandleApiCalls 用这个权限保护，没声明会被直接拒绝。 -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- 卸载/回滚时申请删除包的能力 -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- 允许在能力达标时以“无需用户操作”的方式静默完成自更新（normal 权限） -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
+    <!-- Android 14+：声明更新归属，避免更新权被其它商店抢占（normal 权限） -->
+    <uses-permission android:name="android.permission.ENFORCE_UPDATE_OWNERSHIP" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <!--
+        网页应用里的定位（签到助手 / 查寝 / 打卡 …）：
+        门户里的业务系统跑在 http:// 上，Chromium 对非安全源**硬拒绝** navigator.geolocation
+        （Only secure origins are allowed，且发生在权限判定之前），只能由容器自己取位置再交给页面，
+        详见 ui/webapp/WebAppGeolocation.kt。
+        两个都要：COARSE 走网络定位（快），FINE 才可能拿到 GPS（准）；只在页面真要定位时才申请。
+    -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.NFC" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
 
@@ -25,6 +43,18 @@
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="alipays" />
+        </intent>
+        <!--
+          WakeUp 课程表：导出 .wakeup_schedule 后「在 WakeUp 中打开」按「显式包名直开」实现，
+          而 Android 11+ 的包可见性过滤会让未在此声明的包在 resolveActivity 上恒为 null，
+          旧实现因此在所有设备上都掉进系统选择器。这里声明官方包名与 Pro/衍生版包名；
+          再声明 octet-stream 的 VIEW 处理者，使包名不固定的共存/修改版也能被查询到。
+        -->
+        <package android:name="com.suda.yzune.wakeupschedule" />
+        <package android:name="com.suda.yzune.wakeupschedule.pro" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/octet-stream" />
         </intent>
     </queries>
 
@@ -52,7 +82,7 @@
         </service>
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.shiro.classflow.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
@@ -71,13 +101,29 @@
                 <action android:name="com.xingheyuzhuan.shiguangschedule.action.CAMPUS_CARD" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <!-- 桌面长按图标「付款码」快捷方式入口（直达原生取码页） -->
+            <intent-filter>
+                <action android:name="com.xingheyuzhuan.shiguangschedule.action.PAY_CODE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
 
-            <!-- 校园服务 NFC 感应直达入口 (NDEF_DISCOVERED: 饮水机 /w/ 与 洗衣机 /wm/) -->
+            <!-- 校园服务 NFC 感应直达入口 (NDEF_DISCOVERED: 饮水机 /w/、洗衣机 /wm/、吹风机 /hd/、洗浴 /s/、通用节点 /url/ 与短别名 /u/) -->
             <intent-filter>
                 <action android:name="android.nfc.action.NDEF_DISCOVERED" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="https" android:host="${ujingNfcHost}" android:pathPrefix="/w/" />
                 <data android:scheme="https" android:host="${ujingNfcHost}" android:pathPrefix="/wm/" />
+                <data android:scheme="https" android:host="${ujingNfcHost}" android:pathPrefix="/hd/" />
+                <!-- hub host 同时也是设备直达站点（同一份落地页、同一套 /w/ /wm/ /hd/ 伪静态），
+                     设备码 / 下载页（/w/download）在这两个 host 上都应能进 App -->
+                <data android:scheme="https" android:host="${linkHubHost}" android:pathPrefix="/w/" />
+                <data android:scheme="https" android:host="${linkHubHost}" android:pathPrefix="/wm/" />
+                <data android:scheme="https" android:host="${linkHubHost}" android:pathPrefix="/hd/" />
+                <!-- 洗浴设备直达 /s/{系统}/{设备号}（马影河 1 栋 / 2-3 栋），见 CampusShowerLink -->
+                <data android:scheme="https" android:host="${linkHubHost}" android:pathPrefix="/s/" />
+                <!-- 通用链接节点（服务端短码 / 内嵌载荷），域名来自 CLASSFLOW_LINK_HUB_HOST -->
+                <data android:scheme="https" android:host="${linkHubHost}" android:pathPrefix="/url/" />
+                <data android:scheme="https" android:host="${linkHubHost}" android:pathPrefix="/u/" />
             </intent-filter>
 
             <!-- 校园服务 DeepLink / 网页链接直达入口 (VIEW) -->
@@ -87,7 +133,57 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="${ujingNfcHost}" android:pathPrefix="/w/" />
                 <data android:scheme="https" android:host="${ujingNfcHost}" android:pathPrefix="/wm/" />
+                <data android:scheme="https" android:host="${ujingNfcHost}" android:pathPrefix="/hd/" />
             </intent-filter>
+
+            <!--
+              通用链接节点与 hub 站设备直达入口 (VIEW: /url/、短别名 /u/，以及 hub 站同时提供的 /w/ /wm/ /hd/ /s/)。
+              单独一个 filter：域名验证是按 host 逐个进行的，与 U净 host 分开写，
+              某个 host 的 assetlinks.json 出问题不会牵连另一个。
+              该 host 的 .well-known/assetlinks.json 已包含 com.shiro.classflow 与 .dev 两个包名。
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="${linkHubHost}" />
+                <data android:pathPrefix="/url/" />
+                <data android:scheme="https" />
+                <data android:host="${linkHubHost}" />
+                <data android:pathPrefix="/u/" />
+                <!-- hub 站的设备/下载命名空间：落地页上「打开 ClassFlow」按钮发的 intent://
+                     也要能命中，否则浏览器只能退回落地页（表现为「点了没反应」） -->
+                <data android:scheme="https" />
+                <data android:host="${linkHubHost}" />
+                <data android:pathPrefix="/w/" />
+                <data android:scheme="https" />
+                <data android:host="${linkHubHost}" />
+                <data android:pathPrefix="/wm/" />
+                <data android:scheme="https" />
+                <data android:host="${linkHubHost}" />
+                <data android:pathPrefix="/hd/" />
+                <!-- 洗浴设备直达 /s/{系统}/{设备号}（马影河 1 栋 / 2-3 栋） -->
+                <data android:scheme="https" />
+                <data android:host="${linkHubHost}" />
+                <data android:pathPrefix="/s/" />
+            </intent-filter>
+
+            <!-- classflow:// 自定义协议：浏览器 / 外部 App（不需要 autoVerify，也不依赖签名证书） -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="classflow" />
+            </intent-filter>
+
+            <!-- classflow:// NFC NDEF URI 记录（GitHub 自建包/无域名构建的主要入口） -->
+            <intent-filter>
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="classflow" />
+            </intent-filter>
+
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
@@ -95,6 +191,12 @@
 
         <receiver
             android:name=".service.CourseAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- 洗衣完成提醒的精确闹钟落点（只在用户开启提醒后才会被排上） -->
+        <receiver
+            android:name=".service.WasherAlarmReceiver"
             android:enabled="true"
             android:exported="false" />
 

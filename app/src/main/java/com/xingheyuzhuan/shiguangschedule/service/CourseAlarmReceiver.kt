@@ -12,7 +12,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import androidx.core.content.getSystemService
-import com.xingheyuzhuan.shiguangschedule.MainActivity
+import com.shiro.classflow.MainActivity
 import com.xingheyuzhuan.shiguangschedule.AppEntryPoint
 import dagger.hilt.android.EntryPointAccessors
 import com.xingheyuzhuan.shiguangschedule.R
@@ -125,8 +125,8 @@ class CourseAlarmReceiver : BroadcastReceiver() {
                         }
 
                     } else {
-                        val courseName = intent?.getStringExtra(EXTRA_COURSE_NAME) ?: "未知课程"
-                        val coursePosition = intent?.getStringExtra(EXTRA_COURSE_POSITION) ?: "地点未知"
+                        val courseName = intent?.getStringExtra(EXTRA_COURSE_NAME) ?: ctx.getString(R.string.notification_unknown_course)
+                        val coursePosition = intent?.getStringExtra(EXTRA_COURSE_POSITION) ?: ctx.getString(R.string.notification_unknown_position)
                         val courseIdString = intent?.getStringExtra(EXTRA_COURSE_ID)
 
                         if (!courseIdString.isNullOrEmpty()) {

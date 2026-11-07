@@ -1,12 +1,12 @@
 package com.xingheyuzhuan.shiguangschedule.tool
 
 import android.content.Context
+import com.xingheyuzhuan.shiguangschedule.R
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.appcompat.app.AppCompatDelegate
-import androidx.core.content.FileProvider
 import androidx.core.os.ConfigurationCompat
 import com.xingheyuzhuan.shiguangschedule.BuildConfig
 import kotlinx.coroutines.Dispatchers
@@ -72,6 +72,26 @@ data class CustomUpdateResponse(
     @SerialName("download_available") val downloadAvailable: Boolean = true,
     @SerialName("download_info") val downloadInfo: DownloadInfoResponse? = null
 )
+
+/** 更新检查的实际来源。 */
+enum class UpdateSource { API, GITHUB }
+
+/**
+ * 解析更新来源：
+ * - 用户手填自定义接口 → API；
+ * - 否则编译时注入了更新接口 → API；
+ * - 两者都没有 → GitHub Releases。
+ *
+ * 编译时配置了接口的构建不会在失败时回退 GitHub，避免混用不同渠道/签名的包。
+ */
+internal fun resolveUpdateSource(
+    customApiUrl: String?,
+    buildApiUrl: String = BuildConfig.UPDATE_API_URL
+): UpdateSource {
+    val hasCustom = !customApiUrl.isNullOrBlank()
+    val hasBuild = buildApiUrl.isNotBlank()
+    return if (hasCustom || hasBuild) UpdateSource.API else UpdateSource.GITHUB
+}
 
 class UpdateChecker(private val context: Context) {
 
@@ -155,19 +175,38 @@ class UpdateChecker(private val context: Context) {
     }
 
     /**
-     * 检查更新
-     * @param customApiUrl 自定义接口地址（若为空则使用 BuildConfig.UPDATE_API_URL）
+     * 检查更新。
+     *
+     * 来源路由见 [resolveUpdateSource]：
+     * - 自定义接口 / 编译时接口 → [checkUpdateFromApi]；
+     * - 都没有 → GitHub Releases。
+     *
+     * @param customApiUrl 用户手填的自定义接口地址（留空则使用构建内置来源）
      * @param channel 更新渠道（如 stable, beta, dev，默认 stable）
      */
     suspend fun checkUpdate(
         customApiUrl: String? = null,
         channel: String = "stable"
     ): UpdateStatus = withContext(Dispatchers.IO) {
-        val apiUrl = customApiUrl?.trim()?.takeIf { it.isNotBlank() } ?: BuildConfig.UPDATE_API_URL.trim()
-        if (apiUrl.isBlank()) {
-            return@withContext UpdateStatus.Error("未配置更新服务器地址，无法检查更新")
-        }
+        val apiUrl = customApiUrl?.trim()?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.UPDATE_API_URL.trim()
 
+        if (apiUrl.isNotBlank()) {
+            checkUpdateFromApi(apiUrl, channel)
+        } else {
+            GitHubUpdateSource(
+                context = context,
+                httpClient = httpClient,
+                deviceArch = getDeviceArch()
+            ).checkUpdate(channel)
+        }
+    }
+
+    /**
+     * 通过更新接口检查。
+     */
+    private suspend fun checkUpdateFromApi(apiUrl: String, channel: String): UpdateStatus =
+        withContext(Dispatchers.IO) {
         try {
             val arch = getDeviceArch()
             val lang = getCurrentLanguageTag()
@@ -193,7 +232,7 @@ class UpdateChecker(private val context: Context) {
                 .build()
 
             val jsonString = httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw IOException("服务器响应异常: HTTP ${response.code}")
+                if (!response.isSuccessful) throw IOException(context.getString(R.string.format_err_server_response, response.code))
                 response.body.string()
             }
 
@@ -223,17 +262,17 @@ class UpdateChecker(private val context: Context) {
 
             // 如果服务端明确标记下载不可用
             if (!updateResponse.downloadAvailable) {
-                return@withContext UpdateStatus.Error("新版本 $versionDisplayName 已发布，但针对当前架构 ($arch) 的安装包暂未开放下载")
+                return@withContext UpdateStatus.Error(context.getString(R.string.format_err_arch_not_available, versionDisplayName, arch))
             }
 
             if (effectiveDownloadUrl.isBlank()) {
-                return@withContext UpdateStatus.Error("更新信息中未提供有效的下载地址")
+                return@withContext UpdateStatus.Error(context.getString(R.string.err_no_download_url))
             }
 
             val info = ReleaseUpdateInfo(
                 latestVersionName = versionDisplayName,
                 latestVersionCode = updateResponse.latestVersionCode,
-                releaseTitle = "发现新版本 $versionDisplayName",
+                releaseTitle = context.getString(R.string.title_update_found, versionDisplayName),
                 summary = updateResponse.changelog.trim(),
                 releaseUrl = effectiveDownloadUrl,
                 downloadUrl = effectiveDownloadUrl,
@@ -244,7 +283,12 @@ class UpdateChecker(private val context: Context) {
 
             UpdateStatus.Found(info)
         } catch (e: Exception) {
-            UpdateStatus.Error("检查更新失败: ${e.message ?: "未知网络错误"}")
+            UpdateStatus.Error(
+                context.getString(
+                    R.string.format_err_check_update,
+                    e.message ?: context.getString(R.string.err_unknown_network_error)
+                )
+            )
         }
     }
 
@@ -280,7 +324,7 @@ class UpdateChecker(private val context: Context) {
             val tempFile = File(updatesDir, "classflow-update-$safeVersion.apk.tmp")
 
             httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw IOException("下载失败: HTTP ${response.code}")
+                if (!response.isSuccessful) throw IOException(context.getString(R.string.format_err_download_failed, response.code))
                 val body = response.body
                 val totalBytes = body.contentLength()
                 var downloadedBytes = 0L
@@ -320,7 +364,7 @@ class UpdateChecker(private val context: Context) {
                 if (targetApk.length() != expectedSize) {
                     val actualSize = targetApk.length()
                     targetApk.delete()
-                    throw IOException("安装包大小校验失败: 预期 $expectedSize 字节，实际 $actualSize 字节")
+                    throw IOException(context.getString(R.string.format_err_size_mismatch, expectedSize, actualSize))
                 }
             }
 
@@ -329,18 +373,21 @@ class UpdateChecker(private val context: Context) {
                 val actualMd5 = calculateFileMd5(targetApk)
                 if (!actualMd5.equals(expectedMd5.trim(), ignoreCase = true)) {
                     targetApk.delete()
-                    throw IOException("安装包 MD5 校验不匹配: 预期 $expectedMd5，实际 $actualMd5")
+                    throw IOException(context.getString(R.string.format_err_md5_mismatch, expectedMd5, actualMd5))
                 }
             }
 
-            withContext(Dispatchers.Main) {
-                if (canRequestPackageInstalls()) {
-                    installApk(targetApk)
-                }
-            }
+            // 仅负责下载与校验，安装由调用方通过 SessionInstallManager 提交
             targetApk
         }
     }
+
+    /**
+     * 通过 PackageInstaller 会话安装已下载的更新包。
+     * 挂起直到拿到最终结果；系统需要用户确认时会自动调起确认界面。
+     */
+    suspend fun installUpdate(apkFile: File): InstallResult =
+        withContext(Dispatchers.IO) { SessionInstallManager.install(context, apkFile) }
 
     /**
      * 计算文件 MD5 哈希值
@@ -382,21 +429,10 @@ class UpdateChecker(private val context: Context) {
     }
 
     /**
-     * 调起系统应用包安装器
+     * 旧版兜底：交由系统安装器处理（Session 安装异常时使用）
      */
-    fun installApk(apkFile: File) {
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            apkFile
-        )
-
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(intent)
+    fun installLegacy(apkFile: File) {
+        SessionInstallManager.installLegacy(context, apkFile)
     }
 
     /**
@@ -409,24 +445,7 @@ class UpdateChecker(private val context: Context) {
         return if (targetApk.exists() && targetApk.length() > 0) targetApk else null
     }
 
-    private fun normalizeVersionName(version: String): String {
-        return version.trim().removePrefix("v").substringBefore("+").trim()
-    }
+    private fun normalizeVersionName(version: String): String = VersionNames.normalize(version)
 
-    private fun compareVersion(remote: String, local: String): Int {
-        val remoteParts = remote.split(Regex("[^0-9]+"))
-            .filter { it.isNotBlank() }
-            .map { it.toIntOrNull() ?: 0 }
-        val localParts = local.split(Regex("[^0-9]+"))
-            .filter { it.isNotBlank() }
-            .map { it.toIntOrNull() ?: 0 }
-
-        val maxSize = maxOf(remoteParts.size, localParts.size)
-        for (index in 0 until maxSize) {
-            val left = remoteParts.getOrElse(index) { 0 }
-            val right = localParts.getOrElse(index) { 0 }
-            if (left != right) return left.compareTo(right)
-        }
-        return 0
-    }
+    private fun compareVersion(remote: String, local: String): Int = VersionNames.compare(remote, local)
 }

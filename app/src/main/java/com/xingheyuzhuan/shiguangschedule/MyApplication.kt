@@ -1,20 +1,24 @@
 package com.xingheyuzhuan.shiguangschedule
 
 import android.app.Application
+import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuAuthTransport
+import com.shiro.classflow.data.network.wbu.MyhTimeSlotCorrection
+import com.shiro.classflow.data.network.wbu.WbuAuthTransport
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
 import com.xingheyuzhuan.shiguangschedule.data.sync.SyncManager
 import com.xingheyuzhuan.shiguangschedule.tool.UpdateChecker
+import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttp
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -36,6 +40,11 @@ class MyApplication : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
 
+        // 清单里移除了 androidx.startup.InitializationProvider（避免它拉起全部 Initializer），
+        // OkHttp 的 PlatformInitializer 也就不会运行。OkHttp 5 依赖 applicationContext 从
+        // assets 读取公共后缀列表（Cookie 的 Domain 校验必需），这里按官方要求显式初始化。
+        OkHttp.initialize(this)
+
         // 在应用启动时清理临时分享文件与已安装过期的更新安装包
         clearShareTempFiles()
         UpdateChecker.clearOutdatedUpdateFiles(this)
@@ -53,10 +62,23 @@ class MyApplication : Application(), Configuration.Provider {
         // 创建并启动同步管理器（由 Hilt 注入后直接使用）
         syncManager.startAllSynchronizers()
 
+        // 洗衣提醒：进程重启后把周期轮询按当前设置补回来（开机 / 被系统杀掉都会走到这里）。
+        // 精确闹钟由 AlarmManager 自己保活，不需要重建；这里只保证「开关还是开的」时轮询不丢。
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                val watcher = EntryPointAccessors.fromApplication(
+                    this@MyApplication,
+                    AppEntryPoint::class.java
+                ).washerWatcher()
+                watcher.syncBackgroundSchedule()
+            }.onFailure { Log.w("MyApplication", "恢复洗衣提醒调度失败", it) }
+        }
+
         // 在应用启动时初始化离线仓库
         CoroutineScope(Dispatchers.IO).launch {
             initOfflineRepo()
             migrateLegacyDefaultTimeSlotsIfNeeded()
+            enqueueMyhTimeAuditIfNeeded()
         }
     }
 
@@ -86,6 +108,29 @@ class MyApplication : Application(), Configuration.Provider {
         return slots.zip(LEGACY_WBU_DEFAULT_TIME_SLOTS).all { (slot, expected) ->
             slot.number == expected.first && slot.startTime == expected.second && slot.endTime == expected.third
         }
+    }
+
+    /**
+     * 老版本升级用户：第一次启动时看一眼当前课表的作息，命中马影河第 4 节「12:20 下课」就登记待审计。
+     *
+     * 为什么放在这里而不是每次启动都查：这个提示的语义是「升级后发现一次」，
+     * 放启动处只在 `myh_time_fix_checked` 未置位时执行一次，之后不再自动触发；
+     * 后续只由真实导入（见 WbuAuthTransport.markMyhTimeAuditPending）重新登记。
+     *
+     * 当前课表看不出校区（老数据没有 xqdm），只能按时间签名判断 —— 见 MyhTimeSlotCorrection.detect。
+     */
+    private suspend fun enqueueMyhTimeAuditIfNeeded() = withContext(Dispatchers.IO) {
+        val prefs = getSharedPreferences("app_migration", MODE_PRIVATE)
+        if (prefs.getBoolean("myh_time_fix_checked", false)) return@withContext
+
+        val tableId = appSettingsRepository.getAppSettingsOnce().currentCourseTableId
+        if (tableId.isNotBlank()) {
+            val slots = timeSlotRepository.getTimeSlotsByCourseTableId(tableId).first()
+            if (MyhTimeSlotCorrection.detect(slots, campusId = null) != null) {
+                WbuAuthTransport.markMyhTimeAuditPending(this@MyApplication, tableId, campusId = null)
+            }
+        }
+        prefs.edit().putBoolean("myh_time_fix_checked", true).apply()
     }
 
     /**

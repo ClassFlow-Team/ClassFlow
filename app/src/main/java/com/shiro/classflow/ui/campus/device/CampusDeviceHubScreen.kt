@@ -1,0 +1,761 @@
+package com.shiro.classflow.ui.campus.device
+
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.xingheyuzhuan.shiguangschedule.Destination
+import com.xingheyuzhuan.shiguangschedule.NavBridge
+import com.xingheyuzhuan.shiguangschedule.R
+import com.shiro.classflow.data.model.wbu.CampusDeviceEntry
+import com.shiro.classflow.data.model.wbu.CampusDeviceKind
+import com.xingheyuzhuan.shiguangschedule.ui.settings.notification.hasNotificationPermission
+import com.xingheyuzhuan.shiguangschedule.ui.settings.notification.hasExactAlarmPermission
+import com.xingheyuzhuan.shiguangschedule.ui.settings.notification.openExactAlarmSettings
+import com.shiro.classflow.data.network.wbu.CampusShowerLink
+import com.shiro.classflow.data.network.wbu.ShowerManualCode
+import com.shiro.classflow.data.network.wbu.WbuAuthTransport
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/**
+ * 校园设备管理页（设置 → 校园服务 → 饮水机 / 洗衣机 / 洗浴）。
+ *
+ * 与吹风机页同一套骨架：**我用过哪几台**（记录），点开一台就是它的全部动作 ——
+ * 直接使用 / 重命名 / 添加到桌面 / 删除。吹风机独有的「判型设置」这里没有：
+ * 这三类设备的直达目标由设备身份唯一决定，没有可选的分叉。
+ *
+ * [kindName] 由导航参数给定（`CampusDeviceKind` 的名字），决定标题、空状态文案
+ * 与「扫码添加」按钮的文案。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CampusDeviceHubScreen(
+    navBridge: NavBridge,
+    kindName: String,
+    viewModel: CampusDeviceHubViewModel = hiltViewModel(),
+) {
+    val context = LocalContext.current
+    var kind by rememberSaveable { mutableStateOf(CampusDeviceKind.WATER) }
+
+    LaunchedEffect(kindName) {
+        kind = CampusDeviceKind.fromNameOrNull(kindName) ?: CampusDeviceKind.WATER
+        viewModel.start(kindName)
+    }
+
+    val state by viewModel.uiState.collectAsState()
+
+    // 洗衣机独有：进行中订单 / 洗衣账单 / 提醒设置
+    // VM 无条件创建（Compose 调用顺序必须稳定），但只有 kind == WASHER 时才启动和渲染
+    val washerViewModel: WasherProgressViewModel = hiltViewModel()
+    val washerState = washerViewModel.uiState.collectAsState().value
+    LaunchedEffect(kind) {
+        if (kind == CampusDeviceKind.WASHER) washerViewModel.start()
+    }
+    // 开启提醒时若还没给通知权限，就地申请（Android 13+）
+    val notificationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) {
+            Toast.makeText(context, R.string.washer_settings_need_notification, Toast.LENGTH_LONG).show()
+        }
+    }
+    // 精确闹钟权限：Android 12+ 默认不给，没有它「洗好了」只能延迟几分钟才提醒。
+    // 用户从系统设置返回时 Activity 会重新 resume，这里跟着重读一次，提示条才会消失。
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var exactAlarmAllowed by remember(lifecycleOwner) {
+        mutableStateOf(hasExactAlarmPermission(context))
+    }
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                val nowAllowed = hasExactAlarmPermission(context)
+                val wasAllowed = exactAlarmAllowed
+                exactAlarmAllowed = nowAllowed
+                // 用户刚在系统设置里把「精确闹钟」打开：
+                // 当前这一单的闹钟是在没权限时排的（退化成了 WorkManager，
+                // 而那台 vivo 上 Worker 根本不执行），必须立刻重排成真正的闹钟，
+                // 否则用户授权了也收不到这一单的提醒。
+                if (!wasAllowed && nowAllowed) {
+                    washerViewModel.rescheduleForExactAlarm()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    // 离开页面时按当前快照重排闹钟：用户关掉 App 也能收到「洗好了」
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { washerViewModel.onScreenLeaving() }
+    }
+    LaunchedEffect(Unit) {
+        washerViewModel.messages.collect { resId ->
+            Toast.makeText(context, resId, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 「自动补缴饮水欠费」：只对饮水机有意义，读写同一份 wbu_sync_auth 偏好
+    val contextForPrefs = LocalContext.current
+    var autoSettleUnpaid by remember {
+        mutableStateOf(WbuAuthTransport.isAutoSettleWaterUnpaidEnabled(contextForPrefs))
+    }
+    val manualState by viewModel.manualShower.collectAsState()
+    var expandedKey by remember { mutableStateOf<String?>(null) }
+    var renameTarget by remember { mutableStateOf<CampusDeviceEntry?>(null) }
+    var systemTarget by remember { mutableStateOf<CampusDeviceEntry?>(null) }
+    var pinTarget by remember { mutableStateOf<CampusDeviceEntry?>(null) }
+    var manualShowerInput by remember { mutableStateOf(false) }
+
+    // 「设闹钟」弹窗：让用户选闹钟还是倒计时（两者都交给系统时钟）。
+    // 状态放在页面级，因为进度卡片和设置卡片里的入口共用同一个弹窗。
+    var washerAlarmChoiceOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { resId ->
+            Toast.makeText(context, resId, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 手输解析成功：一次性跳到目标页（解析已在弹窗里完成，不再经过蓝色过渡页）
+    LaunchedEffect(Unit) {
+        viewModel.openShower.collect { destination ->
+            manualShowerInput = false
+            navBridge.navigate(destination)
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        stringResource(titleRes(kind)),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = { navBridge.popBackStack() }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.a11y_back)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                actions = {
+                    // 洗衣提醒设置只在洗衣机页出现：其它两类设备没有「洗完提醒」这回事
+                    if (kind == CampusDeviceKind.WASHER) {
+                        IconButton(
+                            onClick = {
+                                washerViewModel.toggleSettings()
+                            }
+                        ) {
+                            Icon(
+                                Icons.Filled.Settings,
+                                contentDescription = stringResource(R.string.washer_settings_title)
+                            )
+                        }
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // ───────── 洗衣机主页：进行中进度 + 洗衣账单 + 提醒设置 ─────────
+            if (kind == CampusDeviceKind.WASHER) {
+                item {
+                    WasherProgressCard(
+                        snapshot = washerState.snapshot,
+                        loading = washerState.loading,
+                        refreshing = washerState.refreshing,
+                        onRefresh = { washerViewModel.refresh() },
+                        onScan = { navBridge.navigate(Destination.QrScan) },
+                        onSetSystemAlarm = { washerAlarmChoiceOpen = true },
+                    )
+                }
+                if (washerState.settingsOpen) {
+                    item {
+                        WasherReminderSettingsCard(
+                            reminderEnabled = washerState.reminderEnabled,
+                            backgroundPolling = washerState.backgroundPolling,
+                            exactAlarmAllowed = exactAlarmAllowed,
+                            onReminderChange = { enabled ->
+                                if (enabled && !hasNotificationPermission(context)) {
+                                    notificationPermissionLauncher.launch(
+                                        android.Manifest.permission.POST_NOTIFICATIONS
+                                    )
+                                }
+                                washerViewModel.setReminderEnabled(enabled)
+                                // 精确闹钟没开时不主动跳系统设置（会和通知权限弹窗抢焦点），
+                                // 改由卡片里的提示条 +「去允许」按钮引导
+                                if (enabled && !hasExactAlarmPermission(context)) {
+                                    Toast.makeText(
+                                        context,
+                                        R.string.washer_settings_need_exact_alarm,
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            },
+                            onPollingChange = washerViewModel::setBackgroundPollingEnabled,
+                            onCheckNow = washerViewModel::checkNow,
+                            onRequestExactAlarm = { openExactAlarmSettings(context) },
+                            onSetSystemAlarm = { washerAlarmChoiceOpen = true },
+                        )
+                    }
+                }
+                // 洗衣账单始终显示：即便这次没查到记录，也要让用户知道「这里能看历史消费」，
+                // 而不是把整块藏起来显得功能不存在
+                item {
+                    WasherBillSection(
+                        orders = washerState.history,
+                        loading = washerState.historyLoading,
+                        errorRes = washerState.historyErrorRes,
+                        hasMore = washerState.historyHasMore,
+                        onLoadMore = { washerViewModel.loadHistory() },
+                        onRefresh = { washerViewModel.loadHistory(reset = true) },
+                        onOpenDetail = { washerViewModel.openHistoryDetail(it) },
+                    )
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.device_section_history),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // 饮水机独有：欠费会直接挡住下一次取水，所以开关放在最上面，先看见再说记录
+            if (kind == CampusDeviceKind.WATER) {
+                item {
+                    AutoSettleUnpaidCard(
+                        checked = autoSettleUnpaid,
+                        onCheckedChange = { enabled ->
+                            autoSettleUnpaid = enabled
+                            WbuAuthTransport.setAutoSettleWaterUnpaidEnabled(contextForPrefs, enabled)
+                        }
+                    )
+                }
+            }
+
+            if (state.entries.isEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        )
+                    ) {
+                        Text(
+                            text = stringResource(emptyRes(kind)),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                }
+            } else {
+                items(state.entries, key = { it.key }) { entry ->
+                    DeviceHistoryCard(
+                        entry = entry,
+                        expanded = expandedKey == entry.key,
+                        onToggle = {
+                            expandedKey = if (expandedKey == entry.key) null else entry.key
+                        },
+                        onUse = { navBridge.navigate(entry.launchDestination()) },
+                        onRename = { renameTarget = entry },
+                        onSystem = { systemTarget = entry },
+                        onPin = { pinTarget = entry },
+                        onCopyId = {
+                            copyToClipboard(context, entry.key)
+                            viewModel.notify(R.string.device_message_copied)
+                        },
+                        onDelete = {
+                            expandedKey = null
+                            viewModel.delete(entry.key)
+                        }
+                    )
+                }
+            }
+
+            item {
+                OutlinedButton(
+                    onClick = { navBridge.navigate(Destination.QrScan) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Filled.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text(stringResource(scanActionRes(kind)))
+                }
+            }
+
+            // 只有洗浴需要手输入口：1 栋页面压根没有输入框、2-3 栋页面有但那是网页版的；
+            // 饮水机 / 洗衣机都印着完整机号，扫一下比敲一串 uuid 快得多。
+            if (kind == CampusDeviceKind.SHOWER) {
+                item {
+                    OutlinedButton(
+                        onClick = { manualShowerInput = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Filled.Keyboard, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Text(stringResource(R.string.device_action_manual_shower))
+                    }
+                }
+            }
+        }
+    }
+
+    // 「设闹钟」弹窗：两个入口都用它，选择后把用户送到系统时钟。
+    if (washerAlarmChoiceOpen) {
+        val snapshot = washerState.snapshot
+        val order = snapshot?.order
+        // 真实剩余（不含界面那 60 秒显示补偿）——系统时钟要的是真实时长
+        val remainSeconds = if (order != null && order.phase.isActive) {
+            order.remainingSeconds(System.currentTimeMillis(), snapshot.fetchedAt).toLong()
+        } else {
+            0L
+        }
+        val triggerAt = if (order != null && order.phase.isActive) {
+            snapshot.fetchedAt + order.remainSeconds * 1000L
+        } else {
+            System.currentTimeMillis()
+        }
+
+        WasherAlarmChoiceDialog(
+            onDismiss = { washerAlarmChoiceOpen = false },
+            onPickAlarm = {
+                washerAlarmChoiceOpen = false
+                val ok = openSystemAlarmForWasher(
+                    context = context,
+                    kind = WasherAlarmKind.ALARM,
+                    triggerAtMillis = triggerAt,
+                    remainingSeconds = remainSeconds,
+                )
+                if (!ok) {
+                    Toast.makeText(
+                        context,
+                        R.string.washer_settings_no_clock_app,
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            },
+            onPickTimer = {
+                washerAlarmChoiceOpen = false
+                val ok = openSystemAlarmForWasher(
+                    context = context,
+                    kind = WasherAlarmKind.TIMER,
+                    triggerAtMillis = triggerAt,
+                    remainingSeconds = remainSeconds,
+                )
+                if (!ok) {
+                    Toast.makeText(
+                        context,
+                        R.string.washer_settings_no_clock_app,
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            },
+        )
+    }
+
+    // 账单详情弹层：金额只在这里显示（列表接口不返回金额）
+    washerState.historyDetail?.let { target ->
+        WasherBillDetailSheet(
+            target = target,
+            onDismiss = { washerViewModel.closeHistoryDetail() },
+        )
+    }
+
+    if (manualShowerInput) {
+        DeviceManualShowerDialog(
+            onDismiss = {
+                manualShowerInput = false
+                viewModel.resetManualShower()
+            },
+            resolving = manualState.resolving,
+            errorText = manualState.errorRes?.let { stringResource(it) },
+            onConfirm = { system, code, port ->
+                // 解析就在弹窗里跑（原地转圈），成功后才一次性导航到目标页
+                viewModel.resolveManualShower(system, code, port)
+            }
+        )
+    }
+
+    renameTarget?.let { target ->
+        DeviceRenameDialog(
+            initial = target.alias.orEmpty(),
+            onDismiss = { renameTarget = null },
+            onConfirm = { alias ->
+                viewModel.rename(target.key, alias)
+                renameTarget = null
+            }
+        )
+    }
+
+    systemTarget?.let { target ->
+        DeviceShowerSystemDialog(
+            currentSystem = target.showerSystem,
+            code = target.code,
+            port = target.port,
+            onDismiss = { systemTarget = null },
+            onConfirm = { system, code, port ->
+                viewModel.changeShowerSystem(
+                    oldKey = target.key,
+                    target = ShowerManualCode.Candidate(system = system, code = code, port = port)
+                )
+                systemTarget = null
+            }
+        )
+    }
+
+    pinTarget?.let { target ->
+        DeviceIconPickerDialog(
+            kind = target.kind,
+            selectedIconId = target.iconId,
+            onDismiss = { pinTarget = null },
+            onConfirm = { iconId ->
+                viewModel.setIcon(target.key, iconId)
+                val label = target.displayTitle.take(12)
+                val result = CampusDeviceShortcuts.addToHome(
+                    context = context,
+                    entry = target.copy(iconId = iconId),
+                    label = label
+                )
+                viewModel.notify(
+                    when (result) {
+                        CampusDeviceShortcuts.PinResult.REQUESTED -> R.string.device_message_shortcut_requested
+                        CampusDeviceShortcuts.PinResult.UPDATED -> R.string.device_message_shortcut_updated
+                        CampusDeviceShortcuts.PinResult.ALREADY_PINNED -> R.string.device_message_shortcut_already
+                        CampusDeviceShortcuts.PinResult.UNSUPPORTED -> R.string.device_message_shortcut_unsupported
+                        CampusDeviceShortcuts.PinResult.FAILED -> R.string.device_message_shortcut_failed
+                    }
+                )
+                pinTarget = null
+            }
+        )
+    }
+}
+
+/**
+ * 「自动补缴饮水欠费」开关卡片。
+ *
+ * 为什么放在饮水机页而不是设置里的某个总开关：欠费挡的是**取水**这件事本身，
+ * 用户是在这里才想得起来「上次是不是没付钱」。
+ */
+@Composable
+private fun AutoSettleUnpaidCard(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Payments,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.item_auto_settle_water_unpaid),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = stringResource(R.string.desc_auto_settle_water_unpaid),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
+        }
+    }
+}
+
+/** 记录里的「直接使用」：按类型落回各自的直达目的地。 */private fun CampusDeviceEntry.launchDestination(): Destination = when (kind) {
+    CampusDeviceKind.WATER -> Destination.UjingWater(cd = key)
+
+    CampusDeviceKind.WASHER -> Destination.WebApp(
+        appId = com.shiro.classflow.data.model.wbu.WebAppId.CAMPUS_CARD.name,
+        // raw 为空时按 uuid 重建小天鹅原文（`/wm/` 深链同款写法）
+        pendingAutoScan = raw.ifBlank {
+            "http://app.littleswan.com/u_download.html?type=Ujing&uuid=$key"
+        }
+    )
+
+    CampusDeviceKind.SHOWER -> {
+        val (system, code, port) =
+            com.xingheyuzhuan.shiguangschedule.data.repository.CampusDeviceHubRepository.showerParts(key)
+        Destination.ShowerDirect(system = system, code = code, port = port)
+    }
+}
+
+/** 记录卡片：大标题 / 小标题 / 次数与时间；展开是六个动作。 */
+@Composable
+private fun DeviceHistoryCard(
+    entry: CampusDeviceEntry,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onUse: () -> Unit,
+    onRename: () -> Unit,
+    onSystem: () -> Unit,
+    onPin: () -> Unit,
+    onCopyId: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = entry.displayTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    entry.displaySubtitle?.let { subtitle ->
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                // 洗浴卡片右上角标出控水器类型（1 栋 / 2-3 栋）：这两套是完全不同的服务端，
+                // 光看标题里的楼栋名容易和「端口 #2」这类标签混在一起，单独给一个标签更好认。
+                if (entry.kind == CampusDeviceKind.SHOWER) {
+                    SystemChip(entry)
+                    Spacer(Modifier.width(6.dp))
+                }
+                KindChip(entry)
+            }
+
+            Text(
+                text = stringResource(R.string.device_history_use_count, entry.useCount) +
+                    lastUsedSuffix(entry),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            AnimatedVisibility(visible = expanded) {
+                Column {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    // 5 个动作在 360dp 窄屏上一行放不下（「复制机号」会被挤成竖排并裁切），
+                    // 用 FlowRow 让它们自然换行。
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        TextButton(onClick = onUse) { Text(stringResource(R.string.device_action_use)) }
+                        TextButton(onClick = onRename) { Text(stringResource(R.string.device_action_rename)) }
+                        // 「改类型」只对洗浴有意义：饮水机 / 洗衣机没有多套服务端。
+                        // 另需 key 能原样还原成三元组 —— 设备号里含冒号（旧数据把整条 URL
+                        // 当设备号存过）时改类型会把号码截断，那种记录只能重新扫码 / 手输。
+                        if (entry.canChangeShowerSystem) {
+                            TextButton(onClick = onSystem) {
+                                Text(stringResource(R.string.device_action_change_system))
+                            }
+                        }
+                        TextButton(onClick = onPin) { Text(stringResource(R.string.device_action_pin_shortcut)) }
+                        TextButton(onClick = onCopyId) { Text(stringResource(R.string.device_action_copy_id)) }
+                        TextButton(onClick = onDelete) {
+                            Text(
+                                text = stringResource(R.string.device_action_delete),
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 洗浴控水器类型标签（右上角）：1 栋 / 2-3 栋。
+ *
+ * 和 [KindChip] 的端口标签分开配色 —— 类型是「这台设备归哪个服务端管」，
+ * 端口只是「同一台设备上的第几路」，两者语义完全不同，颜色一样会分不清。
+ */
+@Composable
+private fun SystemChip(entry: CampusDeviceEntry) {
+    val system = entry.showerSystem ?: return
+    val label = when (system) {
+        CampusShowerLink.SYSTEM_YKT -> stringResource(R.string.device_system_chip_ykt)
+        CampusShowerLink.SYSTEM_LIFE -> stringResource(R.string.device_system_chip_life)
+        else -> return
+    }
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
+    }
+}
+
+/**
+ * 洗浴记录的端口标签（其余类型不显示）。
+ *
+ * 楼栋（1栋 / 2-3栋）由右上角的 [SystemChip] 单独显示，这里只标多路控水器的端口。
+ */
+@Composable
+private fun KindChip(entry: CampusDeviceEntry) {
+    val label = entry.port?.takeIf { it.isNotBlank() }?.let { "#$it" } ?: return
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
+    }
+}
+
+/** 「N 次 · 上次 M」的时间后缀（没有时间记录的旧数据只显示次数）。 */
+@Composable
+private fun lastUsedSuffix(entry: CampusDeviceEntry): String {
+    if (entry.lastUsedAt <= 0L) return ""
+    val formatter = remember { SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()) }
+    return " · " + stringResource(
+        R.string.device_history_last_used,
+        formatter.format(Date(entry.lastUsedAt))
+    )
+}
+
+/**
+ * 复制设备的完整「机号」（即扫码用 id：洗衣机 uuid 整串 / 饮水机 cd / 洗浴 `system:code[:port]`）。
+ * 复制的是能拿去扫码 / 深链的原始标识，不是「000002」这种短机号。
+ */
+private fun copyToClipboard(context: android.content.Context, id: String) {
+    val manager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+        as? android.content.ClipboardManager ?: return
+    manager.setPrimaryClip(
+        android.content.ClipData.newPlainText(
+            context.getString(R.string.device_action_copy_id), id
+        )
+    )
+}
+
+@Composable
+private fun titleRes(kind: CampusDeviceKind): Int = when (kind) {
+    CampusDeviceKind.WATER -> R.string.title_device_hub_water
+    CampusDeviceKind.WASHER -> R.string.title_device_hub_washer
+    CampusDeviceKind.SHOWER -> R.string.title_device_hub_shower
+}
+
+@Composable
+private fun emptyRes(kind: CampusDeviceKind): Int = when (kind) {
+    CampusDeviceKind.WATER -> R.string.device_history_empty_water
+    CampusDeviceKind.WASHER -> R.string.device_history_empty_washer
+    CampusDeviceKind.SHOWER -> R.string.device_history_empty_shower
+}
+
+@Composable
+private fun scanActionRes(kind: CampusDeviceKind): Int = when (kind) {
+    CampusDeviceKind.WATER -> R.string.device_action_scan_water
+    CampusDeviceKind.WASHER -> R.string.device_action_scan_washer
+    CampusDeviceKind.SHOWER -> R.string.device_action_scan_shower
+}

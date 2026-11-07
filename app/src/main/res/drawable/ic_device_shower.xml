@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 校园设备桌面快捷方式预设图标：淋浴。
+     自带底色：浅色 / 深色桌面都能看清，也不依赖 Launcher 的图标底色。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 圆角底色 -->
+    <path
+        android:fillColor="#5E35B1"
+        android:pathData="M0,24 A24,24 0 0 1 24,0 H84 A24,24 0 0 1 108,24 V84 A24,24 0 0 1 84,108 H24 A24,24 0 0 1 0,84 Z" />
+
+    <!-- 立管与弯头 -->
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M78,22 V40 A26,26 0 0 1 52,66" />
+
+    <!-- 花洒头 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M28,62 L62,54 A6,6 0 0 1 69,60 L69,66 L34,74 A6,6 0 0 1 28,68 Z" />
+
+    <!-- 水滴 ×3 -->
+    <path
+        android:fillType="nonZero"
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M36,80 C38.5,84 41,86.5 41,89.5 A5,5 0 0 1 31,89.5 C31,86.5 33.5,84 36,80 Z" />
+    <path
+        android:fillType="nonZero"
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M50,82 C52.5,86 55,88.5 55,91.5 A5,5 0 0 1 45,91.5 C45,88.5 47.5,86 50,82 Z" />
+    <path
+        android:fillType="nonZero"
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M64,80 C66.5,84 69,86.5 69,89.5 A5,5 0 0 1 59,89.5 C59,86.5 61.5,84 64,80 Z" />
+</vector>

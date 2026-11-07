@@ -43,3 +43,18 @@ echo ""
 echo "=== 提醒 ==="
 echo "1. 清单外的文件出现差异 = 遗漏，必须处理"
 echo "2. merge 冲突区域只处理冲突，非冲突区域的遗留差异靠本脚本的 --stat 全量审计发现"
+
+echo ""
+echo "=== 包边界守卫（上游新增文件不得落在 com/shiro/classflow 路径上）==="
+# MainActivity.kt 有意例外：它是唯一被搬进 com/shiro/classflow 的上游文件（见 CLASSFLOW_CUSTOMIZATIONS.md）
+overlap=$(comm -12 \
+  <(git ls-tree -r --name-only "$UPSTREAM_REF" -- app/src/main/java \
+      | sed 's#com/xingheyuzhuan/shiguangschedule#com/shiro/classflow#' | sort) \
+  <(git ls-files -- app/src/main/java/com/shiro/classflow | sort) \
+  | grep -v '^app/src/main/java/com/shiro/classflow/MainActivity\.kt$' || true)
+if [ -z "$overlap" ]; then
+  echo "OK   上游路径与 com/shiro/classflow 无重叠"
+else
+  echo "WARN 上游出现与我们同路径的文件（merge 时可能 add/add 冲突）："
+  echo "$overlap"
+fi

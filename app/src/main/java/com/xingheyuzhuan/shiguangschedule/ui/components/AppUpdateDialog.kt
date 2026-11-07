@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -191,45 +190,4 @@ fun InstallPermissionPromptDialog(
             }
         }
     )
-}
-@Composable
-fun MarkdownReleaseNotes(markdown: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        markdown.lines().forEach { rawLine ->
-            val line = rawLine.trimEnd()
-            when {
-                line.isBlank() -> Spacer(modifier = Modifier.height(2.dp))
-                line.startsWith("### ") -> Text(
-                    text = line.removePrefix("### ").trim(),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-                line.startsWith("## ") -> Text(
-                    text = line.removePrefix("## ").trim(),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                line.startsWith("# ") -> Text(
-                    text = line.removePrefix("# ").trim(),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                line.startsWith("- ") || line.startsWith("* ") -> Text(
-                    text = "• ${line.drop(2).trim()}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Regex("^\\d+\\.\\s+.+").matches(line) -> Text(
-                    text = line,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                else -> Text(
-                    text = line,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
 }

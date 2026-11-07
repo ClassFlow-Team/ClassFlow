@@ -40,7 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSyncEngine
+import com.shiro.classflow.data.network.wbu.WbuSyncEngine
 /**
  * 学期选择对话框：
  * 采用标准 AlertDialog + LazyColumn，从根本上杜绝手势滑动误关闭，

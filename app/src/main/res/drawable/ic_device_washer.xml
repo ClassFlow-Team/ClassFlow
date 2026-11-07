@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 校园设备桌面快捷方式预设图标：洗衣机。
+     自带底色：浅色 / 深色桌面都能看清，也不依赖 Launcher 的图标底色。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 圆角底色 -->
+    <path
+        android:fillColor="#00897B"
+        android:pathData="M0,24 A24,24 0 0 1 24,0 H84 A24,24 0 0 1 108,24 V84 A24,24 0 0 1 84,108 H24 A24,24 0 0 1 0,84 Z" />
+
+    <!-- 机身（白色圆角方箱） -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M28,20 H80 A5,5 0 0 1 85,25 V83 A5,5 0 0 1 80,88 H28 A5,5 0 0 1 23,83 V25 A5,5 0 0 1 28,20 Z" />
+
+    <!-- 控制面板条（底色，带两个旋钮） -->
+    <path
+        android:fillColor="#00897B"
+        android:pathData="M28,25 H80 A1,1 0 0 1 81,26 V38 H27 V26 A1,1 0 0 1 28,25 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M36,31.5 A4,4 0 1 1 44,31.5 A4,4 0 1 1 36,31.5 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M64,31.5 A4,4 0 1 1 72,31.5 A4,4 0 1 1 64,31.5 Z" />
+
+    <!-- 滚筒（圆形舱门） -->
+    <path
+        android:fillColor="#B2DFDB"
+        android:pathData="M54,61 A19,19 0 1 1 53.99,61 Z" />
+    <path
+        android:fillColor="#00897B"
+        android:pathData="M54,61 A13,13 0 1 1 53.99,61 Z" />
+
+    <!-- 滚筒里的水波 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M44,62 C48,58 52,66 56,62 C60,58 63,64 63,64 A13,13 0 0 1 45,65 Z" />
+</vector>

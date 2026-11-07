@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
 import com.xingheyuzhuan.shiguangschedule.data.model.StartScreen
 import com.xingheyuzhuan.shiguangschedule.data.model.UpdateChannelType
+import com.xingheyuzhuan.shiguangschedule.data.model.UpdateCheckInterval
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -66,6 +67,23 @@ class MoreOptionsViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = UpdateChannelType.STABLE.channelId
         )
+
+    /** 自动检查更新的冷却间隔 */
+    val updateCheckInterval: StateFlow<UpdateCheckInterval> = appSettingsRepository.getAppSettings()
+        .map { it.updateCheckInterval }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = UpdateCheckInterval.DAILY
+        )
+
+    /** 更新检查频率；重置冷却让新间隔立即生效 */
+    fun onUpdateCheckIntervalChanged(interval: UpdateCheckInterval) {
+        viewModelScope.launch {
+            appSettingsRepository.updateUpdateCheckInterval(interval)
+            appSettingsRepository.updateLastCheckUpdateTime(0L)
+        }
+    }
 
     /** 更新更新渠道 */
     fun onUpdateChannelChanged(channel: String) {

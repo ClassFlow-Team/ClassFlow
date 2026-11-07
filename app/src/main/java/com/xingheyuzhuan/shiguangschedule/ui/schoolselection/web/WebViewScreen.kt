@@ -1,12 +1,16 @@
 package com.xingheyuzhuan.shiguangschedule.ui.schoolselection.web
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.net.http.SslError
 import android.util.Log
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.ConsoleMessage
+import android.webkit.JsPromptResult
+import android.webkit.JsResult
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -93,17 +97,26 @@ import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.BuildConfig
 import com.xingheyuzhuan.shiguangschedule.R
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuNetworkProbe
-import com.xingheyuzhuan.shiguangschedule.data.network.wbu.WbuSyncEngine
+import com.shiro.classflow.data.model.wbu.CredentialService
+import com.shiro.classflow.data.network.wbu.CampusLinkRouter
+import com.shiro.classflow.data.network.wbu.ClassFlowScheme
+import com.shiro.classflow.data.network.wbu.WbuAuthTransport
+import com.shiro.classflow.data.network.wbu.WbuNetworkProbe
+import com.shiro.classflow.data.network.wbu.WbuSyncEngine
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseConversionRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseTableRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
 import com.xingheyuzhuan.shiguangschedule.ui.components.CourseTablePickerDialog
-import kotlinx.coroutines.Dispatchers
+import com.xingheyuzhuan.shiguangschedule.ui.components.WebPageErrorInfo
+import com.xingheyuzhuan.shiguangschedule.ui.components.WebPageErrorView
+import com.xingheyuzhuan.shiguangschedule.ui.components.isRealWebLoadFailure
+import com.xingheyuzhuan.shiguangschedule.ui.components.WebJsDialogHost
+import com.xingheyuzhuan.shiguangschedule.ui.components.WebJsDialogRequest
+import com.xingheyuzhuan.shiguangschedule.ui.components.WebJsDialogState
+import com.xingheyuzhuan.shiguangschedule.ui.components.webDialogPageLabel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.launch
 import java.io.File
 
 private const val WBU_HOST = "jwxt.wbu.edu.cn"
@@ -130,12 +143,14 @@ fun WebViewScreen(
     courseTableRepository: CourseTableRepository,
     timeSlotRepository: TimeSlotRepository,
     appSettingsRepository: AppSettingsRepository,
+    /** 通用链接节点等非 WBU 场景：隐藏底部「导入课程」引导栏。 */
+    hideImportBar: Boolean = false,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    val startedEmpty: Boolean = remember { initialUrl.isNullOrBlank() || initialUrl == "about:blank" }
+    val startedEmpty: Boolean = remember { isBlankWebPageUrl(initialUrl) }
 
     // --- 预取字符串资源 ---
     val titleEnterUrl = stringResource(R.string.title_enter_url)
@@ -159,8 +174,18 @@ fun WebViewScreen(
         initialUrl?.contains("wbu.edu.cn", ignoreCase = true) == true
     }
 
-    var currentUrl by remember { mutableStateOf(if (isWbuFlow) "about:blank" else (initialUrl ?: "about:blank")) }
-    var inputUrl by remember { mutableStateOf(if (isWbuFlow) "https://" else (initialUrl ?: "https://")) }
+    // 首个要加载的地址：WBU 流程要等校园网探测出结果，空白启动则等用户输入，先留空。
+    // 这里刻意不用 "about:blank" 作为初始地址——空白页一旦被写进 WebView 历史，
+    // 用户按返回就会先停在白屏上，得再按一次才能真正退出。
+    val initialLoadUrl: String = remember {
+        if (isWbuFlow) "" else initialUrl?.takeIf { it.isNotBlank() && it != BLANK_WEB_PAGE_URL }.orEmpty()
+    }
+    val initialInputUrl: String = remember {
+        if (isWbuFlow) "https://"
+        else initialUrl?.takeIf { it.isNotBlank() && it != BLANK_WEB_PAGE_URL } ?: "https://"
+    }
+    var currentUrl by remember { mutableStateOf(initialLoadUrl) }
+    var inputUrl by remember { mutableStateOf(initialInputUrl) }
     var isProbingCampus by remember { mutableStateOf(isWbuFlow) }
     val defaultProbingText = stringResource(R.string.status_probing_campus_network)
     var probeStatusText by remember { mutableStateOf(defaultProbingText) }
@@ -168,7 +193,9 @@ fun WebViewScreen(
 
     LaunchedEffect(isWbuFlow) {
         if (!isWbuFlow) return@LaunchedEffect
-        val onCampus = WbuNetworkProbe.refresh()
+        // 「自动校园网探测」开着时用快速探测（短超时 + 短缓存）：这里用户正盯着「正在探测校园网络环境…」
+        // 的提示等结果，探测慢一点就是白屏久一点；关掉则沿用原来的较长超时探测（只增不减）。
+        val onCampus = WbuNetworkProbe.probeForCampusFlow(context)
         if (!probeInterrupted) {
             if (onCampus) {
                 probeStatusText = context.getString(R.string.status_campus_detected_connecting)
@@ -190,6 +217,13 @@ fun WebViewScreen(
         }
     }
     var loadingProgress by remember { mutableFloatStateOf(0f) }
+    // 主框架网络层失败（服务器压根没返回内容）：盖一层应用自己的错误页，
+    // 替掉 WebView 内置那张绿色机器人页。HTTP 4xx/5xx 不会走到这里，那些页面原样展示。
+    var pageError by remember { mutableStateOf<WebPageErrorInfo?>(null) }
+    /** 用户点了「重新加载」：错误页继续挡着，直到新页面真的加载成功才撤。 */
+    var reloadingAfterError by remember { mutableStateOf(false) }
+    /** 本轮加载是否已经失败过：`onPageFinished` 在失败之后也会回调，不能拿它当「成功」的信号。 */
+    var loadFailedThisRound by remember { mutableStateOf(false) }
     var pageTitle by remember {
         mutableStateOf(
             if (startedEmpty) titleEnterUrl else titleLoading
@@ -221,6 +255,9 @@ fun WebViewScreen(
     // --- Channel 和 Bridge 实例化 ---
     val uiEventChannel = remember { Channel<WebUiEvent>(Channel.BUFFERED) }
     var androidBridge: AndroidBridge? by remember { mutableStateOf(null) }
+
+    // 网页原生 alert / confirm / prompt 的挂起队列（由 WebJsDialogHost 渲染成应用自己的弹窗）
+    val jsDialogState = remember { WebJsDialogState() }
 
 
     val webView = remember {
@@ -281,7 +318,8 @@ fun WebViewScreen(
             webViewClient = object : WebViewClient() {
                 @Deprecated("Deprecated in Java")
                 override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                    return false
+                    if (url == null) return false
+                    return handleNonHttpNavigation(context, navBridge, url)
                 }
 
                 @SuppressLint("WebViewClientOnReceivedSslError")
@@ -291,15 +329,24 @@ fun WebViewScreen(
 
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                     super.onPageStarted(view, url, favicon)
+                    // 新一轮加载开始：上一轮失败记录作废。错误页不立刻撤 ——
+                    // 重载过程中先露出的是 WebView 里那张绿机器人页，等 onPageFinished 确认成功再撤。
+                    loadFailedThisRound = false
                     Log.d("WebViewScreen", "页面开始加载: $url")
                     Log.d("WebViewScreen", "硬件加速状态: ${view?.isHardwareAccelerated}")
                 }
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
+                    // 这一次真的加载成功了：撤掉上次留下的错误页（失败时 loadFailedThisRound 为 true，
+                    // 且 onPageFinished 在失败回调之后也会来一次，不能拿它当成功信号）。
+                    if (!loadFailedThisRound) {
+                        pageError = null
+                        reloadingAfterError = false
+                    }
                     Log.d("WebViewScreen", "页面加载完成: $url")
                     view?.injectAllJavaScript(isDesktopMode)
-                    view?.let { maybeAutofillWbuCredentials(it, url) }
+                    view?.let { maybeAutofillWbuCredentials(context, it, url) }
 
                     // 检测到达 JWXT 后台后，自动提取 VPN cookies 供 OkHttp 复用
                     if (!vpnCookiesSaved && url != null) {
@@ -325,10 +372,19 @@ fun WebViewScreen(
                 override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
                     if (request.isForMainFrame) {
                         val description = error.description.toString()
-                        val ctx = view.context
-                        Log.e("WebViewScreen", "页面加载错误: $description")
-                        view.post {
-                            Toast.makeText(ctx, ctx.getString(R.string.toast_web_load_error_format, description), Toast.LENGTH_LONG).show()
+                        val failedUrl = request.url?.toString()
+                        Log.e("WebViewScreen", "页面加载错误: $failedUrl code=${error.errorCode} desc=$description")
+                        // 只接管「服务器压根没返回内容」的网络层失败（替掉 WebView 内置的绿色机器人页）。
+                        // aborted（-3）是导航被新页面顶掉，不是真失败；about:/data: 不是真页面。
+                        if (isRealWebLoadFailure(failedUrl, error.errorCode)) {
+                            pageError = WebPageErrorInfo(
+                                url = failedUrl?.takeIf { it.isNotBlank() } ?: view.url,
+                                code = error.errorCode,
+                                description = description
+                            )
+                            loadFailedThisRound = true
+                            // 又失败了：把主按钮的转圈停下，让用户能再点一次
+                            reloadingAfterError = false
                         }
                     }
                 }
@@ -360,9 +416,68 @@ fun WebViewScreen(
                     }
                     return super.onConsoleMessage(consoleMessage)
                 }
+
+                // ── 劫持网页原生对话框：返回 true 表示由我们自己弹窗 ──
+                // 页面 JS 会阻塞到 JsResult 被落定为止（与系统弹窗行为一致），
+                // 因此这里只入队，落定交给 WebJsDialogHost 的按钮 / 页面销毁兜底。
+
+                override fun onJsAlert(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean {
+                    if (message == null || result == null) {
+                        return super.onJsAlert(view, url, message, result)
+                    }
+                    Log.d("WebViewScreen", "接管网页 alert: $message @$url")
+                    jsDialogState.enqueue(
+                        WebJsDialogRequest.Alert(
+                            pageLabel = webDialogPageLabel(url ?: view?.url),
+                            message = message,
+                            onConfirm = { result.confirm() },
+                        )
+                    )
+                    return true
+                }
+
+                override fun onJsConfirm(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean {
+                    if (message == null || result == null) {
+                        return super.onJsConfirm(view, url, message, result)
+                    }
+                    Log.d("WebViewScreen", "接管网页 confirm: $message @$url")
+                    jsDialogState.enqueue(
+                        WebJsDialogRequest.Confirm(
+                            pageLabel = webDialogPageLabel(url ?: view?.url),
+                            message = message,
+                            onConfirm = { result.confirm() },
+                            onCancel = { result.cancel() },
+                        )
+                    )
+                    return true
+                }
+
+                override fun onJsPrompt(
+                    view: WebView?,
+                    url: String?,
+                    message: String?,
+                    defaultValue: String?,
+                    result: JsPromptResult?
+                ): Boolean {
+                    if (message == null || result == null) {
+                        return super.onJsPrompt(view, url, message, defaultValue, result)
+                    }
+                    Log.d("WebViewScreen", "接管网页 prompt: $message @$url")
+                    jsDialogState.enqueue(
+                        WebJsDialogRequest.Prompt(
+                            pageLabel = webDialogPageLabel(url ?: view?.url),
+                            message = message,
+                            defaultValue = defaultValue.orEmpty(),
+                            onConfirmInput = { input -> result.confirm(input) },
+                            onCancel = { result.cancel() },
+                        )
+                    )
+                    return true
+                }
             }
 
-            loadUrl(if (isWbuFlow) "about:blank" else (initialUrl ?: "about:blank"))
+            // 首个页面交给下面的 LaunchedEffect(currentUrl) 加载（此时可能还在探测校园网）。
+            // 这里不再预载 "about:blank"：它会被写进历史，让「返回」先停在白屏上。
         }
     }
 
@@ -416,18 +531,17 @@ fun WebViewScreen(
         }
     }
 
-    // 状态改变时加载 URL
+    // 状态改变时加载 URL。
+    // 首个地址同样走这里加载，因此 WebView 历史的第一条就是真实页面，
+    // 空白状态（等待探测 / 等待输入）不加载任何页面，也就不会污染返回栈。
     LaunchedEffect(currentUrl) {
-        if (currentUrl.isNotBlank() && currentUrl != "about:blank") {
-            val urlToLoad = if (currentUrl.startsWith("http://") || currentUrl.startsWith("https://")) {
-                currentUrl
-            } else {
-                "https://$currentUrl"
-            }
-            webView.loadUrl(urlToLoad)
-        } else if (currentUrl == "about:blank") {
-            webView.loadUrl("about:blank")
+        if (isBlankWebPageUrl(currentUrl)) return@LaunchedEffect
+        val urlToLoad = if (currentUrl.startsWith("http://") || currentUrl.startsWith("https://")) {
+            currentUrl
+        } else {
+            "https://$currentUrl"
         }
+        webView.loadUrl(urlToLoad)
     }
 
     BackHandler {
@@ -437,8 +551,8 @@ fun WebViewScreen(
             isEditingUrl = false
             inputUrl = webView.url ?: currentUrl
             keyboardController?.hide()
-        } else if (webView.canGoBack()) {
-            webView.goBack()
+        } else if (webView.goBackSkippingBlankPages()) {
+            // 已在 WebView 内回退到上一条有效页面（跳过可能残留的 about:blank 空白页）
         } else {
             navBridge.popBackStack()
         }
@@ -448,24 +562,26 @@ fun WebViewScreen(
     DisposableEffect(webView) {
         onDispose {
             Log.d("WebViewScreen", "开始清理 WebView 资源")
+
+            // 先把还挂着的网页对话框按「取消」落定，否则页面 JS 会永久卡住
+            jsDialogState.cancelAll()
+
             webView.stopLoading()
 
-            // 在后台线程执行耗时的清理操作
-            coroutineScope.launch(Dispatchers.IO) {
-                try {
-                    webView.clearCache(true)
-                    webView.clearFormData()
-                    webView.clearHistory()
-                    // VPN cookies 已桥接到 OkHttp 持久化存储，可安全清理 WebView cookies
-                    val cookieManager = CookieManager.getInstance()
-                    cookieManager.removeAllCookies(null)
-                    cookieManager.flush()
-                    WebStorage.getInstance().deleteAllData()
-                    Log.d("WebViewScreen", "WebView 资源清理完成")
-                } catch (e: Exception) {
-                    Log.e("WebViewScreen", "清理资源时出错: ${e.message}")
-                }
-            }
+            // 注意：WebView 的方法必须在创建它的线程（主线程）上调用。
+            // 之前放在 Dispatchers.IO 里清理会抛 "A WebView method was called on thread ..."，
+            // 结果是 cache / cookies / storage 一条都没清掉，这里回到主线程执行。
+            runCatching {
+                webView.clearCache(true)
+                webView.clearFormData()
+                webView.clearHistory()
+                // VPN cookies 已桥接到 OkHttp 持久化存储，可安全清理 WebView cookies
+                val cookieManager = CookieManager.getInstance()
+                cookieManager.removeAllCookies(null)
+                cookieManager.flush()
+                WebStorage.getInstance().deleteAllData()
+                Log.d("WebViewScreen", "WebView 资源清理完成")
+            }.onFailure { Log.e("WebViewScreen", "清理资源时出错: ${it.message}", it) }
 
             webView.removeAllViews()
             webView.destroy()
@@ -543,7 +659,7 @@ fun WebViewScreen(
                         } else if (enableAddressBarToggleButton || startedEmpty) {
                             IconButton(onClick = {
                                 isEditingUrl = true
-                                inputUrl = webView.url?.takeIf { it.isNotBlank() && it != "about:blank" } ?: "https://"
+                                inputUrl = webView.url?.takeIf { !isBlankWebPageUrl(it) } ?: "https://"
                                 keyboardController?.show()
                             }) {
                                 Icon(Icons.Default.Link, contentDescription = stringResource(R.string.a11y_enter_url))
@@ -579,7 +695,7 @@ fun WebViewScreen(
                                     val tText = if (isDesktopMode) toastSwitchedToDesktop else toastSwitchedToPhone
                                     Toast.makeText(context, tText, Toast.LENGTH_SHORT).show()
 
-                                    if (currentUrl.isNotBlank() && currentUrl != "about:blank") {
+                                    if (!isBlankWebPageUrl(currentUrl)) {
                                         webView.loadUrl(currentUrl)
                                     } else {
                                         Toast.makeText(context, toastUrlEmpty, Toast.LENGTH_LONG).show()
@@ -618,6 +734,7 @@ fun WebViewScreen(
             )
         },
         bottomBar = {
+            if (hideImportBar) return@Scaffold
             BottomAppBar(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -664,7 +781,7 @@ fun WebViewScreen(
             )
 
             // 加载进度条
-            if (loadingProgress < 1.0f) {
+            if (pageError == null && loadingProgress < 1.0f) {
                 LinearProgressIndicator(
                     progress = { loadingProgress },
                     modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
@@ -677,6 +794,32 @@ fun WebViewScreen(
                 webView = webView,
                 uiEvents = uiEventChannel.receiveAsFlow()
             )
+
+            // 主框架网络层失败：盖掉 WebView 内置的绿色机器人页，换成应用自己的错误页。
+            // WebView 不销毁，点「重新加载」就是 reload()，历史与登录态都还在。
+            pageError?.let { error ->
+                WebPageErrorView(
+                    info = error,
+                    retrying = reloadingAfterError,
+                    onReload = {
+                        // 错误页继续挡着：等 onPageFinished 确认这次加载成功再撤，
+                        // 否则重载过程中会先露出 WebView 里那张绿机器人页。
+                        reloadingAfterError = true
+                        webView.reload()
+                    },
+                    onCopyUrl = {
+                        copyPageUrlToClipboard(context, error.url.orEmpty())
+                        Toast.makeText(context, context.getString(R.string.web_error_url_copied), Toast.LENGTH_SHORT).show()
+                    },
+                    onOpenInBrowser = error.url?.takeIf { it.startsWith("http", ignoreCase = true) }?.let { url ->
+                        { openPageInExternalBrowser(context, url) }
+                    },
+                    onBack = { navBridge.popBackStack() }
+                )
+            }
+
+            // 网页原生 alert / confirm / prompt：用应用自己的弹窗替代系统样式
+            WebJsDialogHost(jsDialogState)
 
             if (isProbingCampus) {
                 CampusNetworkProbeOverlay(
@@ -830,7 +973,7 @@ private fun isWbuTimetableUrl(uri: Uri): Boolean {
     return matched
 }
 
-private fun maybeAutofillWbuCredentials(webView: WebView, url: String?) {
+private fun maybeAutofillWbuCredentials(context: Context, webView: WebView, url: String?) {
         val currentUrl = url ?: return
         val uri = runCatching { Uri.parse(currentUrl) }.getOrNull() ?: return
         val host = uri.host?.lowercase() ?: return
@@ -850,7 +993,10 @@ private fun maybeAutofillWbuCredentials(webView: WebView, url: String?) {
 
         if (!shouldTryAutofill) return
 
-        val credentials = WbuWebLoginAutofillStore.getActiveOrNull() ?: return
+        // 一次性草稿优先（刚刚那次登录失败时放进去的）；没有就用**保存的凭据** ——
+        // 开了「自动使用保存的密码登录」后，WebView 里的手动登录页也应该是填好的，用户只需点提交。
+        val oneTime = WbuWebLoginAutofillStore.getActiveOrNull()
+        val credentials = oneTime ?: savedCredentialsForAutofill(context) ?: return
         val rawStudentId = credentials.studentId.trim()
         val rawPassword = credentials.password
 
@@ -904,11 +1050,26 @@ private fun maybeAutofillWbuCredentials(webView: WebView, url: String?) {
         """.trimIndent()
 
         webView.evaluateJavascript(js) { result ->
-            if (result == "true") {
-                // 填充成功后立即清空一次性凭证，防止在后续其它页面反复误注入
+            // 只有一次性草稿要在填充成功后立即清空（防止在后续其它页面反复误注入）；
+            // 保存的凭据不是一次性的，留着下次继续用
+            if (result == "true" && oneTime != null) {
                 WbuWebLoginAutofillStore.clear()
             }
         }
+}
+
+/**
+ * 用**保存的**统一认证凭据做填充（仅在开了「自动使用保存的密码登录」时）。
+ *
+ * 与一次性草稿的区别：这份凭据是用户自己选择长期保存的，可以反复使用；
+ * 是否该填由调用方判定（页面确实是登录页、host 确实是我们自己的域）。
+ */
+private fun savedCredentialsForAutofill(context: Context): WbuWebLoginAutofillStore.Credentials? {
+    if (!WbuAuthTransport.isAutoLoginWithSavedPasswordEnabled(context)) return null
+    val studentId = WbuAuthTransport.getSavedStudentId(context).trim()
+    val password = WbuAuthTransport.getSavedPassword(context, CredentialService.UNIFIED_AUTH)?.trim().orEmpty()
+    if (studentId.isBlank() && password.isBlank()) return null
+    return WbuWebLoginAutofillStore.Credentials(studentId = studentId, password = password)
 }
 
 private fun jsQuote(raw: String): String {
@@ -1141,4 +1302,108 @@ private fun CampusNetworkProbeOverlay(
         }
     }
 }
+/**
+ * 拦截 WebView 里的**非 http(s)** 跳转。
+ *
+ * 为什么需要：网页常用 `intent://host/path#Intent;scheme=https;package=...;S.browser_fallback_url=...;end`
+ * 来唤起 App，但 WebView 自己不认识 `intent://`，会直接把「网页无法打开 /
+ * net::ERR_UNKNOWN_URL_SCHEME」渲染出来（App 里就会出现一张莫名其妙的错误页）。
+ *
+ * 处理策略：
+ * 1. `intent://` → 解析出内层 http(s) 地址：
+ *    a. 命中应用内深链规范（饮水机 / 洗衣机 / 通用节点…）→ 直接走原生页面（replace 掉当前 WebView）；
+ *    b. 否则交给系统（浏览器 / App Links）；
+ * 2. 其它自定义 scheme（`alipays://`、`weixin://`、`tel:`…）→ 交给系统。
+ *
+ * 返回 true 表示已消费，WebView 不再处理；http(s) 等常规 scheme 返回 false 交回 WebView。
+ */
+private fun handleNonHttpNavigation(context: Context, navBridge: NavBridge, rawUrl: String): Boolean {
+    val uri = runCatching { Uri.parse(rawUrl) }.getOrNull() ?: return false
+    val scheme = uri.scheme?.lowercase().orEmpty()
+    if (scheme.isEmpty() || scheme in WEBVIEW_NATIVE_SCHEMES) return false
 
+    // classflow://：能命中应用内路由就直接切原生页，避免 WebView 渲染 ERR_UNKNOWN_URL_SCHEME
+    if (scheme == ClassFlowScheme.SCHEME) {
+        val destination = CampusLinkRouter.parse(rawUrl)
+        if (destination != null) {
+            Log.d("WebViewScreen", "classflow:// 命中应用内深链，转原生页面: $rawUrl")
+            navBridge.replace(destination)
+            return true
+        }
+        Log.d("WebViewScreen", "classflow:// 未命中路由，交给系统: $rawUrl")
+        return launchExternally(context, uri)
+    }
+
+    if (scheme == "intent") {
+        val intent = runCatching { Intent.parseUri(rawUrl, Intent.URI_INTENT_SCHEME) }.getOrNull()
+        val innerUrl = listOfNotNull(
+            // Chrome 约定：S.browser_fallback_url=...
+            intent?.getStringExtra("browser_fallback_url"),
+            // 部分站点直接写 scheme=https;package=...，此时 data 就是内层地址
+            intent?.dataString,
+        ).firstOrNull {
+            it.startsWith("http://") || it.startsWith("https://") ||
+                ClassFlowScheme.isClassFlowUri(it)
+        }
+
+        if (innerUrl != null) {
+            val destination = CampusLinkRouter.parse(innerUrl)
+            if (destination != null) {
+                Log.d("WebViewScreen", "intent:// 命中应用内深链，转原生页面: $innerUrl")
+                navBridge.replace(destination)
+                return true
+            }
+            Log.d("WebViewScreen", "intent:// 交给系统打开: $innerUrl")
+            return launchExternally(context, Uri.parse(innerUrl))
+        }
+
+        if (intent != null && runCatching {
+                context.startActivity(Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }.isSuccess
+        ) {
+            return true
+        }
+        Log.w("WebViewScreen", "无法处理的 intent:// 跳转: $rawUrl")
+        return true
+    }
+
+    Log.d("WebViewScreen", "非 http(s) scheme 交给系统: $scheme")
+    return launchExternally(context, uri)
+}
+
+/** 交给系统处理该 URI；无法处理时提示用户（而不是让 WebView 渲染错误页）。 */
+private fun launchExternally(context: Context, uri: Uri): Boolean {
+    val intent = Intent(Intent.ACTION_VIEW, uri).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+    val launched = runCatching { context.startActivity(intent) }.isSuccess
+    if (!launched) {
+        Toast.makeText(context, context.getString(R.string.toast_web_scheme_unhandled), Toast.LENGTH_SHORT).show()
+    }
+    return true
+}
+
+/** 错误页的「复制地址」。 */
+private fun copyPageUrlToClipboard(context: Context, url: String) {
+    if (url.isBlank()) return
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+        ?: return
+    runCatching {
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("ClassFlow", url))
+    }
+}
+
+/** 错误页的「用浏览器打开」：有些页面在 WebView 里走不通，但浏览器里是好的。 */
+private fun openPageInExternalBrowser(context: Context, url: String) {
+    if (url.isBlank()) return
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    val launched = runCatching { context.startActivity(intent) }.isSuccess
+    if (!launched) {
+        Toast.makeText(context, context.getString(R.string.toast_web_scheme_unhandled), Toast.LENGTH_SHORT).show()
+    }
+}
+
+/** WebView 自己能处理的 scheme（其余一律拦截后交给系统）。 */
+private val WEBVIEW_NATIVE_SCHEMES = setOf(
+    "http", "https", "about", "data", "file", "javascript", "blob", "content"
+)

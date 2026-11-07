@@ -1,0 +1,164 @@
+package com.shiro.classflow.data.network.wbu
+
+import android.content.Context
+import com.shiro.classflow.data.model.wbu.CredentialService
+import com.xingheyuzhuan.shiguangschedule.data.repository.ApiConfigRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.withContext
+import okhttp3.Request
+import java.net.URLEncoder
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/** 服务会话验证结果。 */
+enum class SessionState {
+    /** 会话有效。 */
+    VALID,
+
+    /** 会话存在但已失效，需要重新登录。 */
+    EXPIRED,
+
+    /** 本地无该服务的登录态。 */
+    NOT_LOGGED_IN,
+
+    /** 服务尚未接入，无法验证（如一卡通）。 */
+    NOT_AVAILABLE,
+
+    /** 网络异常等无法判定。 */
+    UNKNOWN,
+}
+
+/**
+ * 会话验证器：进入凭据管理页时按需联网核验各服务的登录态是否仍然有效。
+ *
+ * 复用现有探针实现：教务 [WbuQueryClient.checkSession]、图书馆 [WbuQueryClient.ensureOpacSession]、
+ * WebVPN [WebVpnClient.validateTwfid]、WebDAV 根目录探活。
+ *
+ * 通道（直连 / WebVPN）由 [resolveCampusUseVpn] 决定：它会先做一次快速校园网探测（「自动校园网探测」），
+ * 所以「校验校园网环境」这件事在本页也做了，之后才是各服务凭据有效性的核验。
+ */
+@Singleton
+class CredentialVerifier @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val apiConfigRepository: ApiConfigRepository,
+) {
+
+    suspend fun verify(service: CredentialService): SessionState = withContext(Dispatchers.IO) {
+        // 验证同样是「需要校园网」的访问，通道判定与校园服务流水线保持一致：
+        // 开着 WebVPN 但人在校园网里时直接连，不绕 webvpn 域 —— 否则本页的核验会比必要的慢，
+        // 而且核验用的通道和页面实际访问用的通道不一致，容易出现「验证说没事、进去说登录过期」。
+        val useVpn = resolveCampusUseVpn(context)
+        when (service) {
+            CredentialService.UNIFIED_AUTH -> verifyUnifiedAuth(useVpn)
+            CredentialService.JIAOWU -> verifyJiaowu(useVpn)
+            CredentialService.LIBRARY -> verifyLibrary(useVpn)
+            CredentialService.WEBVPN -> verifyWebVpn()
+            CredentialService.CAMPUS_CARD -> verifyCampusCard()
+            CredentialService.WEBDAV -> verifyWebDav()
+        }
+    }
+
+    /** 统一认证：持有 CASTGC 且能换到 service ticket 视为有效。 */
+    private fun verifyUnifiedAuth(useVpn: Boolean): SessionState {
+        val transport = WbuAuthTransport.getShared(context, useVpn)
+        transport.restoreCookieStore()
+        val hasTgc = transport.cookieStore.any { it.name == "CASTGC" && it.value.isNotBlank() }
+        if (!hasTgc) return SessionState.NOT_LOGGED_IN
+        return runCatching {
+            val service = URLEncoder.encode(transport.casServiceTarget, "UTF-8")
+            // 用 idsBaseForContent(useVpn) 而不是 idsBase()：后者只看「统一认证经过 WebVPN」开关
+            // （默认关），校外内容走隧道时它会去打公网 ids，被 WAF 拦成 403 → 本页误报「已过期」。
+            val url = "${transport.idsBaseForContent(useVpn)}/authserver/login?service=$service"
+            val req = Request.Builder()
+                .url(url)
+                .header("User-Agent", transport.authUserAgent())
+                .header("Accept-Language", transport.authAcceptLanguage)
+                .get()
+                .build()
+            val client = transport.client.newBuilder().followRedirects(false).build()
+            client.newCall(req).execute().use { resp ->
+                val location = resp.header("Location").orEmpty()
+                when {
+                    location.contains("ticket=") -> SessionState.VALID
+                    resp.code in 300..399 -> SessionState.EXPIRED
+                    else -> SessionState.UNKNOWN
+                }
+            }
+        }.getOrDefault(SessionState.UNKNOWN)
+    }
+
+    /** 教务系统：持有 jw_uf 且 /admin 接口可访问视为有效。 */
+    private suspend fun verifyJiaowu(useVpn: Boolean): SessionState {
+        val transport = WbuAuthTransport.getShared(context, useVpn)
+        transport.restoreCookieStore()
+        val hasSessionCookie = transport.cookieStore.any { it.name == "jw_uf" && it.value.isNotBlank() }
+        if (!hasSessionCookie) return SessionState.NOT_LOGGED_IN
+        return if (WbuQueryClient(context, useVpn).checkSession()) SessionState.VALID else SessionState.EXPIRED
+    }
+
+    /** 图书馆：持有 OPAC 会话或 CASTGC，能确保会话有效则视为有效。 */
+    private suspend fun verifyLibrary(useVpn: Boolean): SessionState {
+        val transport = WbuAuthTransport.getShared(context, useVpn)
+        transport.restoreCookieStore()
+        val hasPhp = transport.cookieStore.any { it.name == "PHPSESSID" && it.value.isNotBlank() }
+        val hasTgc = transport.cookieStore.any { it.name == "CASTGC" && it.value.isNotBlank() }
+        if (!hasPhp && !hasTgc) return SessionState.NOT_LOGGED_IN
+        return try {
+            WbuQueryClient(context, useVpn).ensureOpacSession()
+            SessionState.VALID
+        } catch (e: WbuSessionExpiredException) {
+            SessionState.EXPIRED
+        } catch (e: Exception) {
+            SessionState.UNKNOWN
+        }
+    }
+
+    /** WebVPN：TWFID 探活（走只读的 /por/conf.csp，不消耗登录尝试、不触发风控）。 */
+    private suspend fun verifyWebVpn(): SessionState {
+        val twfid = WbuAuthTransport.getTwfid(context)
+        if (twfid.isBlank()) return SessionState.NOT_LOGGED_IN
+        val transport = WbuAuthTransport.getShared(context, true)
+        return when (WebVpnClient(transport).probeTwfid(twfid)) {
+            TwfidState.VALID -> SessionState.VALID
+            TwfidState.NOT_AUTHENTICATED -> SessionState.EXPIRED
+            // 探活没做成 ≠ 会话失效：报「无法判定」，不要吓用户说会话过期
+            TwfidState.UNKNOWN -> SessionState.UNKNOWN
+        }
+    }
+
+    /** 一卡通：使用 access_token 探测会话有效性；若过期则尝试用 refresh_token 刷新续期（不顶号）。 */
+    private suspend fun verifyCampusCard(): SessionState {
+        val token = WbuAuthTransport.getCampusCardAccessToken(context)
+        if (token.isBlank()) return SessionState.NOT_LOGGED_IN
+        val cardClient = WbuCampusCardClient(context, useVpn = false)
+        val ok = cardClient.checkSession(token)
+        if (ok) return SessionState.VALID
+
+        // 尝试用 refresh_token 续期
+        val refreshToken = WbuAuthTransport.getCampusCardRefreshToken(context)
+        if (refreshToken.isNotBlank()) {
+            val refreshed = cardClient.refreshToken(refreshToken)
+            if (refreshed != null && refreshed.accessToken.isNotBlank()) {
+                WbuAuthTransport.setCampusCardTokens(context, refreshed.accessToken, refreshed.refreshToken)
+                return SessionState.VALID
+            }
+        }
+        return SessionState.EXPIRED
+    }
+
+    /** WebDAV：连接并确保根目录可访问。 */
+    private suspend fun verifyWebDav(): SessionState {
+        val config = apiConfigRepository.webDavConfigFlow.firstOrNull() ?: return SessionState.NOT_LOGGED_IN
+        if (config.password.isBlank()) return SessionState.NOT_LOGGED_IN
+        val client = apiConfigRepository.createWebDavClient(config) ?: return SessionState.NOT_LOGGED_IN
+        return try {
+            if (client.ensureRootDirectoryExists()) SessionState.VALID else SessionState.EXPIRED
+        } catch (e: Exception) {
+            SessionState.EXPIRED
+        } finally {
+            client.close()
+        }
+    }
+}
