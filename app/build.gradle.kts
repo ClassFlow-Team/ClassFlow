@@ -105,8 +105,8 @@ android {
         applicationId = "com.shiro.classflow"
         minSdk = 26
         targetSdk = 37
-        versionCode = 18
-        versionName = "1.1.2"
+        versionCode = 19
+        versionName = "1.2.0"
 
         buildConfigField("String", "UPDATE_API_URL", "\"$updateApiUrl\"")
         buildConfigField("String", "GITHUB_UPDATE_REPO", "\"$githubUpdateRepo\"")
