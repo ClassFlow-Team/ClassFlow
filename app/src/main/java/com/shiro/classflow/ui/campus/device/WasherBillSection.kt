@@ -1,5 +1,6 @@
 package com.shiro.classflow.ui.campus.device
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,12 +10,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.LocalLaundryService
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,6 +48,8 @@ fun WasherBillSection(
     errorRes: Int?,
     hasMore: Boolean,
     onLoadMore: () -> Unit,
+    onRefresh: () -> Unit,
+    onOpenDetail: (WasherOrderSummary) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -54,15 +60,32 @@ fun WasherBillSection(
                 modifier = Modifier.weight(1f)
             )
             if (orders.isNotEmpty()) {
+                // 列表接口不带金额，顶部就只报条数；金额点开详情才看得到，
+                // 免得汇总行显示「共 ¥0.00」——那比不显示更误导。
                 Text(
-                    text = stringResource(
-                        R.string.washer_bill_summary,
-                        orders.size,
-                        formatMoney(orders.sumOf { it.payPrice })
-                    ),
+                    text = stringResource(R.string.washer_bill_summary_count_only, orders.size),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            // 账单是独立接口，进度卡的刷新不会带上它；给一个自己的刷新入口，
+            // 否则刚洗完单、账单还是旧的时候只能退出去重进页面。
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .size(18.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                IconButton(onClick = onRefresh, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        Icons.Filled.Refresh,
+                        contentDescription = stringResource(R.string.washer_bill_refresh),
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 
@@ -116,7 +139,7 @@ fun WasherBillSection(
                                     color = MaterialTheme.colorScheme.outlineVariant
                                 )
                             }
-                            WasherBillRow(order)
+                            WasherBillRow(order, onClick = { onOpenDetail(order) })
                         }
                         if (hasMore) {
                             TextButton(
@@ -140,10 +163,11 @@ fun WasherBillSection(
 }
 
 @Composable
-private fun WasherBillRow(order: WasherOrderSummary) {
+private fun WasherBillRow(order: WasherOrderSummary, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -176,11 +200,8 @@ private fun WasherBillRow(order: WasherOrderSummary) {
         }
         Spacer(Modifier.width(8.dp))
         Column(horizontalAlignment = Alignment.End) {
-            Text(
-                text = formatMoney(order.payPrice),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold
-            )
+            // 列表接口不带金额（见 WasherOrderSummary.UNKNOWN_PRICE），
+            // 金额在详情里 —— 所以这里不给数字，只给状态和「可点开」的提示。
             Text(
                 text = order.statusRemark?.takeIf { it.isNotBlank() }
                     ?: stringResource(
@@ -190,7 +211,18 @@ private fun WasherBillRow(order: WasherOrderSummary) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Text(
+                text = stringResource(R.string.washer_bill_row_amount_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -199,7 +231,7 @@ private fun WasherBillRow(order: WasherOrderSummary) {
  *
  * 解析失败就原样返回前 16 个字符 —— 账单里显示一条原始时间也比显示空白强。
  */
-private fun formatDate(iso: String?): String? {
+internal fun formatDate(iso: String?): String? {
     if (iso.isNullOrBlank()) return null
     val parsed = runCatching {
         // 服务端固定 UTC（末尾 Z）；换成毫秒手动加，避免依赖 API 26 才有的 java.time 解析格式

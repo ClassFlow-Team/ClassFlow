@@ -132,28 +132,32 @@ class WasherWatcher @Inject constructor(
 
     /** 排下一次闹钟；单已结束就取消。 */
     private suspend fun reschedule(order: WasherOrderSummary, fetchedAt: Long) {
-        when {
-            order.phase == WasherOrderPhase.RUNNING -> {
-                val at = fetchedAt + order.remainSeconds * 1000L + ALARM_GRACE_MILLIS
-                WasherReminderScheduler.scheduleAlarm(context, at)
-            }
-
-            order.phase.isTerminal -> WasherReminderScheduler.cancelAlarm(context)
-
-            // 待支付 / 待启动：服务端不会自己动，等用户回来按按钮；
-            // 但保持一个较慢的兜底检查，避免用户忘了还占着机器。
-            else -> WasherReminderScheduler.scheduleAlarm(
-                context,
-                System.currentTimeMillis() + RETRY_DELAY_MILLIS * 5
-            )
+        if (order.phase.isTerminal) {
+            WasherReminderScheduler.cancelAlarm(context)
+            return
         }
+        WasherReminderScheduler.scheduleAlarm(
+            context,
+            nextCheckAtMillis(
+                order = order,
+                fetchedAtMillis = fetchedAt,
+                retryDelayMillis = RETRY_DELAY_MILLIS * 5,
+                nowMillis = System.currentTimeMillis(),
+                graceMillis = ALARM_GRACE_MILLIS,
+            )
+        )
     }
 
     /**
-     * 找「当前该盯的那一单」。
+     * 找「当前该盯的那一单」，并**一定**补一次详情。
      *
      * 优先运行中（用户最关心），其次已支付待启动，最后待支付 —— 同时有多单时
      * 按这个优先级取，避免把「另一台待付款的单」当成正在洗的那台。
+     *
+     * 为什么非要补详情：`orders/running` 只是列表，实测里它不带 `remainTime` /
+     * `workTime`，而倒计时和进度条全靠这两个字段。官方 H5 也一样 —— 列表页拿到
+     * `orderId` 之后照样去拉 `orders/{id}/detail`。少了这一步，页面上的剩余时间
+     * 会恒为 00:00。
      *
      * 服务端 `orders/running` 一旦把单移出（洗完了），列表就是空的；这时**回头查一次
      * 上一单的详情**，把终态拿回来 —— 否则页面会直接从「洗涤中」跳到「没有订单」，
@@ -162,15 +166,15 @@ class WasherWatcher @Inject constructor(
     private suspend fun discoverActiveOrder(previous: WasherOrderSummary?): WasherOrderSummary? {
         val orders = WasherOrderSession.withClient(context) { it.fetchRunningWasherOrders() }
         val candidates = orders.filter { it.phase.isActive }
-        if (candidates.isNotEmpty()) return candidates.minByOrNull { priority(it.phase) }
+        val picked = candidates.minByOrNull { priority(it.phase) }
 
-        if (previous != null && previous.phase.isActive) {
-            val finished = WasherOrderSession.withClient(context) {
-                it.fetchWasherOrderDetail(previous.orderId)
-            }
-            if (finished != null) return finished
+        // 有列表项就补详情；列表已空但上一单还「进行中」，同样查一次它的终态。
+        val target = picked ?: previous?.takeIf { it.phase.isActive } ?: return null
+        val detailed = WasherOrderSession.withClient(context) {
+            it.fetchWasherOrderDetail(target.orderId)
         }
-        return null
+        // 详情拿不到（单被删 / 接口抖动）就退回列表项：进度可能没有，但状态是对的
+        return detailed ?: picked
     }
 
     private fun priority(phase: WasherOrderPhase): Int = when (phase) {
@@ -231,7 +235,13 @@ class WasherWatcher @Inject constructor(
         if (order.phase != WasherOrderPhase.RUNNING) return
         WasherReminderScheduler.scheduleAlarm(
             context,
-            snapshot.fetchedAt + order.remainSeconds * 1000L + ALARM_GRACE_MILLIS
+            nextCheckAtMillis(
+                order = order,
+                fetchedAtMillis = snapshot.fetchedAt,
+                retryDelayMillis = RETRY_DELAY_MILLIS * 5,
+                nowMillis = System.currentTimeMillis(),
+                graceMillis = ALARM_GRACE_MILLIS,
+            )
         )
         if (repository.isBackgroundPollingEnabled()) {
             WasherReminderScheduler.ensurePeriodic(context)
@@ -256,44 +266,91 @@ object WasherReminderScheduler {
     private const val PERIODIC_WORK_NAME = "WasherWatchWorker_Periodic"
     private const val ONE_SHOT_WORK_NAME = "WasherCheckWorker_OneShot"
 
+    /** 无精确闹钟权限时用的延迟检查（独立名字，避免把用户主动的「立即检查」顶掉）。 */
+    private const val DELAYED_WORK_NAME = "WasherCheckWorker_Delayed"
+
     /** 闹钟触发的广播（见 `WasherAlarmReceiver`）。 */
     const val ACTION_WASHER_ALARM = "com.xingheyuzhuan.shiguangschedule.action.WASHER_ALARM"
 
     fun scheduleAlarm(context: Context, triggerAtMillis: Long) {
-        val manager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        val manager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
         val now = System.currentTimeMillis()
-        // 已经过点的立刻补一次（用 one-shot worker 而不是闹钟：闹钟设过去的时间不会触发）
-        if (triggerAtMillis <= now + 1_000L) {
-            enqueueOneShot(context)
-            return
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !manager.canScheduleExactAlarms()) {
-            // 没有精确闹钟权限：退化成「轮询尽快跑一次」，不静默失败
-            Log.i(TAG, "无精确闹钟权限，改用一次性 Worker")
-            enqueueOneShot(context)
-            return
-        }
-        val pending = alarmPendingIntent(context) ?: run {
-            enqueueOneShot(context)
-            return
-        }
-        runCatching {
-            manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pending)
-        }.onFailure {
-            Log.w(TAG, "设置洗衣闹钟失败，改用一次性 Worker", it)
-            enqueueOneShot(context)
+        val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            manager?.canScheduleExactAlarms() == true
+        when (decideWasherAlarmStrategy(triggerAtMillis, now, canExact)) {
+            // 已经过点：闹钟设过去的时间不会触发，只能立刻补跑一次
+            WasherAlarmStrategy.IMMEDIATE -> enqueueOneShot(context)
+
+            // 没有精确闹钟权限：退化成「到点再跑的延迟任务」，不静默失败。
+            //
+            // 这里**绝不能**用「立刻跑一次」兜底：Worker 跑完发现还在洗，会再调回本方法，
+            // 而权限又还没给，于是又立刻跑一次……实测 1 秒内连跑 5 轮，接口被打爆。
+            WasherAlarmStrategy.DELAYED_WORK -> {
+                Log.i(
+                    TAG,
+                    "无精确闹钟权限，改用延迟 Worker（${(triggerAtMillis - now) / 1000}s 后）"
+                )
+                enqueueDelayedCheck(context, triggerAtMillis)
+            }
+
+            WasherAlarmStrategy.EXACT_ALARM -> {
+                val pending = alarmPendingIntent(context)
+                if (manager == null || pending == null) {
+                    // 与「没有权限」同类：延迟排，不能立刻重跑
+                    enqueueDelayedCheck(context, triggerAtMillis)
+                    return
+                }
+                // 优先用 setAlarmClock：它在系统里被当作「用户可见的闹钟」，
+                // 状态栏会显示时钟图标、锁屏会显示下一次闹钟，因此厂商的省电
+                // 管控不敢拦它 —— 这是实测中唯一能稳定触发的通道。
+                //
+                // 代价：会占一个系统闹钟位（锁屏上能看到）。对「洗好了」这种
+                // 一次性提醒可以接受；真被拦掉就什么都收不到，那更糟。
+                val setOk = runCatching {
+                    manager.setAlarmClock(
+                        AlarmManager.AlarmClockInfo(triggerAtMillis, null),
+                        pending
+                    )
+                }
+                if (setOk.isSuccess) {
+                    Log.i(
+                        TAG,
+                        "已设置洗衣闹钟（setAlarmClock，${(triggerAtMillis - now) / 1000}s 后）"
+                    )
+                    return
+                }
+
+                Log.w(TAG, "setAlarmClock 失败，退回 setExactAndAllowWhileIdle", setOk.exceptionOrNull())
+                runCatching {
+                    manager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerAtMillis,
+                        pending
+                    )
+                }.onFailure {
+                    // 同上：不能立刻重跑，否则会陷入「跑完→还在洗→再排」的自激循环
+                    Log.w(TAG, "设置洗衣闹钟失败，改用延迟 Worker", it)
+                    enqueueDelayedCheck(context, triggerAtMillis)
+                }
+            }
         }
     }
 
     fun cancelAlarm(context: Context) {
-        val manager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        val pending = alarmPendingIntent(context, create = false) ?: return
-        manager.cancel(pending)
-        pending.cancel()
+        // 延迟 Worker 是闹钟的替代品，取消闹钟时必须一起取消，
+        // 否则「单已结束 / 提醒已关」后它还会到点触发一次。
+        WorkManager.getInstance(context).cancelUniqueWork(DELAYED_WORK_NAME)
+
+        val manager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+        val pending = alarmPendingIntent(context, create = false)
+        // 没有精确闹钟权限时这里本来就是 null，不能因此跳过上面的 Worker 取消
+        if (manager != null && pending != null) {
+            manager.cancel(pending)
+            pending.cancel()
+        }
     }
 
-    private fun alarmPendingIntent(context: Context, create: Boolean = true): PendingIntent? {
-        val intent = Intent(context, WasherAlarmReceiver::class.java).apply {
+    private fun alarmPendingIntent(context: Context, create: Boolean = true): PendingIntent? {        val intent = Intent(context, WasherAlarmReceiver::class.java).apply {
             action = ACTION_WASHER_ALARM
         }
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -329,7 +386,7 @@ object WasherReminderScheduler {
         WorkManager.getInstance(context).cancelUniqueWork(PERIODIC_WORK_NAME)
     }
 
-    /** 立刻跑一次（闹钟到点 / 没有精确闹钟权限时的退化路径）。 */
+    /** 立刻跑一次（用户点「立即检查」/ 闹钟已过点时的补跑）。 */
     fun enqueueOneShot(context: Context) {
         val request = OneTimeWorkRequestBuilder<WasherCheckWorker>()
             .setConstraints(
@@ -340,6 +397,31 @@ object WasherReminderScheduler {
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
             ONE_SHOT_WORK_NAME,
+            ExistingWorkPolicy.REPLACE,
+            request
+        )
+    }
+
+    /**
+     * 没有精确闹钟权限时的替代品：到点才跑的一次性检查。
+     *
+     * 与 [enqueueOneShot] 的区别只有初始延迟。WorkManager 不保证精确到秒（Doze 下可能
+     * 晚几分钟），所以它只是「比 15 分钟轮询更快」的兜底，不能当成闹钟用 ——
+     * 真正的准时提醒仍然要靠用户授予精确闹钟权限（见页面上的权限提示）。
+     */
+    private fun enqueueDelayedCheck(context: Context, triggerAtMillis: Long) {
+        val delay = (triggerAtMillis - System.currentTimeMillis()).coerceAtLeast(0L)
+        val request = OneTimeWorkRequestBuilder<WasherCheckWorker>()
+            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+            )
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            DELAYED_WORK_NAME,
+            // 订单变化（换单 / 改时间）时应该顶掉旧的那次，而不是排两个
             ExistingWorkPolicy.REPLACE,
             request
         )

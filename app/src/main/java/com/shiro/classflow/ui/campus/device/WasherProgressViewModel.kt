@@ -28,6 +28,23 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
+ * 账单详情弹层的状态。
+ *
+ * [order] 是列表里那一条（点开就能立刻显示机器、时间、状态），
+ * [detail] 是后到的详情接口结果（带金额）。两者分开存，是为了让弹层先出内容
+ * 再补金额，而不是点一下先白屏等网络。
+ */
+data class WasherHistoryDetailTarget(
+    val order: WasherOrderSummary,
+    val detail: WasherOrderSummary? = null,
+    val loading: Boolean = false,
+    @StringRes val errorRes: Int? = null,
+) {
+    /** 显示用：详情回来了就用详情，否则先用列表那一条。 */
+    val shown: WasherOrderSummary get() = detail ?: order
+}
+
+/**
  * 洗衣机页的「进度 + 账单 + 提醒」逻辑。
  *
  * 与 [CampusDeviceHubViewModel] 分开：那份管三类设备共用的「使用记录」，
@@ -71,6 +88,9 @@ class WasherProgressViewModel @Inject constructor(
         val backgroundPolling: Boolean = true,
         /** 提醒设置面板是否展开。 */
         val settingsOpen: Boolean = false,
+
+        /** 账单里点开的那一条（null = 没有打开详情）。 */
+        val historyDetail: WasherHistoryDetailTarget? = null,
     ) {
         /** 页面主卡片要显示的那一单。 */
         val order: WasherOrderSummary? get() = snapshot?.order
@@ -80,7 +100,7 @@ class WasherProgressViewModel @Inject constructor(
 
         /** 本月洗衣次数与金额（账单顶部小计）。 */
         val monthSpent: Double
-            get() = history.filter { it.phase.isTerminal }.sumOf { it.payPrice }
+            get() = history.filter { it.phase.isTerminal && it.hasKnownPrice }.sumOf { it.payPrice }
     }
 
     private val _uiState = MutableStateFlow(UiState())
@@ -90,6 +110,20 @@ class WasherProgressViewModel @Inject constructor(
     val messages: SharedFlow<Int> = _messages.asSharedFlow()
 
     private var started = false
+
+    /**
+     * 「正在刷新」的**同步**标记。
+     *
+     * 不能只看 `_uiState.refreshing`：它是在协程**内部**才置位的，而协程启动是异步的。
+     * 页面一进来 `start()` 会触发一次刷新，用户又点了刷新按钮 / 下拉，几次调用都会
+     * 在状态还没来得及更新时通过检查，于是并发打十几次详情接口（实测 1 秒内 143 次）。
+     *
+     * 这里在主线程直接做「比较并置位」，同一时刻只允许一个刷新在跑。
+     */
+    private var refreshInFlight = false
+
+    /** 账单加载的同步防重入标记（理由同上）。 */
+    private var historyInFlight = false
 
     /**
      * 页面进入 / 重新回到前台时调用。
@@ -124,56 +158,65 @@ class WasherProgressViewModel @Inject constructor(
      * @param silent 进入页面时的首次刷新：失败不弹 Toast，只把错误放在顶部提示条里。
      */
     fun refresh(silent: Boolean = false) {
-        if (_uiState.value.refreshing) return
+        // 同步的「比较并置位」：并发调用只有第一个能进来（见 refreshInFlight）
+        if (refreshInFlight) return
+        refreshInFlight = true
         viewModelScope.launch {
             _uiState.update { it.copy(refreshing = true, errorRes = null) }
-            val result = withContext(Dispatchers.IO) {
-                // 用户主动刷新时不发通知：人就在页面上，弹通知是噪音
-                watcher.refresh(discover = true, notify = false)
-            }
-            when (result) {
-                is WasherWatcher.Result.Ok -> {
-                    _uiState.update {
-                        it.copy(
-                            snapshot = result.snapshot,
-                            refreshing = false,
-                            loading = false,
-                            errorRes = null,
-                        )
-                    }
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    // 用户主动刷新时不发通知：人就在页面上，弹通知是噪音
+                    watcher.refresh(discover = true, notify = false)
                 }
+                when (result) {
+                    is WasherWatcher.Result.Ok -> {
+                        _uiState.update {
+                            it.copy(
+                                snapshot = result.snapshot,
+                                refreshing = false,
+                                loading = false,
+                                errorRes = null,
+                            )
+                        }
+                    }
 
-                WasherWatcher.Result.Idle -> {
-                    _uiState.update {
-                        it.copy(snapshot = null, refreshing = false, loading = false, errorRes = null)
+                    WasherWatcher.Result.Idle -> {
+                        _uiState.update {
+                            it.copy(snapshot = null, refreshing = false, loading = false, errorRes = null)
+                        }
                     }
-                }
 
-                is WasherWatcher.Result.Failed -> {
-                    Log.w(TAG, "刷新洗衣进度失败", result.cause)
-                    _uiState.update {
-                        it.copy(
-                            refreshing = false,
-                            loading = false,
-                            errorRes = R.string.washer_progress_error_refresh,
-                        )
+                    is WasherWatcher.Result.Failed -> {
+                        Log.w(TAG, "刷新洗衣进度失败", result.cause)
+                        _uiState.update {
+                            it.copy(
+                                refreshing = false,
+                                loading = false,
+                                errorRes = R.string.washer_progress_error_refresh,
+                            )
+                        }
+                        if (!silent) _messages.tryEmit(R.string.washer_progress_error_refresh)
                     }
-                    if (!silent) _messages.tryEmit(R.string.washer_progress_error_refresh)
                 }
+                // 状态变了，后台调度跟着变（有单才轮询，没单就停）
+                withContext(Dispatchers.IO) { watcher.syncBackgroundSchedule() }
+            } finally {
+                // 失败 / 取消都要放开，否则一次异常会让页面永远卡在「刷新中」
+                refreshInFlight = false
             }
-            // 状态变了，后台调度跟着变（有单才轮询，没单就停）
-            withContext(Dispatchers.IO) { watcher.syncBackgroundSchedule() }
         }
     }
 
     /** 加载洗衣账单（历史订单）。[reset] 为 true 时从第一页重来。 */
     fun loadHistory(reset: Boolean = false) {
         val state = _uiState.value
-        if (state.historyLoading) return
+        // 同 refresh：historyLoading 是协程内才置位的，必须用同步标记挡住并发
+        if (historyInFlight) return
         val nextPage = if (reset) 1 else state.historyPage + 1
         if (!reset && !state.historyHasMore) return
         // 首次加载失败后用户再点「加载更多」应该重试第一页，而不是永远卡在 hasMore=false
         val pageToLoad = if (!reset && state.historyPage == 0) 1 else nextPage
+        historyInFlight = true
 
         viewModelScope.launch {
             _uiState.update {
@@ -183,33 +226,92 @@ class WasherProgressViewModel @Inject constructor(
                     history = if (reset) emptyList() else it.history,
                 )
             }
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    WasherOrderSession.withClient(context) {
-                        it.fetchWasherOrderHistory(page = pageToLoad, size = HISTORY_PAGE_SIZE)
+            try {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        WasherOrderSession.withClient(context) {
+                            it.fetchWasherOrderHistory(page = pageToLoad, size = HISTORY_PAGE_SIZE)
+                        }
+                    }
+                }.onSuccess { page ->
+                    _uiState.update { current ->
+                        val merged = if (reset) page else current.history + page
+                        current.copy(
+                            history = merged.distinctBy { it.orderId },
+                            historyLoading = false,
+                            historyPage = pageToLoad,
+                            historyHasMore = page.size >= HISTORY_PAGE_SIZE,
+                            historyErrorRes = null,
+                        )
+                    }
+                }.onFailure { e ->
+                    Log.w(TAG, "加载洗衣账单失败 page=$pageToLoad", e)
+                    _uiState.update {
+                        it.copy(
+                            historyLoading = false,
+                            historyErrorRes = R.string.washer_bill_error,
+                        )
                     }
                 }
-            }.onSuccess { page ->
-                _uiState.update { current ->
-                    val merged = if (reset) page else current.history + page
-                    current.copy(
-                        history = merged.distinctBy { it.orderId },
-                        historyLoading = false,
-                        historyPage = pageToLoad,
-                        historyHasMore = page.size >= HISTORY_PAGE_SIZE,
-                        historyErrorRes = null,
-                    )
+            } finally {
+                historyInFlight = false
+            }
+        }
+    }
+
+    /**
+     * 打开一条账单的详情（含金额）。
+     *
+     * `orders/history` 的列表项**没有金额字段**（实测只给 `payFlag`），金额只在
+     * `orders/{id}/detail` 里 —— 所以详情是按需查的，不预取整个列表：
+     * 账单一屏 20 条，进页面就打 20 个详情请求既慢又没必要。
+     */
+    fun openHistoryDetail(order: WasherOrderSummary) {
+        _uiState.update {
+            it.copy(
+                historyDetail = WasherHistoryDetailTarget(
+                    order = order,
+                    detail = null,
+                    loading = true,
+                    errorRes = null,
+                )
+            )
+        }
+        viewModelScope.launch {
+            val result = runCatching {
+                withContext(Dispatchers.IO) {
+                    WasherOrderSession.withClient(context) {
+                        it.fetchWasherOrderDetail(order.orderId)
+                    }
                 }
-            }.onFailure { e ->
-                Log.w(TAG, "加载洗衣账单失败 page=$pageToLoad", e)
-                _uiState.update {
-                    it.copy(
-                        historyLoading = false,
-                        historyErrorRes = R.string.washer_bill_error,
+            }
+            val detail = result.getOrNull()
+            _uiState.update { current ->
+                val target = current.historyDetail ?: return@update current
+                // 用户可能已经关掉或换了一条：只更新仍然匹配的那次请求
+                if (target.order.orderId != order.orderId) return@update current
+                if (detail == null) {
+                    current.copy(
+                        historyDetail = target.copy(
+                            loading = false,
+                            errorRes = R.string.washer_bill_detail_error,
+                        )
+                    )
+                } else {
+                    // 详情比列表新：把列表里那一条也换成详情，避免两处字段打架
+                    current.copy(
+                        historyDetail = target.copy(detail = detail, loading = false),
+                        history = current.history.map {
+                            if (it.orderId == order.orderId) detail else it
+                        },
                     )
                 }
             }
         }
+    }
+
+    fun closeHistoryDetail() {
+        _uiState.update { it.copy(historyDetail = null) }
     }
 
     fun toggleSettings(open: Boolean = !_uiState.value.settingsOpen) {
@@ -252,9 +354,18 @@ class WasherProgressViewModel @Inject constructor(
         }
     }
 
-    /** 「立即检查一次」：提醒设置里的手动验证入口。 */
-    fun checkNow() {
+    /** 用户刚授予精确闹钟权限：把当前这一单的提醒重排成真正的系统闹钟。 */
+    fun rescheduleForExactAlarm() {
         viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching { watcher.scheduleFromCurrentSnapshot() }
+                    .onFailure { Log.w(TAG, "重排洗衣闹钟失败", it) }
+            }
+        }
+    }
+
+    /** 「立即检查一次」：提醒设置里的手动验证入口。 */
+    fun checkNow() {        viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 watcher.refresh(discover = true, notify = true)
             }

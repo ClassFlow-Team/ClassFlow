@@ -22,7 +22,7 @@ class WasherCheckWorker @AssistedInject constructor(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        Log.i(TAG, "闹钟触发的洗衣检查")
+        Log.i(TAG, "洗衣检查开始（来源：闹钟 / 延迟任务）")
         return runCatching {
             when (val result = watcher.refresh(discover = false)) {
                 is WasherWatcher.Result.Failed -> {

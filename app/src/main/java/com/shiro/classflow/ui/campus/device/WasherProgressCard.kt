@@ -3,6 +3,7 @@ package com.shiro.classflow.ui.campus.device
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.LocalLaundryService
@@ -19,6 +21,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -51,7 +54,7 @@ import androidx.compose.ui.res.stringResource
  *
  * 三种形态：有进行中的单（倒计时 + 进度）、刚结束的单（结果）、没有单（引导去扫码）。
  * 倒计时用 `LaunchedEffect` 每秒刷新一次本机时间，只重算「现在 - 拉取时刻」，
- * 不依赖系统时钟的绝对值（见 `WasherOrderSummary.remainingSeconds`）。
+ * 不依赖系统时钟的绝对值（见 `WasherOrderSummary.displayRemainingSeconds`）。
  */
 @Composable
 fun WasherProgressCard(
@@ -60,6 +63,8 @@ fun WasherProgressCard(
     refreshing: Boolean,
     onRefresh: () -> Unit,
     onScan: () -> Unit,
+    /** 运行中订单右下角的「设闹钟」；为 null 时不显示（例如非洗衣机场景）。 */
+    onSetSystemAlarm: (() -> Unit)? = null,
 ) {
     val order = snapshot?.order
     Card(
@@ -121,7 +126,11 @@ fun WasherProgressCard(
                 }
 
                 else -> {
-                    WasherOrderBody(order = order, fetchedAt = snapshot.fetchedAt)
+                    WasherOrderBody(
+                        order = order,
+                        fetchedAt = snapshot.fetchedAt,
+                        onSetSystemAlarm = onSetSystemAlarm,
+                    )
                 }
             }
         }
@@ -129,7 +138,11 @@ fun WasherProgressCard(
 }
 
 @Composable
-private fun WasherOrderBody(order: WasherOrderSummary, fetchedAt: Long) {
+private fun WasherOrderBody(
+    order: WasherOrderSummary,
+    fetchedAt: Long,
+    onSetSystemAlarm: (() -> Unit)? = null,
+) {
     // 每秒推进一次，倒计时才会走；只在运行中才需要跳
     var now by remember(order.orderId, fetchedAt) { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(order.orderId, fetchedAt, order.phase) {
@@ -164,14 +177,18 @@ private fun WasherOrderBody(order: WasherOrderSummary, fetchedAt: Long) {
 
     when (order.phase) {
         WasherOrderPhase.RUNNING -> {
-            val remain = order.remainingSeconds(now, fetchedAt)
-            val progress by animateFloatAsState(
-                targetValue = order.progress(now, fetchedAt),
+            // 显示口径与服务端真实剩余分开：显示对齐官方 H5（+60 秒），
+            // 闹钟仍按真实剩余排（见 WasherWatcher），两者不要互相污染。
+            val remain = order.displayRemainingSeconds(now, fetchedAt)
+            val progress = order.progress(now, fetchedAt)
+            val animatedProgress by animateFloatAsState(
+                targetValue = progress,
                 label = "washerProgress"
             )
-            if (order.workTimeMinutes > 0) {
+            // progress 返回 0 表示「总时长不可信 / 拿不到」，此时不画进度条
+            if (progress > 0f) {
                 LinearProgressIndicator(
-                    progress = { progress },
+                    progress = { animatedProgress },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(6.dp),
@@ -246,12 +263,49 @@ private fun WasherOrderBody(order: WasherOrderSummary, fetchedAt: Long) {
         }
     }
 
-    if (order.payPrice > 0.0) {
-        Text(
-            text = stringResource(R.string.washer_progress_paid, formatMoney(order.payPrice)),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+    // 底部一行：左边是实付金额，右边是「设个提醒」。
+    //
+    // 提醒按钮放在这里而不是收进右上角设置，是因为它才是真正可靠的提醒方式：
+    // 本应用的后台通知会被省电策略拦，而系统时钟不会。
+    // 把它藏在二级菜单里，等于让用户继续依赖一个会失效的通道。
+    val showAlarmButton = onSetSystemAlarm != null && order.phase == WasherOrderPhase.RUNNING
+    if (order.hasKnownPrice || showAlarmButton) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (order.hasKnownPrice) {
+                Text(
+                    text = stringResource(
+                        R.string.washer_progress_paid,
+                        formatMoney(order.payPrice)
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
+            if (showAlarmButton) {
+                // 与进度同色系、但用实心按钮，保证一眼能看见
+                FilledTonalButton(
+                    onClick = onSetSystemAlarm!!,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.Alarm,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.washer_progress_set_alarm),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -317,9 +371,12 @@ private fun PhaseBadge(order: WasherOrderSummary) {
 fun WasherReminderSettingsCard(
     reminderEnabled: Boolean,
     backgroundPolling: Boolean,
+    exactAlarmAllowed: Boolean,
     onReminderChange: (Boolean) -> Unit,
     onPollingChange: (Boolean) -> Unit,
     onCheckNow: () -> Unit,
+    onRequestExactAlarm: () -> Unit,
+    onSetSystemAlarm: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -351,6 +408,41 @@ fun WasherReminderSettingsCard(
                 Switch(checked = reminderEnabled, onCheckedChange = onReminderChange)
             }
 
+            // 不可靠性必须写在开关旁边，不能只藏在文档里：
+            // 实测在 vivo 上系统会挂着 WorkManager 任务不执行，用户完全收不到提醒。
+            // 提前说清楚，比事后让用户以为「App 坏了」要好。
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.tertiaryContainer
+            ) {
+                Text(
+                    text = stringResource(R.string.washer_settings_experimental_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                )
+            }
+
+            // 真正有用的那条路：把用户送到系统闹钟，那才是熄屏也会响的通道。
+            // 说明完问题立刻给解法。
+            OutlinedButton(
+                onClick = onSetSystemAlarm,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Alarm,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.washer_settings_set_alarm))
+            }
+
             if (reminderEnabled) {
                 Row(
                     modifier = Modifier
@@ -371,34 +463,35 @@ fun WasherReminderSettingsCard(
                     }
                     Switch(checked = backgroundPolling, onCheckedChange = onPollingChange)
                 }
+                // 精确闹钟没给：提醒会退化成延迟任务（可能晚几分钟），
+                // 这里明确告诉用户，并直接给出授权入口 —— 不静默降级。
+                if (!exactAlarmAllowed) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.errorContainer
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = stringResource(R.string.washer_settings_need_exact_alarm),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = onRequestExactAlarm) {
+                                Text(stringResource(R.string.washer_settings_need_exact_alarm_action))
+                            }
+                        }
+                    }
+                }
                 TextButton(onClick = onCheckNow, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.washer_settings_check_now))
                 }
-            }
-        }
-    }
-}
-
-/** 提醒没开时页面顶部的一行引导（点了直接展开设置）。 */
-@Composable
-fun WasherReminderNudge(onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.secondaryContainer
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.washer_settings_nudge),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(onClick = onClick) {
-                Text(stringResource(R.string.washer_settings_nudge_action))
             }
         }
     }

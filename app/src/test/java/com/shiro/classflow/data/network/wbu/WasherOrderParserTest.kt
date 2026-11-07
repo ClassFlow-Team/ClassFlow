@@ -1,6 +1,7 @@
 package com.shiro.classflow.data.network.wbu
 
 import com.shiro.classflow.data.model.wbu.WasherOrderPhase
+import com.shiro.classflow.data.model.wbu.WasherOrderSummary
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -44,6 +45,41 @@ class WasherOrderParserTest {
            "payPrice":3.4, "createAt":"2026-10-15T10:00:00Z"}
         ], "message":""}
     """.trimIndent()
+
+    /**
+     * `orders/history` 的**真实**响应（实测 2026-11-07 南B-11-01）。
+     *
+     * 关键点：列表项**完全没有金额字段**，只有一个 `payFlag`。之前的解析器把缺失
+     * 当成 `0.0`，账单上就显示「1 笔 · 共 ¥0.00」「0.00」——比不显示更误导。
+     */
+    private val realHistoryBody = """
+        {"code":0, "message":"", "data":[{"deviceTypeId":9, "deviceTypeName":"10kg滚筒机",
+         "boxTypeId":0, "deviceNo":"000001", "storeName":"南B-11",
+         "createAt":"2026-11-06T14:31:47Z", "status":"50", "statusRemark":"订单完成",
+         "orderId":1683306322, "payFlag":1, "deviceWashModelId":0, "workModel":"",
+         "errorCode":"", "remainTime":0, "deviceId":"427f188952b54663a5487a5f5269e517",
+         "newGBStd":false}]}
+    """.trimIndent()
+
+    @Test
+    fun `history without price is unknown not zero`() {
+        val orders = WasherOrderParser.parseOrderList(realHistoryBody)
+        assertEquals(1, orders.size)
+        val order = orders.single()
+        assertEquals(1683306322L, order.orderId)
+        assertEquals(WasherOrderPhase.DONE, order.phase)
+        // 没有金额字段时必须标记为「未知」，绝不能伪装成 0 元
+        assertFalse(order.hasKnownPrice)
+        assertEquals(WasherOrderSummary.UNKNOWN_PRICE, order.payPrice, 0.001)
+    }
+
+    /** 详情接口带金额，点开详情才显示真实实付。 */
+    @Test
+    fun `history detail supplies the missing price`() {
+        val order = WasherOrderParser.parseOrderDetail(detailBody)!!
+        assertTrue(order.hasKnownPrice)
+        assertEquals(4.9, order.payPrice, 0.001)
+    }
 
     @Test
     fun `detail parses string status into running phase`() {
@@ -102,6 +138,40 @@ class WasherOrderParserTest {
         assertEquals(0, order.remainingSeconds(fetchedAt + 10_000_000L, fetchedAt))
     }
 
+    /**
+     * 界面必须和官方 H5 显示同一个数字。
+     *
+     * washer-h5 订单详情写的是 `remainTime*1000 + 60000`，所以原生页的倒计时
+     * 在 `remainTime` 基础上要多 1 分钟 —— 少这 60 秒，用户会觉得「原生版算错了」。
+     */
+    @Test
+    fun `displayed countdown matches official h5 adds one minute`() {
+        val order = WasherOrderParser.parseOrderDetail(detailBody)!!
+        val fetchedAt = 1_000_000L
+        assertEquals(
+            order.remainingSeconds(fetchedAt, fetchedAt) + 60,
+            order.displayRemainingSeconds(fetchedAt, fetchedAt)
+        )
+        assertEquals(3299 + 60, order.displayRemainingSeconds(fetchedAt, fetchedAt))
+        // 真实剩余 30 秒时，显示层是 90 秒：两边差的就是固定的那 1 分钟
+        val almostDone = fetchedAt + (3299 - 30) * 1000L
+        assertEquals(30, order.remainingSeconds(almostDone, fetchedAt))
+        assertEquals(90, order.displayRemainingSeconds(almostDone, fetchedAt))
+        // 真实剩余归零后，显示层仍有 60 秒缓冲，不会提前跳到「即将完成」
+        val finished = fetchedAt + 3299 * 1000L
+        assertEquals(0, order.remainingSeconds(finished, fetchedAt))
+        assertEquals(60, order.displayRemainingSeconds(finished, fetchedAt))
+    }
+
+    /** `remainTime` 是小数写法时也必须解析出来，否则倒计时会静默变成 00:00。 */
+    @Test
+    fun `decimal remain time is parsed instead of silently dropped`() {
+        val order = WasherOrderParser.parseOrderDetail(
+            """{"code":0,"data":{"orderId":9,"status":"40","remainTime":"3299.0","workTime":48}}"""
+        )!!
+        assertEquals(3299, order.remainSeconds)
+    }
+
     @Test
     fun `progress is clamped between zero and one`() {
         val order = WasherOrderParser.parseOrderDetail(detailBody)!!
@@ -110,6 +180,31 @@ class WasherOrderParserTest {
         assertTrue(start in 0f..1f)
         // 剩余时间归零 = 进度拉满（不会超过 1）
         assertEquals(1f, order.progress(fetchedAt + 10_000_000L, fetchedAt), 0.0001f)
+    }
+
+    /**
+     * 真实响应里 `workTime` 可能略小于 `remainTime`（实测 48 分钟 vs 3299 秒）。
+     *
+     * 服务端会把剩余时间算得比标称时长多一点，基准取两者较大值，于是拉取那一刻
+     * 进度是 0、随后单调增长，不会被夹成一根永远满格的假进度条。
+     */
+    @Test
+    fun `work time slightly below remain time still yields a usable progress bar`() {
+        val order = WasherOrderParser.parseOrderDetail(detailBody)!!
+        val fetchedAt = 0L
+        // 刚拉到时进度为 0（而不是满格 / 负数）
+        assertEquals(0f, order.progress(fetchedAt, fetchedAt), 0.0001f)
+        // 过 10 分钟，进度必须真的往前走
+        val later = order.progress(fetchedAt + 600_000L, fetchedAt)
+        assertTrue("progress should advance, got $later", later > 0f)
+        assertTrue(later <= 1f)
+    }
+
+    /** `workTime` 完全缺失时没有进度条可画。 */
+    @Test
+    fun `missing work time yields no progress bar`() {
+        val order = WasherOrderSummary(orderId = 1L, status = 40, remainSeconds = 600)
+        assertEquals(0f, order.progress(0L, 0L), 0.0001f)
     }
 
     @Test

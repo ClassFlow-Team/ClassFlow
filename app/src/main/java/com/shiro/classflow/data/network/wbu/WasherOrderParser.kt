@@ -37,7 +37,12 @@ object WasherOrderParser {
             cycle = obj.stringOrNull("cycle"),
             status = status,
             statusRemark = obj.stringOrNull("statusRemark"),
-            payPrice = obj.doubleOrNull("payPrice") ?: obj.doubleOrNull("payment") ?: 0.0,
+            payPrice = obj.doubleOrNull("payPrice")
+                ?: obj.doubleOrNull("payment")
+                // 缺失时用 **-1** 表示「未知」，而不是 0.0。
+                // 实测 `orders/history` 的列表项**不带任何金额字段**（只有 payFlag），
+                // 落到 0.0 会让账单显示「0.00 元」，比不显示金额更误导。
+                ?: WasherOrderSummary.UNKNOWN_PRICE,
             workTimeMinutes = obj.intOrNull("workTime") ?: 0,
             remainSeconds = obj.intOrNull("remainTime") ?: 0,
             createAt = obj.stringOrNull("createAt"),
@@ -89,10 +94,17 @@ private fun JsonObject.primitiveOrNull(key: String): JsonPrimitive? =
 private fun JsonObject.stringOrNull(key: String): String? =
     primitiveOrNull(key)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
 
-/** 字符串 / 数字都接受：实测 `status` 两种写法都存在。 */
+/**
+ * 字符串 / 数字都接受：实测 `status` 两种写法都存在。
+ *
+ * 小数写法（`"3299.0"`）也收：`remainTime` 一旦解析失败就会静默变成 0，
+ * 页面上的倒计时会直接显示「即将完成」，这种错必须在这里挡掉。
+ */
 private fun JsonObject.intOrNull(key: String): Int? {
     val primitive = primitiveOrNull(key) ?: return null
-    return primitive.content.trim().toIntOrNull()
+    val raw = primitive.content.trim()
+    raw.toIntOrNull()?.let { return it }
+    return raw.toDoubleOrNull()?.toInt()
 }
 
 private fun JsonObject.longOrNull(key: String): Long? {

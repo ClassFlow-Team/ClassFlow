@@ -1328,16 +1328,26 @@
     <string name="washer_status_unknown">状态未知</string>
 
     <string name="washer_bill_section">洗衣账单</string>
-    <string name="washer_bill_summary">%1$d 笔 · 共 ¥%2$s</string>
+    <string name="washer_bill_summary_count_only">%1$d 笔</string>
+    <string name="washer_bill_row_amount_hint">查看详情</string>
+    <string name="washer_bill_detail_paid">实付</string>
+    <string name="washer_bill_detail_program">程序</string>
+    <string name="washer_bill_detail_time">下单时间</string>
+    <string name="washer_bill_detail_device_no">机号</string>
+    <string name="washer_bill_detail_order_id">订单号</string>
+    <string name="washer_bill_detail_close">关闭</string>
+    <string name="washer_bill_detail_price_unavailable">详情未返回金额</string>
+    <string name="washer_bill_detail_error">详情读取失败，请重试</string>
     <string name="washer_bill_loading">正在读取洗衣账单…</string>
     <string name="washer_bill_empty">还没有洗衣记录</string>
     <string name="washer_bill_error">洗衣账单读取失败，请稍后重试</string>
     <string name="washer_bill_load_more">加载更多</string>
     <string name="washer_bill_loading_more">加载中…</string>
+    <string name="washer_bill_refresh">刷新洗衣账单</string>
 
     <string name="washer_settings_title">洗衣提醒设置</string>
     <string name="washer_settings_reminder_title">洗衣完成提醒</string>
-    <string name="washer_settings_reminder_desc">洗完时通知我，默认关闭</string>
+    <string name="washer_settings_reminder_desc">洗完后通知我（仅在应用打开时有效）</string>
     <string name="washer_settings_polling_title">后台自动查询</string>
     <string name="washer_settings_polling_desc">关闭后只在打开 App 时查询进度，更省电</string>
     <string name="washer_settings_check_now">立即检查一次</string>
@@ -1345,9 +1355,21 @@
     <string name="washer_settings_check_idle">当前没有进行中的洗衣订单</string>
     <string name="washer_settings_reminder_enabled_toast">已开启洗衣完成提醒</string>
     <string name="washer_settings_reminder_disabled_toast">已关闭洗衣完成提醒</string>
-    <string name="washer_settings_nudge">想洗完就收到提醒？可以在这里开启</string>
-    <string name="washer_settings_nudge_action">去开启</string>
     <string name="washer_settings_need_notification">通知权限未开启，洗完时无法提醒你。可在系统设置里允许本应用发送通知</string>
+    <string name="washer_settings_need_exact_alarm">系统未允许「精确闹钟」，完成提醒可能延迟几分钟</string>
+    <string name="washer_settings_need_exact_alarm_action">去允许</string>
+    <string name="washer_settings_experimental_desc">受系统省电策略限制，本应用切到后台或锁屏后很可能收不到通知，别指望它叫你回来取衣服。下面的系统时钟不依赖本应用运行，更可靠。</string>
+    <string name="washer_settings_set_alarm">用系统时钟提醒我</string>
+    <string name="washer_alarm_label">洗衣结束</string>
+    <string name="washer_settings_no_clock_app">没有找到系统时钟应用，请手动设置一个闹钟</string>
+    <string name="washer_alarm_dialog_title">设个提醒</string>
+    <string name="washer_alarm_dialog_desc">本应用的提醒离开前台后可能失效，用系统时钟更可靠。</string>
+    <string name="washer_alarm_dialog_alarm">闹钟</string>
+    <string name="washer_alarm_dialog_alarm_desc">到点响铃\n会留在闹钟列表</string>
+    <string name="washer_alarm_dialog_timer">倒计时</string>
+    <string name="washer_alarm_dialog_timer_desc">响完自动消失\n不占闹钟列表</string>
+    <string name="washer_alarm_dialog_cancel">取消</string>
+    <string name="washer_progress_set_alarm">设个提醒</string>
 
     <string name="washer_notification_channel_name">洗衣完成提醒</string>
     <string name="washer_notification_channel_desc">衣服洗好后提醒你及时取衣</string>

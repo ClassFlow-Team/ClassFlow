@@ -62,6 +62,8 @@ import com.xingheyuzhuan.shiguangschedule.R
 import com.shiro.classflow.data.model.wbu.CampusDeviceEntry
 import com.shiro.classflow.data.model.wbu.CampusDeviceKind
 import com.xingheyuzhuan.shiguangschedule.ui.settings.notification.hasNotificationPermission
+import com.xingheyuzhuan.shiguangschedule.ui.settings.notification.hasExactAlarmPermission
+import com.xingheyuzhuan.shiguangschedule.ui.settings.notification.openExactAlarmSettings
 import com.shiro.classflow.data.network.wbu.CampusShowerLink
 import com.shiro.classflow.data.network.wbu.ShowerManualCode
 import com.shiro.classflow.data.network.wbu.WbuAuthTransport
@@ -111,6 +113,30 @@ fun CampusDeviceHubScreen(
             Toast.makeText(context, R.string.washer_settings_need_notification, Toast.LENGTH_LONG).show()
         }
     }
+    // 精确闹钟权限：Android 12+ 默认不给，没有它「洗好了」只能延迟几分钟才提醒。
+    // 用户从系统设置返回时 Activity 会重新 resume，这里跟着重读一次，提示条才会消失。
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var exactAlarmAllowed by remember(lifecycleOwner) {
+        mutableStateOf(hasExactAlarmPermission(context))
+    }
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                val nowAllowed = hasExactAlarmPermission(context)
+                val wasAllowed = exactAlarmAllowed
+                exactAlarmAllowed = nowAllowed
+                // 用户刚在系统设置里把「精确闹钟」打开：
+                // 当前这一单的闹钟是在没权限时排的（退化成了 WorkManager，
+                // 而那台 vivo 上 Worker 根本不执行），必须立刻重排成真正的闹钟，
+                // 否则用户授权了也收不到这一单的提醒。
+                if (!wasAllowed && nowAllowed) {
+                    washerViewModel.rescheduleForExactAlarm()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     // 离开页面时按当前快照重排闹钟：用户关掉 App 也能收到「洗好了」
     androidx.compose.runtime.DisposableEffect(Unit) {
         onDispose { washerViewModel.onScreenLeaving() }
@@ -132,6 +158,10 @@ fun CampusDeviceHubScreen(
     var systemTarget by remember { mutableStateOf<CampusDeviceEntry?>(null) }
     var pinTarget by remember { mutableStateOf<CampusDeviceEntry?>(null) }
     var manualShowerInput by remember { mutableStateOf(false) }
+
+    // 「设闹钟」弹窗：让用户选闹钟还是倒计时（两者都交给系统时钟）。
+    // 状态放在页面级，因为进度卡片和设置卡片里的入口共用同一个弹窗。
+    var washerAlarmChoiceOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { resId ->
@@ -201,20 +231,15 @@ fun CampusDeviceHubScreen(
                         refreshing = washerState.refreshing,
                         onRefresh = { washerViewModel.refresh() },
                         onScan = { navBridge.navigate(Destination.QrScan) },
+                        onSetSystemAlarm = { washerAlarmChoiceOpen = true },
                     )
-                }
-                if (!washerState.reminderEnabled) {
-                    item {
-                        WasherReminderNudge(
-                            onClick = { washerViewModel.toggleSettings(open = true) }
-                        )
-                    }
                 }
                 if (washerState.settingsOpen) {
                     item {
                         WasherReminderSettingsCard(
                             reminderEnabled = washerState.reminderEnabled,
                             backgroundPolling = washerState.backgroundPolling,
+                            exactAlarmAllowed = exactAlarmAllowed,
                             onReminderChange = { enabled ->
                                 if (enabled && !hasNotificationPermission(context)) {
                                     notificationPermissionLauncher.launch(
@@ -222,9 +247,20 @@ fun CampusDeviceHubScreen(
                                     )
                                 }
                                 washerViewModel.setReminderEnabled(enabled)
+                                // 精确闹钟没开时不主动跳系统设置（会和通知权限弹窗抢焦点），
+                                // 改由卡片里的提示条 +「去允许」按钮引导
+                                if (enabled && !hasExactAlarmPermission(context)) {
+                                    Toast.makeText(
+                                        context,
+                                        R.string.washer_settings_need_exact_alarm,
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
                             },
                             onPollingChange = washerViewModel::setBackgroundPollingEnabled,
                             onCheckNow = washerViewModel::checkNow,
+                            onRequestExactAlarm = { openExactAlarmSettings(context) },
+                            onSetSystemAlarm = { washerAlarmChoiceOpen = true },
                         )
                     }
                 }
@@ -237,6 +273,8 @@ fun CampusDeviceHubScreen(
                         errorRes = washerState.historyErrorRes,
                         hasMore = washerState.historyHasMore,
                         onLoadMore = { washerViewModel.loadHistory() },
+                        onRefresh = { washerViewModel.loadHistory(reset = true) },
+                        onOpenDetail = { washerViewModel.openHistoryDetail(it) },
                     )
                 }
             }
@@ -336,6 +374,67 @@ fun CampusDeviceHubScreen(
                 }
             }
         }
+    }
+
+    // 「设闹钟」弹窗：两个入口都用它，选择后把用户送到系统时钟。
+    if (washerAlarmChoiceOpen) {
+        val snapshot = washerState.snapshot
+        val order = snapshot?.order
+        // 真实剩余（不含界面那 60 秒显示补偿）——系统时钟要的是真实时长
+        val remainSeconds = if (order != null && order.phase.isActive) {
+            order.remainingSeconds(System.currentTimeMillis(), snapshot.fetchedAt).toLong()
+        } else {
+            0L
+        }
+        val triggerAt = if (order != null && order.phase.isActive) {
+            snapshot.fetchedAt + order.remainSeconds * 1000L
+        } else {
+            System.currentTimeMillis()
+        }
+
+        WasherAlarmChoiceDialog(
+            onDismiss = { washerAlarmChoiceOpen = false },
+            onPickAlarm = {
+                washerAlarmChoiceOpen = false
+                val ok = openSystemAlarmForWasher(
+                    context = context,
+                    kind = WasherAlarmKind.ALARM,
+                    triggerAtMillis = triggerAt,
+                    remainingSeconds = remainSeconds,
+                )
+                if (!ok) {
+                    Toast.makeText(
+                        context,
+                        R.string.washer_settings_no_clock_app,
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            },
+            onPickTimer = {
+                washerAlarmChoiceOpen = false
+                val ok = openSystemAlarmForWasher(
+                    context = context,
+                    kind = WasherAlarmKind.TIMER,
+                    triggerAtMillis = triggerAt,
+                    remainingSeconds = remainSeconds,
+                )
+                if (!ok) {
+                    Toast.makeText(
+                        context,
+                        R.string.washer_settings_no_clock_app,
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            },
+        )
+    }
+
+    // 账单详情弹层：金额只在这里显示（列表接口不返回金额）
+    washerState.historyDetail?.let { target ->
+        WasherBillDetailSheet(
+            target = target,
+            onDismiss = { washerViewModel.closeHistoryDetail() },
+        )
     }
 
     if (manualShowerInput) {

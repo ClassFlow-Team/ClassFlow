@@ -3,6 +3,8 @@ package com.shiro.classflow.data.network.wbu
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -26,6 +28,14 @@ object WasherOrderSession {
 
     /** 提前 5 分钟视为过期，避免「刚好卡在边界上」的那一次请求。 */
     private const val EXPIRY_SKEW_SECONDS = 300L
+
+    /**
+     * 换票互斥锁。
+     *
+     * U净 的 OAuth code 一次性有效，并发兑换会让后来者拿到 code 1200
+     * （「第三方授权异常」）。进度与账单是并发请求的，必须串行化换票。
+     */
+    private val loginMutex = Mutex()
 
     /** 最近一次失败原因，供页面显示（不落库，进程内即可）。 */
     @Volatile
@@ -57,16 +67,32 @@ object WasherOrderSession {
                 }
             }
 
-            // 平台票交给 ensureValidAccessToken 自己判断：它内部会校验会话、优先用
-            // refresh_token 续期（不顶号），只有真的失效才重走 CAS。不要在这里自己缓存，
-            // 否则后台轮询会拿着一份早就过期的票反复撞墙。
-            val platform = cardClient.ensureValidAccessToken()
-            val user = ujing.connect(platform, appId = WbuUjingClient.WASHER_APP_ID)
-            val fresh = ujing.ujingToken
-            if (fresh.isNullOrBlank()) throw java.io.IOException("U净 未返回 token（${user.id}）")
-            token = fresh
-            tokenExpiresAtSeconds = jwtExpiresAtSeconds(fresh) ?: 0L
-            lastFailure = null
+            // 换票必须串行：OAuth code 是**一次性**的。页面进入时进度和账单会并发起跑，
+            // 两个协程都认为「没有缓存」，各自去换 code —— 后到的那个拿到 1200
+            // 「第三方授权异常」，账单就偶发加载失败。拿到锁后重查一次缓存，
+            // 第二个等待者直接复用刚换好的 token，不再重复兑换。
+            loginMutex.withLock {
+                if (!forceRefresh && isCachedTokenValid()) {
+                    val cached = token
+                    if (cached != null) {
+                        ujing.adoptSession(cached)
+                        return@withLock
+                    }
+                }
+
+                // 平台票交给 ensureValidAccessToken 自己判断：它内部会校验会话、优先用
+                // refresh_token 续期（不顶号），只有真的失效才重走 CAS。不要在这里自己缓存，
+                // 否则后台轮询会拿着一份早就过期的票反复撞墙。
+                val platform = cardClient.ensureValidAccessToken()
+                val user = ujing.connect(platform, appId = WbuUjingClient.WASHER_APP_ID)
+                val fresh = ujing.ujingToken
+                if (fresh.isNullOrBlank()) {
+                    throw java.io.IOException("U净 未返回 token（${user.id}）")
+                }
+                token = fresh
+                tokenExpiresAtSeconds = jwtExpiresAtSeconds(fresh) ?: 0L
+                lastFailure = null
+            }
             ujing
         }
 

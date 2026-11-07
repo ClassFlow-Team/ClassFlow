@@ -1331,16 +1331,26 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="washer_status_unknown">Unknown status</string>
 
     <string name="washer_bill_section">Wash history</string>
-    <string name="washer_bill_summary">%1$d orders · ¥%2$s total</string>
+    <string name="washer_bill_summary_count_only">%1$d orders</string>
+    <string name="washer_bill_row_amount_hint">View details</string>
+    <string name="washer_bill_detail_paid">Paid</string>
+    <string name="washer_bill_detail_program">Program</string>
+    <string name="washer_bill_detail_time">Ordered at</string>
+    <string name="washer_bill_detail_device_no">Machine no.</string>
+    <string name="washer_bill_detail_order_id">Order ID</string>
+    <string name="washer_bill_detail_close">Close</string>
+    <string name="washer_bill_detail_price_unavailable">The details did not include an amount</string>
+    <string name="washer_bill_detail_error">Could not load details. Try again.</string>
     <string name="washer_bill_loading">Loading wash history…</string>
     <string name="washer_bill_empty">No wash records yet</string>
     <string name="washer_bill_error">Could not load wash history. Please try again.</string>
     <string name="washer_bill_load_more">Load more</string>
     <string name="washer_bill_loading_more">Loading…</string>
+    <string name="washer_bill_refresh">Refresh bill</string>
 
     <string name="washer_settings_title">Washer reminders</string>
     <string name="washer_settings_reminder_title">Notify me when the wash finishes</string>
-    <string name="washer_settings_reminder_desc">Off by default</string>
+    <string name="washer_settings_reminder_desc">Notify me when done (only while the app is open)</string>
     <string name="washer_settings_polling_title">Check in the background</string>
     <string name="washer_settings_polling_desc">Turn off to only check progress while the app is open — saves battery</string>
     <string name="washer_settings_check_now">Check now</string>
@@ -1348,9 +1358,20 @@ Overwriting replaces old schedule data and rebinds. Creating a new schedule is r
     <string name="washer_settings_check_idle">No washer order is running right now</string>
     <string name="washer_settings_reminder_enabled_toast">Washer reminders turned on</string>
     <string name="washer_settings_reminder_disabled_toast">Washer reminders turned off</string>
-    <string name="washer_settings_nudge">Want a reminder when the wash finishes? Turn it on here.</string>
-    <string name="washer_settings_nudge_action">Turn on</string>
     <string name="washer_settings_need_notification">Notifications are blocked, so the wash-finished reminder cannot be delivered. Allow notifications for this app in system settings.</string>
+    <string name="washer_settings_need_exact_alarm">Exact alarms are not allowed for this app, so the reminder may be a few minutes late.</string>
+    <string name="washer_settings_need_exact_alarm_action">Allow</string>
+    <string name="washer_settings_experimental_desc">Battery optimisers on many phones stop this app from notifying you once it goes to the background or the screen is locked, so do not count on it to call you back for your laundry. The system clock below does not need this app to be running, and is more reliable.</string>
+    <string name="washer_settings_set_alarm">Remind me with the system clock</string>
+    <string name="washer_alarm_label">Laundry done</string>
+    <string name="washer_alarm_dialog_title">Set a reminder</string>
+    <string name="washer_alarm_dialog_desc">This app can miss reminders once it leaves the foreground. The system clock is more reliable.</string>
+    <string name="washer_alarm_dialog_alarm">Alarm</string>
+    <string name="washer_alarm_dialog_alarm_desc">Rings at the time\nstays in your alarm list</string>
+    <string name="washer_alarm_dialog_timer">Timer</string>
+    <string name="washer_alarm_dialog_timer_desc">Disappears after it rings\nkeeps your list clean</string>
+    <string name="washer_alarm_dialog_cancel">Cancel</string>
+    <string name="washer_progress_set_alarm">Set reminder</string>
 
     <string name="washer_notification_channel_name">Wash finished</string>
     <string name="washer_notification_channel_desc">Reminds you to collect your laundry when the wash finishes</string>
