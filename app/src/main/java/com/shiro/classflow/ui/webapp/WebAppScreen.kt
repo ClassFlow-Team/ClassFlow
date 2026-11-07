@@ -105,10 +105,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xingheyuzhuan.shiguangschedule.Destination
 import com.xingheyuzhuan.shiguangschedule.NavBridge
 import com.xingheyuzhuan.shiguangschedule.R
+import com.shiro.classflow.data.model.wbu.CampusDeviceKind
 import com.shiro.classflow.data.model.wbu.WebAppDefinition
 import com.shiro.classflow.data.model.wbu.WebAppId
 import com.shiro.classflow.data.network.wbu.CampusCardLegacyLink
 import com.shiro.classflow.data.network.wbu.CampusCardRedirect
+import com.shiro.classflow.data.network.wbu.UjingQrLink
 import com.shiro.classflow.data.network.wbu.WbuAuthTransport
 import com.shiro.classflow.ui.campus.components.WasherNoticeDialog
 import com.shiro.classflow.ui.campus.components.WbuAuthTipsScenario
@@ -672,9 +674,32 @@ fun WebAppScreen(
     viewModel: WebAppViewModel = viewModel()
 ) {
     /** 仅洗衣机（/wm/ 或小天鹅链接）进入时显示 U净 品牌首屏。 */
-    val isWasherEntry = pendingAutoScan?.contains("littleswan.com", ignoreCase = true) == true
+    val isWasherEntry = remember(pendingAutoScan) { isWasherRaw(pendingAutoScan) }
     /** 只带设备码、没有直达地址的洗衣机深链：需要先解析出洗衣机 H5 真实入口。 */
     val isWasherDeepLink = isWasherEntry && initialTargetUrl.isNullOrBlank()
+
+    /**
+     * 退出这个容器的落点。
+     *
+     * 洗衣机是唯一「退出 H5 后还有事要做」的入口：扫完码走完下单流程，用户最需要的是
+     * 看进度、设洗完提醒 —— 这两样都在本应用的洗衣机页，而不是他扫码前待的课表页或设置页。
+     * 所以洗衣机入口统一落到洗衣机页；别的网页应用保持原来的「返回上一页」。
+     *
+     * 用 [NavBridge.finishTo] 而不是 navigate：从洗衣机页里点「扫码」进来的话，
+     * 栈顶下面本来就是洗衣机页，退回去不该再叠一份相同的页面。
+     */
+    val exitContainer: () -> Unit = remember(navBridge, isWasherEntry) {
+        {
+            if (isWasherEntry) {
+                navBridge.finishTo(
+                    Destination.CampusDeviceHub(CampusDeviceKind.WASHER.name)
+                )
+            } else {
+                navBridge.popBackStack()
+            }
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         val context = LocalContext.current
         val coroutineScope = rememberCoroutineScope()
@@ -724,9 +749,11 @@ fun WebAppScreen(
         var washerUseRecorded by rememberSaveable(pendingAutoScan) { mutableStateOf(false) }
 
         LaunchedEffect(pendingAutoScan) {
-            if (isWasherDeepLink) {
+            // 深链原文在下面几处都要用：取成本地非空值，避免每处再判一次
+            val washerRaw = pendingAutoScan
+            if (isWasherDeepLink && washerRaw != null) {
                 // /wm/{uuid}：先解析洗衣机 H5 真实入口，避免只停在一卡通首页
-                when (val result = WasherEntryResolver.resolve(context, pendingAutoScan)) {
+                when (val result = WasherEntryResolver.resolve(context, washerRaw)) {
                     is WasherEntryResolver.Result.Ready -> {
                         resolvedInitialUrl = result.url
                         // 真正用上了（拿到直达地址）：记进校园设备管理。
@@ -734,7 +761,7 @@ fun WebAppScreen(
                         // 同一个导航条目重建时不重复记（record 本身幂等，但次数不该虚增）。
                         if (!washerUseRecorded) {
                             washerUseRecorded = true
-                            runCatching { WasherEntryResolver.recordUse(context, pendingAutoScan) }
+                            runCatching { WasherEntryResolver.recordUse(context, washerRaw) }
                         }
                     }
                     is WasherEntryResolver.Result.Unavailable -> washerNotice = result.availability
@@ -778,7 +805,7 @@ fun WebAppScreen(
                 notice = notice,
                 onDismiss = {
                     washerNotice = null
-                    navBridge.popBackStack()
+                    exitContainer()
                 }
             )
         }
@@ -887,7 +914,7 @@ fun WebAppScreen(
                     // 彻底解决在第三方 OAuth 历史链与自动跳转逻辑间卡住「退不出去」的问题。
                     if (isThirdPartyEntryRoute(currentUrl, def)) {
                         Log.i("WebAppScreen", "Back on deep-linked third-party entry route ($currentUrl), exiting to ClassFlow")
-                        navBridge.popBackStack()
+                        exitContainer()
                         return@BackHandler
                     }
                 } else {
@@ -903,10 +930,10 @@ fun WebAppScreen(
                 if (!isAtHomeRoute(currentUrl, def, ownHosts) && webView.canGoBack()) {
                     webView.goBack()
                 } else {
-                    navBridge.popBackStack()
+                    exitContainer()
                 }
             } else {
-                navBridge.popBackStack()
+                exitContainer()
             }
         }
 
@@ -993,7 +1020,7 @@ fun WebAppScreen(
                         onAndroidFuncScan = { callbackName -> scanRequest = ScanRequest.AndroidFunc(callbackName) },
                         onDeepLinkAutoStartHandedOff = { deepLinkAutoStarted = true },
                         onPageErrorVisibleChanged = { pageErrorVisible = it },
-                        onPageBackExit = { navBridge.popBackStack() },
+                        onPageBackExit = exitContainer,
                         onWebViewReady = { webViewInstance = it }
                     )
                 }
@@ -1006,7 +1033,7 @@ fun WebAppScreen(
                         title = stringResource(R.string.title_load_failed),
                         message = stage.message,
                         onReload = { viewModel.retry() },
-                        onBack = { navBridge.popBackStack() }
+                        onBack = exitContainer
                     )
                 }
             }
@@ -1016,7 +1043,7 @@ fun WebAppScreen(
                 (uiState.stage is WebAppStage.ContentReady || uiState.stage is WebAppStage.LoadingToken)
             ) {
                 DraggableExitFab(
-                    onExit = { navBridge.popBackStack() }
+                    onExit = exitContainer
                 )
             }
 
@@ -1486,6 +1513,21 @@ private fun isThirdPartyEntryRoute(currentUrl: String, def: WebAppDefinition?): 
     val hash = currentUrl.substringAfter("#", "").substringBefore('?')
     val entryRoutes = listOf("/programV2", "/reserveV2", "/home", "/scanError", "/createorder")
     return hash.isBlank() || hash == "/" || entryRoutes.any { hash == it || hash.startsWith("$it/") }
+}
+
+/**
+ * 这个网页应用是不是从洗衣机（U净 / 小天鹅）入口进来的。
+ *
+ * 判据是导航参数里带的那条扫码原文 —— 只有洗衣机入口会带它（`/wm/{uuid}`、贴纸原文，
+ * 或桌面快捷方式重建出来的小天鹅地址）。直接进一卡通门户再点进 U净 的情况不算，
+ * 那种浏览用户本来就有自己的返回预期。
+ *
+ * 用 [UjingQrLink.parse] 而不是字符串匹配域名：扫码原文可能是被支付宝包装过的
+ * `q.ujing.com.cn/…?uuid=` 形式，只认 `littleswan.com` 会漏掉。
+ */
+internal fun isWasherRaw(raw: String?): Boolean {
+    if (raw.isNullOrBlank()) return false
+    return UjingQrLink.parse(raw) is UjingQrLink.Result.Washer
 }
 
 /** 独立控水（马影河 1 栋「智能控水」）host。 */

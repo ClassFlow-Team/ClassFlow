@@ -103,6 +103,12 @@ sealed interface Destination : NavKey {
     data class WebApp(
         val appId: String,
         val initialTargetUrl: String? = null,
+        /**
+         * 扫码原文：洗衣机 / 洗浴这类「设备直达」入口一次性交给页面自启用。
+         *
+         * 洗衣机入口同时决定**退出容器后的落点**：带洗衣机原文进来的，退出时落到
+         * 洗衣机页（进度 + 账单 + 洗完提醒），而不是回到扫码前那一页。
+         */
         val pendingAutoScan: String? = null,
         /**
          * 页面**自己授权完成之后**才落上去的 hash 路由（例：U净 吹风机的

@@ -94,6 +94,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
+import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.get
 import androidx.navigation3.runtime.metadata
 import androidx.navigation3.runtime.rememberNavBackStack
@@ -764,6 +765,15 @@ fun AppNavigation(
                 }
             }
 
+            /**
+             * 结束当前页并落到 [destination]（见 [NavBridge.finishTo]）。
+             *
+             * 具体栈操作在 [finishToDestination] 里：脱离 Compose 也能测。
+             */
+            override fun finishTo(destination: Destination) {
+                backStack.finishToDestination(destination)
+            }
+
             override fun navigateUp() = popBackStack()
         }
     }
@@ -1287,6 +1297,24 @@ fun AppNavigation(
             modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
+}
+
+/**
+ * [NavBridge.finishTo] 的栈操作：结束当前页，并落到 [destination]。
+ *
+ * 单独抽出来是为了能测：「扫码进洗衣机 H5，退出后能不能落回洗衣机页、会不会叠出
+ * 两份相同的页面」全靠这几行，而它在 App 里只能靠真机点出来。
+ *
+ * 两个关键点：
+ * 1. 先弹出当前页。所以 H5 这一条不会留在返回栈里（回去只会重新加载一次页面，
+ *    对洗衣机来说还可能再走一遍下单入口）。
+ * 2. 弹完如果栈顶已经是 [destination] 就不再入栈。典型场景是从洗衣机页点「扫码」
+ *    出去：`… → 洗衣机页 → 扫码页(被替换成 H5) → 退出`，回来必须还是**同一个**
+ *    洗衣机页，否则返回键要先经过一份一模一样的页面才走得出去。
+ */
+internal fun <T : NavKey> MutableList<T>.finishToDestination(destination: T) {
+    if (isNotEmpty()) removeAt(lastIndex)
+    if (lastOrNull() != destination) add(destination)
 }
 
 // ── Onboarding card with title, body, optional icon, and action buttons ──
